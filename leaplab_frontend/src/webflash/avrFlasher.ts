@@ -311,7 +311,26 @@ async function pulseDtr(port: SerialPort): Promise<void> {
 async function waitForBootloaderSync(stream: SerialStream, timeoutMs = 1500): Promise<boolean> {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
-        if (stream.consumeUntil(STK_INSYNC)) return true;
+        if (stream.consumeUntil(STK_INSYNC)) {
+            // Confirm it — don't trust the first 0x14. The loop above hammers
+            // a sync every 40ms, so several bootloader replies can be in
+            // flight/in the USB pipeline at once; bytes arriving after a
+            // flush shift the next command's framing (this is exactly how a
+            // signature reply parses as "status 0x14"). avrdude avoids this by
+            // keeping one outstanding sync and draining: settle, flush, send
+            // ONE ping and demand a clean [INSYNC, OK] pair.
+            await sleep(60);
+            stream.flushInput();
+            await stream.write(new Uint8Array([STK_GET_SYNC, CRC_EOP]));
+            try {
+                const reply = await stream.readBytes(2, 250);
+                if (reply[0] === STK_INSYNC && reply[1] === STK_OK) return true;
+            } catch {
+                // Stale pipeline bytes or an expired window — keep hunting.
+            }
+            stream.flushInput();
+            continue;
+        }
         await stream.write(new Uint8Array([STK_GET_SYNC, CRC_EOP]));
         await sleep(40);
     }
@@ -333,6 +352,41 @@ async function classicReset(port: SerialPort): Promise<void> {
     } catch {
         // Port unavailable or already in use — the open-port pulse is primary.
     }
+}
+
+/** Thrown when the chip signature deterministically mismatches — retries cannot fix this. */
+class ChipMismatchError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'ChipMismatchError';
+    }
+}
+
+/**
+ * Verify the chip signature and enter programming mode. Throws
+ * ChipMismatchError for a wrong chip (do not retry) or a generic Error for
+ * transient framing/timeout failures (safe to retry with a fresh reset —
+ * the ~1s bootloader window may have expired mid-command, or the sync
+ * detector may have false-triggered on sketch output containing 0x14).
+ */
+async function verifySignatureAndEnterProgmode(stream: SerialStream, profile: AvrBoardProfile, options: AvrFlashOptions): Promise<void> {
+    // Settle + flush: any residual pipeline byte (late sync reply arriving
+    // after the confirm step) would shift the signature framing.
+    await sleep(50);
+    stream.flushInput();
+    let signature: Uint8Array;
+    try {
+        signature = await stream.stkCommand(new Uint8Array([STK_READ_SIGN, CRC_EOP]), 3);
+    } catch (err: any) {
+        throw new Error(`No signature reply from the bootloader (${err?.message || err}). The bootloader window may have expired — retrying with a fresh reset.`);
+    }
+    const actual = Array.from(signature).join('.');
+    if (!isSignatureAccepted(signature, profile)) {
+        const allAccepted = [profile.signature, ...(profile.alternateSignatures ?? [])].map(s => s.join('.')).join(' or ');
+        throw new ChipMismatchError(`Chip mismatch: expected signature ${allAccepted} but the board reports ${actual}. Check that the correct board is selected.`);
+    }
+    options.onLog?.(`Chip verified: signature ${actual} (${profile.fqbn}).`);
+    await stream.stkCommand(new Uint8Array([STK_ENTER_PROGMODE, CRC_EOP]));
 }
 
 /** Try to sync with the bootloader at the given baud. Never throws on open failure — returns false so the retry loop can try the next baud. */
@@ -549,49 +603,57 @@ export async function flashAvr(port: SerialPort, options: AvrFlashOptions): Prom
             return;
         }
 
+        // The whole sync → signature → progmode sequence is retried: a sync
+        // that lands at the tail of the ~1s bootloader window (or a 0x14 byte
+        // from running sketch output false-triggering the sync detector)
+        // fails at the signature step, and only a fresh reset opens a new
+        // window. Previously only the sync byte was retried, so one slow
+        // signature reply killed the entire upload.
         let synced = false;
+        let lastSyncError: unknown = null;
         for (let attempt = 1; attempt <= 3 && !synced; attempt++) {
             if (attempt > 1) options.onLog?.(`Bootloader entry retry ${attempt}/3...`);
             for (const baud of profile.bauds) {
                 options.onLog?.(`Syncing with bootloader at ${baud} baud...`);
-                stream = new SerialStream(port);
-                if (await syncAtBaud(stream, baud)) {
-                    synced = true;
-                    options.onLog?.(`Bootloader found at ${baud} baud.`);
-                    break;
+                // Variant 1: DTR-pulse reset. Variant 2 (fallback for bridges
+                // that ignore DTR while open): classic 1200-baud open/close
+                // reset, then sync in the new watchdog window without
+                // re-pulsing.
+                for (const useReset of [true, false]) {
+                    if (!useReset) {
+                        options.onLog?.(`Trying classic 1200-baud reset at ${baud}...`);
+                        await classicReset(port);
+                    }
+                    stream = new SerialStream(port);
+                    if (!(await syncAtBaud(stream, baud, useReset))) {
+                        await stream.close();
+                        stream = null;
+                        continue;
+                    }
+                    try {
+                        await verifySignatureAndEnterProgmode(stream, profile, options);
+                        synced = true;
+                        options.onLog?.(`Bootloader found at ${baud} baud${useReset ? '' : ' (classic reset)'}.`);
+                        break;
+                    } catch (err) {
+                        if (err instanceof ChipMismatchError) {
+                            await stream.close();
+                            stream = null;
+                            throw err;
+                        }
+                        lastSyncError = err;
+                        options.onLog?.(`Sync verify failed (${err instanceof Error ? err.message : String(err)})`);
+                        await stream.close();
+                        stream = null;
+                    }
                 }
-                await stream.close();
-                stream = null;
-
-                // Fallback for bridges that ignore DTR while the port is open:
-                // the classic 1200-baud open/close reset, then sync in the new
-                // watchdog window without re-pulsing.
-                options.onLog?.(`Trying classic 1200-baud reset at ${baud}...`);
-                await classicReset(port);
-                stream = new SerialStream(port);
-                if (await syncAtBaud(stream, baud, /* reset */ false)) {
-                    synced = true;
-                    options.onLog?.(`Bootloader found at ${baud} baud (classic reset).`);
-                    break;
-                }
-                await stream.close();
-                stream = null;
+                if (synced) break;
             }
         }
         if (!synced || !stream) {
-            throw new Error('Could not sync with the bootloader. Check the USB cable and that the board has an Arduino bootloader.');
+            const detail = lastSyncError instanceof Error ? ` Last error: ${lastSyncError.message}` : '';
+            throw new Error(`Could not sync with the bootloader after 3 attempts. Check the USB cable (data cable, not charge-only) and that the board has an Arduino bootloader.${detail}`);
         }
-
-        // Verify the chip signature matches the selected board (ATmega328P = 30.149.15, ATmega328 = 30.149.20 both accepted).
-        const signature = await stream.stkCommand(new Uint8Array([STK_READ_SIGN, CRC_EOP]), 3);
-        const actual = Array.from(signature).join('.');
-        if (!isSignatureAccepted(signature, profile)) {
-            const allAccepted = [profile.signature, ...(profile.alternateSignatures ?? [])].map(s => s.join('.')).join(' or ');
-            throw new Error(`Chip mismatch: expected signature ${allAccepted} but the board reports ${actual}. Check that the correct board is selected.`);
-        }
-        options.onLog?.(`Chip verified: signature ${actual} (${options.fqbn}).`);
-
-        await stream.stkCommand(new Uint8Array([STK_ENTER_PROGMODE, CRC_EOP]));
 
         // Program flash page by page (flash base address is always 0).
         const pageSize = profile.pageSize;

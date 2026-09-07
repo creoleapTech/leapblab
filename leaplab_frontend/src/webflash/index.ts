@@ -96,6 +96,12 @@ let monitorPort: SerialPort | null = null;
 let monitorReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 let monitorOpenedPort = false;
 let monitorStopRequested = false;
+/**
+ * Generation counter — every start/stop bumps it. A read loop that finds its
+ * captured generation stale exits quietly instead of fighting the newer
+ * session over the port (each close/open toggles DTR and resets the board).
+ */
+let monitorSession = 0;
 
 /**
  * Extracts the baud rate from `Serial.begin(<baud>)` in the sketch.
@@ -181,7 +187,12 @@ export async function startWebSerialMonitor(
 ): Promise<boolean> {
     try {
         monitorStopRequested = false;
+        const session = ++monitorSession;
         const port = await openGrantedPort(baudRate);
+        if (session !== monitorSession) {
+            // A newer start/stop superseded us while the port was opening.
+            return false;
+        }
         if (!port?.readable || !port?.writable) {
             console.log('[webflash-monitor] port has no readable/writable stream');
             onStatus?.('No Web Serial port granted — click Connect first.');
@@ -213,16 +224,23 @@ export async function startWebSerialMonitor(
             const noteBinary = (bytes: Uint8Array) => {
                 binaryBytes += bytes.length;
                 const now = Date.now();
-                if (!binaryWarned || now - lastBinaryWarn > 5000) {
+                // Console warning stays throttled, but the Log-tab status is
+                // sent only once per binary episode — otherwise a board
+                // sitting in its bootloader spams the log every 5s forever.
+                // binaryWarned resets when clean text arrives below.
+                if (!binaryWarned || now - lastBinaryWarn > 15000) {
+                    const firstOfEpisode = !binaryWarned;
                     binaryWarned = true;
                     lastBinaryWarn = now;
                     const preview = Array.from(bytes.slice(0, 8)).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' ');
                     console.warn(`[webflash-monitor] ignoring ${bytes.length} binary bytes (${preview}…) — likely bootloader traffic or a baud-rate mismatch. Check that the monitor baud matches Serial.begin() in your sketch.`);
-                    onStatus?.('⚠ Serial data looks binary (bootloader chatter or wrong baud) — check the monitor baud matches Serial.begin() in your sketch.');
+                    if (firstOfEpisode) {
+                        onStatus?.('⚠ Serial data looks binary (bootloader chatter or wrong baud) — check the monitor baud matches Serial.begin() in your sketch.');
+                    }
                 }
             };
             try {
-                while (monitorReader && !monitorStopRequested) {
+                while (monitorReader && !monitorStopRequested && session === monitorSession) {
                     const { value, done } = await monitorReader.read();
                     if (done) {
                         console.log('[webflash-monitor] read loop done (stream closed by device)');
@@ -243,18 +261,23 @@ export async function startWebSerialMonitor(
                     if (!clean) continue;
                     buffer += clean;
                     let newline: number;
+                    let gotCleanText = false;
                     while ((newline = buffer.indexOf('\n')) >= 0) {
                         const line = buffer.slice(0, newline).replace(/\r$/, '');
                         buffer = buffer.slice(newline + 1);
                         if (!line.trim()) continue;
+                        gotCleanText = true;
                         onData(line);
                     }
+                    // Clean text flowing again ends the binary episode, so a
+                    // later binary burst warns the Log tab once more.
+                    if (gotCleanText) binaryWarned = false;
                     // Guard against an ever-growing newline-less buffer
                     // (e.g. binary that slipped through the filter).
                     if (buffer.length > 4096) flushPartial();
                 }
             } catch (err: any) {
-                if (!monitorStopRequested) {
+                if (!monitorStopRequested && session === monitorSession) {
                     console.error(`[webflash-monitor] read loop error: ${err?.name || ''} ${err?.message || err}`);
                     onStatus?.(`Serial monitor disconnected: ${err?.message || 'read error'}`);
                 }
@@ -278,6 +301,7 @@ export async function startWebSerialMonitor(
 /** Stops the monitor read loop and closes the port if this module opened it. */
 export async function stopWebSerialMonitor(): Promise<void> {
     monitorStopRequested = true;
+    monitorSession++;
     try { await monitorReader?.cancel(); } catch { /* ignore */ }
     // Give the cancelled read() a tick to exit before releasing the lock,
     // otherwise the next port.open() can race and throw InvalidStateError.

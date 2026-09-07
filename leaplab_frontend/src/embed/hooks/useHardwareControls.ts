@@ -246,17 +246,27 @@ export function useHardwareControls(
             setIsUploading(false);
             // Restart the monitor at the sketch's Serial.begin baud so the
             // output is readable. A 115200 monitor on a 9600 sketch shows up
-            // as NUL / control-char floods (the \u0000 spam in the logs).
+            // as NUL / control-char floods.
             const sketchBaud = detectSketchBaud(generatedCode);
-            const monitorBaud = sketchBaud ?? baudRateRef.current;
-            if (sketchBaud && sketchBaud !== baudRateRef.current) {
+            if (sketchBaud && sketchBaud !== baudRateRef.current && setBaudRate) {
                 addLog(`ℹ Sketch uses Serial.begin(${sketchBaud}) — switching monitor from ${baudRateRef.current} to ${sketchBaud} baud.`);
-                setBaudRate?.(sketchBaud);
+                setBaudRate(sketchBaud);
+                // Do NOT start the monitor here: the baud-change effect
+                // restarts it. Starting it here too creates two concurrent
+                // readers that close/reopen the port from under each other —
+                // every reopen toggles DTR and resets the board back into its
+                // bootloader (the endless 0x14/0x10 flood in the logs).
+                // After a failed upload the board may still sit in its ~1s
+                // bootloader window, so wait it out before the effect fires.
+                await new Promise(resolve => setTimeout(resolve, result?.success ? 800 : 1800));
+                return;
             }
-            // The sketch needs a moment to boot after the bootloader exits.
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Same baud (or no setter): restart directly. After a failure the
+            // board may still be in the bootloader window — wait it out so the
+            // monitor catches sketch output instead of bootloader chatter.
+            await new Promise(resolve => setTimeout(resolve, result?.success ? 500 : 1500));
             await startWebSerialMonitor(
-                monitorBaud,
+                sketchBaud ?? baudRateRef.current,
                 (line) => setSerialMessages(prev => [...prev.slice(-100), line]),
                 (msg) => addLog(msg),
             );
