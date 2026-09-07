@@ -745,6 +745,60 @@ arduinoGenerator.forBlock['variables_get'] = function (block) {
 
 };
 
+// ——— Fix: LEAP/UI variable reporters (data_variable) share the same workspace model
+// but were not handled for Arduino. Without this, `valueToCode` for `write [var] to serial`
+// returned empty and fell back to the shadow "Hello World" literal.
+// See IntermediateApp.tsx:1859 LEAP_VARIABLES replacement → data_variable.
+arduinoGenerator.forBlock['data_variable'] = function (block) {
+    // field_variable stores ID; resolve to real variable for type/sanitised name
+    const varId = block.getFieldValue('VARIABLE');
+    let variable: any = null;
+    try { variable = block.workspace.getVariableById(varId); } catch {}
+    if (!variable) {
+        try { variable = block.workspace.getVariable(varId, '') || block.workspace.getVariable(varId, 'Number') || block.workspace.getVariable(varId, 'String'); } catch {}
+    }
+    let name: string;
+    let type = '';
+    if (variable) {
+        name = sanitizeName((variable as any).name);
+        type = (variable as any).type || '';
+    } else {
+        name = sanitizeName(varId || 'var');
+    }
+    ensureVarDeclared(name, type);
+    log('data_variable', 'Generating', { name, type, varId });
+    return [name, ORDER_ATOMIC];
+};
+
+arduinoGenerator.forBlock['variable_reporter_checkbox'] = function (block) {
+    // Flyout placeholder before replacement — field stores name directly
+    const rawName = block.getFieldValue('VARIABLE') || block.getFieldValue('LIST') || 'var';
+    let variable: any = null;
+    try { variable = block.workspace.getVariable(rawName, '') || block.workspace.getVariable(rawName, 'Number') || block.workspace.getVariable(rawName, 'String') || block.workspace.getVariableById(rawName); } catch {}
+    const type = variable ? (variable as any).type : '';
+    const name = sanitizeName(rawName);
+    ensureVarDeclared(name, type);
+    log('variable_reporter_checkbox', 'Generating', { name, type, rawName });
+    return [name, ORDER_ATOMIC];
+};
+
+arduinoGenerator.forBlock['list_reporter_checkbox'] = function (block) {
+    const rawName = block.getFieldValue('LIST') || 'list';
+    const name = sanitizeName(rawName);
+    ensureVarDeclared(name, 'list');
+    return [name, ORDER_ATOMIC];
+};
+
+arduinoGenerator.forBlock['data_listcontents'] = function (block) {
+    const varId = block.getFieldValue('LIST');
+    let variable: any = null;
+    try { variable = block.workspace.getVariableById(varId); } catch {}
+    if (!variable) try { variable = block.workspace.getVariable(varId, 'list'); } catch {}
+    const name = variable ? sanitizeName((variable as any).name) : sanitizeName(varId || 'list');
+    ensureVarDeclared(name, 'list');
+    return [name, ORDER_ATOMIC];
+};
+
 
 
 arduinoGenerator.forBlock['variables_set'] = function (block, generator) {
@@ -1108,6 +1162,10 @@ const getSerialPortName = (port: string) => {
 arduinoGenerator.forBlock['arduino_serial_multi_write'] = function (block, generator) {
 
     const value = generator.valueToCode(block, 'VALUE', ORDER_NONE) || '""';
+
+    (arduinoGenerator as any).addSetupIfMissing('serial_begin', '  Serial.begin(9600);');
+
+    log('arduino_serial_multi_write', 'Generating', { value });
 
     return `  Serial.println(${value});\n`;
 
