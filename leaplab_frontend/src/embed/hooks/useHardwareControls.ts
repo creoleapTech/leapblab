@@ -1,7 +1,7 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type React from 'react';
 import { log } from '../utils/log';
-import { isWebSerialSupported, listPorts as webListPorts, requestPort as webRequestPort, uploadToBoard, startWebSerialMonitor, stopWebSerialMonitor, sendWebSerial } from '../../webflash';
+import { isWebSerialSupported, listPorts as webListPorts, requestPort as webRequestPort, uploadToBoard, startWebSerialMonitor, stopWebSerialMonitor, sendWebSerial, getGrantedPort, detectSketchBaud } from '../../webflash';
 
 export function useHardwareControls(
     editorMode: string,
@@ -18,7 +18,12 @@ export function useHardwareControls(
     setUploadProgress: React.Dispatch<React.SetStateAction<string>>,
     setActiveTab: (tab: 'log' | 'serial') => void,
     addLog: (msg: string) => void,
+    setBaudRate?: React.Dispatch<React.SetStateAction<number>>,
 ) {
+    // Tracks the monitor baud so the post-upload restart uses the latest
+    // value even when handleUpload's closure is stale.
+    const baudRateRef = useRef(baudRate);
+    baudRateRef.current = baudRate;
 
     const refreshPorts = useCallback(async () => {
         try {
@@ -130,17 +135,27 @@ export function useHardwareControls(
         }
     }, [selectedPort, isConnected, baudRate, selectedBoard, addLog, setIsConnected, setPorts, setSerialMessages, refreshPorts]);
 
+    // Baud change: for Web Serial just restart the monitor reader at the new
+    // baud on the already-granted port. Never call handleConnect() here — it
+    // opens the browser port picker, which requires a user gesture and throws
+    // SecurityError when invoked from an effect (plus the old code called it
+    // twice, racing two pickers/readers against each other).
     useEffect(() => {
-        if (isConnected && selectedPort) {
-            log.app(`Baud rate changed to ${baudRate}, reconnecting...`);
-            const timer = setTimeout(() => {
-                handleConnect();
-                setTimeout(() => {
-                    handleConnect();
-                }, 500);
-            }, 100);
-            return () => clearTimeout(timer);
-        }
+        const electronAPI = (window as any).electronAPI;
+        if (electronAPI?.connectPort) return; // Electron path reconnects elsewhere.
+        if (!isConnected || !isWebSerialSupported() || !getGrantedPort()) return;
+        let cancelled = false;
+        const timer = setTimeout(async () => {
+            log.app(`Baud rate changed to ${baudRate}, restarting monitor...`);
+            await stopWebSerialMonitor();
+            if (cancelled) return;
+            await startWebSerialMonitor(
+                baudRate,
+                (line) => setSerialMessages(prev => [...prev.slice(-100), line]),
+                (msg) => addLog(msg),
+            );
+        }, 150);
+        return () => { cancelled = true; clearTimeout(timer); };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [baudRate]);
 
@@ -205,6 +220,9 @@ export function useHardwareControls(
             setUploadProgress('Uploading...');
             addLog('Starting upload via Web Serial...');
             await stopWebSerialMonitor();
+            // Let the OS fully release the COM port before the flasher
+            // reopens it at bootloader baud (Windows needs this gap).
+            await new Promise(resolve => setTimeout(resolve, 300));
 
             const result = await uploadToBoard({
                 code: generatedCode,
@@ -226,8 +244,19 @@ export function useHardwareControls(
                 setUploadProgress(`Failed: ${message}`);
             }
             setIsUploading(false);
-            startWebSerialMonitor(
-                baudRate,
+            // Restart the monitor at the sketch's Serial.begin baud so the
+            // output is readable. A 115200 monitor on a 9600 sketch shows up
+            // as NUL / control-char floods (the \u0000 spam in the logs).
+            const sketchBaud = detectSketchBaud(generatedCode);
+            const monitorBaud = sketchBaud ?? baudRateRef.current;
+            if (sketchBaud && sketchBaud !== baudRateRef.current) {
+                addLog(`ℹ Sketch uses Serial.begin(${sketchBaud}) — switching monitor from ${baudRateRef.current} to ${sketchBaud} baud.`);
+                setBaudRate?.(sketchBaud);
+            }
+            // The sketch needs a moment to boot after the bootloader exits.
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await startWebSerialMonitor(
+                monitorBaud,
                 (line) => setSerialMessages(prev => [...prev.slice(-100), line]),
                 (msg) => addLog(msg),
             );

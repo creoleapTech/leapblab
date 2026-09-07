@@ -145,7 +145,22 @@ class SerialStream {
     }
 
     async open(baudRate: number): Promise<void> {
-        await this.port.open({ baudRate });
+        // The serial monitor may still hold the port open (or have just
+        // released it while the OS still considers it busy). Close first so
+        // port.open() below cannot throw InvalidStateError ("already open").
+        if (this.port.readable || this.port.writable) {
+            try { await this.port.close(); } catch { /* already closed — ignore */ }
+            // Small settle delay: Windows needs a tick to release the COM port.
+            await sleep(100);
+        }
+        try {
+            await this.port.open({ baudRate });
+        } catch (err: any) {
+            throw new Error(
+                `Could not open the serial port at ${baudRate} baud (${err?.name || 'Error'}: ${err?.message || err}). ` +
+                `Close the Serial Monitor / Arduino IDE monitor and retry.`
+            );
+        }
         const readable = this.port.readable;
         const writable = this.port.writable;
         if (!readable || !writable) throw new Error('Serial port has no read/write streams.');
@@ -320,9 +335,13 @@ async function classicReset(port: SerialPort): Promise<void> {
     }
 }
 
-/** Try to sync with the bootloader at the given baud. */
+/** Try to sync with the bootloader at the given baud. Never throws on open failure — returns false so the retry loop can try the next baud. */
 async function syncAtBaud(stream: SerialStream, baudRate: number, reset = true): Promise<boolean> {
-    await stream.open(baudRate);
+    try {
+        await stream.open(baudRate);
+    } catch {
+        return false;
+    }
     await sleep(200);
     // Reset into the bootloader NOW, with the port open: the sync loop below
     // then catches the bootloader inside its ~1s watchdog window.

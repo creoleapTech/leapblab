@@ -362,7 +362,10 @@ const IntermediateApp: React.FC<{ onBack: () => void; onOpenPython?: () => void;
 
     const [serialMessages, setSerialMessages] = useState<string[]>([]);
 
-    const [baudRate, setBaudRate] = useState<number>(115200);
+    // Arduino sketches default to Serial.begin(9600) (see arduino-generator);
+    // ESP32 examples default to 115200. The monitor auto-switches to the
+    // sketch baud after each web upload (see useHardwareControls).
+    const [baudRate, setBaudRate] = useState<number>(9600);
 
     const [lineEnding, setLineEnding] = useState<string>('\r\n');
 
@@ -1117,7 +1120,7 @@ const IntermediateApp: React.FC<{ onBack: () => void; onOpenPython?: () => void;
         editorMode, selectedPort, isConnected, baudRate, selectedBoard,
         generatedCode, isUploading,
         setPorts, setIsConnected, setSerialMessages, setIsUploading,
-        setUploadProgress, setActiveTab, addLog
+        setUploadProgress, setActiveTab, addLog, setBaudRate
     );
 
     // Full-block click listener — captures clicks on the ENTIRE block area

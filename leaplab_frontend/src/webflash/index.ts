@@ -95,13 +95,44 @@ function describePort(port: SerialPort): string {
 let monitorPort: SerialPort | null = null;
 let monitorReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 let monitorOpenedPort = false;
+let monitorStopRequested = false;
 
-/** Opens the granted port if it isn't open yet. */
+/**
+ * Extracts the baud rate from `Serial.begin(<baud>)` in the sketch.
+ * Returns null when the sketch has no explicit Serial.begin.
+ */
+export function detectSketchBaud(code: string): number | null {
+    if (!code) return null;
+    const m = /Serial\s*\.\s*begin\s*\(\s*(\d+)\s*\)/.exec(code);
+    if (!m) return null;
+    const baud = parseInt(m[1], 10);
+    return Number.isFinite(baud) && baud > 0 ? baud : null;
+}
+
+/** Opens the granted port at the requested baud, reopening if needed. */
 async function openGrantedPort(baudRate: number): Promise<SerialPort | null> {
     const port = grantedPort;
     if (!port) {
         console.log('[webflash-monitor] openGrantedPort: no granted port');
         return null;
+    }
+    // If the port is already open (e.g. previous monitor/upload left it open
+    // at a different baud), close first so the new open() actually applies
+    // the requested baud rate. Web Serial has no getter for the current baud,
+    // so always reopening is the only way to guarantee correctness.
+    if (port.readable) {
+        if (port.readable.locked) {
+            // A previous upload (esptool-js / SerialStream) left the stream locked.
+            console.log('[webflash-monitor] stream locked by previous reader — closing and reopening');
+        } else {
+            console.log(`[webflash-monitor] port already open — reopening at ${baudRate} baud...`);
+        }
+        try { await monitorReader?.cancel(); } catch { /* ignore */ }
+        try { monitorReader?.releaseLock(); } catch { /* ignore */ }
+        monitorReader = null;
+        try { await port.close(); } catch (err: any) {
+            console.error(`[webflash-monitor] close before reopen failed: ${err?.name || ''} ${err?.message || err}`);
+        }
     }
     if (!port.readable) {
         try {
@@ -110,25 +141,32 @@ async function openGrantedPort(baudRate: number): Promise<SerialPort | null> {
             monitorOpenedPort = true;
             console.log('[webflash-monitor] port opened OK');
         } catch (err: any) {
-            console.error(`[webflash-monitor] port.open failed: ${err?.message || err}`);
+            console.error(`[webflash-monitor] port.open failed: ${err?.name || ''} ${err?.message || err}`);
             throw err;
         }
         return port;
     }
-    if (port.readable.locked) {
-        // A previous upload (esptool-js / SerialStream) left the stream locked.
-        // Close and reopen so the monitor can attach its own reader.
-        console.log('[webflash-monitor] stream locked by previous reader — closing and reopening');
-        try { await port.close(); } catch (err: any) {
-            console.error(`[webflash-monitor] close locked port failed: ${err?.message || err}`);
-        }
-        if (!port.readable) {
-            await port.open({ baudRate });
-            monitorOpenedPort = true;
-            console.log('[webflash-monitor] port reopened OK');
-        }
-    }
     return port;
+}
+
+/**
+ * True when a decoded chunk looks like binary protocol data (bootloader
+ * STK500 0x14/0x10 replies, framing-error 0x00 flood from a baud mismatch)
+ * rather than human-readable sketch output.
+ */
+function isBinaryChunk(bytes: Uint8Array): boolean {
+    if (!bytes.length) return false;
+    let nonPrintable = 0;
+    for (let i = 0; i < bytes.length; i++) {
+        const b = bytes[i];
+        // Allow \r \n \t and printable ASCII (0x20–0x7E) plus common UTF-8
+        // continuation bytes (>= 0x80). Everything else is "binary".
+        if (b === 0x0a || b === 0x0d || b === 0x09) continue;
+        if (b >= 0x20 && b <= 0x7e) continue;
+        if (b >= 0x80) continue;
+        nonPrintable++;
+    }
+    return nonPrintable / bytes.length > 0.3;
 }
 
 /**
@@ -142,6 +180,7 @@ export async function startWebSerialMonitor(
     onStatus?: (message: string) => void,
 ): Promise<boolean> {
     try {
+        monitorStopRequested = false;
         const port = await openGrantedPort(baudRate);
         if (!port?.readable || !port?.writable) {
             console.log('[webflash-monitor] port has no readable/writable stream');
@@ -149,24 +188,41 @@ export async function startWebSerialMonitor(
             return false;
         }
         monitorPort = port;
-        const decoder = new TextDecoder();
+        const decoder = new TextDecoder('utf-8', { fatal: false });
         let buffer = '';
         monitorReader = port.readable.getReader();
         console.log('[webflash-monitor] reader attached — waiting for data...');
         (async () => {
-            let received = 0;
-            // Devices that print without newlines (or slow/failed baud reads)
-            // would otherwise never render — flush partial output periodically.
+            let binaryBytes = 0;
+            let binaryWarned = false;
+            let lastBinaryWarn = 0;
+            // Devices that print without newlines would otherwise never
+            // render — flush partial text output periodically. Binary garbage
+            // (bootloader bytes, baud-mismatch nulls) is NOT flushed to the
+            // UI; it only produces a throttled console warning.
             const flushPartial = () => {
-                if (buffer) {
-                    console.log(`[webflash-monitor] flush → ${JSON.stringify(buffer)}`);
-                    onData(buffer);
-                    buffer = '';
+                if (!buffer) return;
+                // Strip nulls / STK control bytes before deciding to display.
+                // eslint-disable-next-line no-control-regex
+                const cleaned = buffer.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '');
+                buffer = '';
+                if (!cleaned.trim()) return;
+                onData(cleaned);
+            };
+            const flushTimer = setInterval(flushPartial, 250);
+            const noteBinary = (bytes: Uint8Array) => {
+                binaryBytes += bytes.length;
+                const now = Date.now();
+                if (!binaryWarned || now - lastBinaryWarn > 5000) {
+                    binaryWarned = true;
+                    lastBinaryWarn = now;
+                    const preview = Array.from(bytes.slice(0, 8)).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' ');
+                    console.warn(`[webflash-monitor] ignoring ${bytes.length} binary bytes (${preview}…) — likely bootloader traffic or a baud-rate mismatch. Check that the monitor baud matches Serial.begin() in your sketch.`);
+                    onStatus?.('⚠ Serial data looks binary (bootloader chatter or wrong baud) — check the monitor baud matches Serial.begin() in your sketch.');
                 }
             };
-            const flushTimer = setInterval(flushPartial, 150);
             try {
-                while (monitorReader) {
+                while (monitorReader && !monitorStopRequested) {
                     const { value, done } = await monitorReader.read();
                     if (done) {
                         console.log('[webflash-monitor] read loop done (stream closed by device)');
@@ -174,21 +230,34 @@ export async function startWebSerialMonitor(
                         break;
                     }
                     if (!value?.length) continue;
-                    received += value.length;
+                    if (isBinaryChunk(value)) {
+                        noteBinary(value);
+                        continue;
+                    }
                     const text = decoder.decode(value, { stream: true });
-                    console.log(`[webflash-monitor] +${value.length} bytes (total ${received}): ${JSON.stringify(text)}`);
-                    buffer += text;
+                    // Drop any stray control chars (except \r \n \t) so
+                    // STK_INSYNC (0x14) / STK_OK (0x10) / NUL floods never
+                    // reach the Serial Monitor UI.
+                    // eslint-disable-next-line no-control-regex
+                    const clean = text.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '');
+                    if (!clean) continue;
+                    buffer += clean;
                     let newline: number;
                     while ((newline = buffer.indexOf('\n')) >= 0) {
                         const line = buffer.slice(0, newline).replace(/\r$/, '');
                         buffer = buffer.slice(newline + 1);
-                        console.log(`[webflash-monitor] line → ${JSON.stringify(line)}`);
+                        if (!line.trim()) continue;
                         onData(line);
                     }
+                    // Guard against an ever-growing newline-less buffer
+                    // (e.g. binary that slipped through the filter).
+                    if (buffer.length > 4096) flushPartial();
                 }
             } catch (err: any) {
-                console.error(`[webflash-monitor] read loop error: ${err?.message || err}`);
-                onStatus?.(`Serial monitor disconnected: ${err?.message || 'read error'}`);
+                if (!monitorStopRequested) {
+                    console.error(`[webflash-monitor] read loop error: ${err?.name || ''} ${err?.message || err}`);
+                    onStatus?.(`Serial monitor disconnected: ${err?.message || 'read error'}`);
+                }
             } finally {
                 clearInterval(flushTimer);
                 flushPartial();
@@ -200,7 +269,7 @@ export async function startWebSerialMonitor(
         onStatus?.(`Serial monitor connected at ${baudRate} baud.`);
         return true;
     } catch (err: any) {
-        console.error(`[webflash-monitor] start failed: ${err?.message || err}`);
+        console.error(`[webflash-monitor] start failed: ${err?.name || ''} ${err?.message || 'unknown error'}`);
         onStatus?.(`Failed to open serial port: ${err?.message || 'unknown error'}`);
         return false;
     }
@@ -208,16 +277,18 @@ export async function startWebSerialMonitor(
 
 /** Stops the monitor read loop and closes the port if this module opened it. */
 export async function stopWebSerialMonitor(): Promise<void> {
-    console.log('[webflash-monitor] stopping monitor...');
+    monitorStopRequested = true;
     try { await monitorReader?.cancel(); } catch { /* ignore */ }
+    // Give the cancelled read() a tick to exit before releasing the lock,
+    // otherwise the next port.open() can race and throw InvalidStateError.
+    await new Promise(resolve => setTimeout(resolve, 50));
     try { monitorReader?.releaseLock(); } catch { /* ignore */ }
     monitorReader = null;
     if (monitorPort && monitorOpenedPort) {
-        try { if (monitorPort.readable) await monitorPort.close(); } catch { /* ignore */ }
+        try { if (monitorPort.readable || monitorPort.writable) await monitorPort.close(); } catch { /* ignore */ }
     }
     monitorPort = null;
     monitorOpenedPort = false;
-    console.log('[webflash-monitor] stopped');
 }
 
 /** Writes a string to the granted Web Serial port (serial monitor TX). */
@@ -427,11 +498,13 @@ export async function uploadToBoard(options: WebUploadOptions): Promise<{ succes
 
         return { success: true };
     } catch (err: any) {
-        console.error('[webflash] ❌ Upload failed with error:', err);
-        options.onLog?.(`[webflash] ❌ Upload failed: ${err?.message || err}`);
+        const name = err?.name ? `${err.name}: ` : '';
+        const message = err?.message || String(err) || 'unknown error';
+        console.error(`[webflash] ❌ Upload failed with error: ${name}${message}`, err?.stack || err);
+        options.onLog?.(`[webflash] ❌ Upload failed: ${name}${message}`);
         return {
             success: false,
-            error: err?.message || 'Upload failed with an unknown error.',
+            error: `${name}${message}`,
         };
     }
 }
