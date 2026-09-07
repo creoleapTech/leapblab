@@ -176,8 +176,9 @@ export default function MenuBar({
                             {/* Stage / Upload mode toggle */}
                             <ModeToggle mode={mode} onModeChange={onModeChange} />
 
-                            {/* Upload Action Button */}
-                            {mode === 'upload' && (
+                            {/* Upload Action Button — removed from topbar in upload mode per requirement;
+                                the green UPLOAD in the unified toolbar below the topbar (IntermediateApp) is retained */}
+                            {false && mode === 'upload' && (
                                 <ActionButton
                                     variant="warning"
                                     icon={<Upload size={13} strokeWidth={2.5} />}
