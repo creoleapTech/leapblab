@@ -5,23 +5,24 @@
  * NeuraApp — ML module with kid-friendly classifier UI.
  */
 
-import React, { useState, useCallback, lazy, Suspense } from 'react'
+import React, { useState, useCallback, Suspense } from 'react'
 import type { ProjectType } from './types/neura.types'
 import Loader from '../components/Loader'
 import { useCloudProjectStore } from '../store/cloudProjectStore'
+import { lazyWithRetry } from '../utils/lazyWithRetry'
 
-const NeuraHome = lazy(() => import('./ui/NeuraHome'))
-const ProjectWorkspace = lazy(() => import('./ui/ProjectWorkspace'))
-const ImageClassifierPanel = lazy(() => import('./ui/panels/ImageClassifierPanel'))
-const AudioClassifierPanel = lazy(() => import('./ui/panels/AudioClassifierPanel'))
-const PoseClassifierPanel = lazy(() => import('./ui/panels/PoseClassifierPanel'))
-const HandPoseClassifierPanel = lazy(() => import('./ui/panels/HandPoseClassifierPanel'))
-const TextClassifierPanel = lazy(() => import('./ui/panels/TextClassifierPanel'))
-const NumberClassifierPanel = lazy(() => import('./ui/panels/NumberClassifierPanel'))
-const ObjectDetectorPanel = lazy(() => import('./ui/panels/ObjectDetectorPanel'))
-const VirtualPianoPanel = lazy(() => import('./projects/M1-VirtualPiano/VirtualPianoPanel'))
-const DrawingCanvasPanel = lazy(() => import('./projects/M1-DrawingCanvas/DrawingCanvasPanel'))
-const FingerCounterPanel = lazy(() => import('./projects/M1-FingerCounter/FingerCounterPanel'))
+const NeuraHome = lazyWithRetry(() => import('./ui/NeuraHome'), 'NeuraHome')
+const ProjectWorkspace = lazyWithRetry(() => import('./ui/ProjectWorkspace'), 'ProjectWorkspace')
+const ImageClassifierPanel = lazyWithRetry(() => import('./ui/panels/ImageClassifierPanel'), 'ImageClassifierPanel')
+const AudioClassifierPanel = lazyWithRetry(() => import('./ui/panels/AudioClassifierPanel'), 'AudioClassifierPanel')
+const PoseClassifierPanel = lazyWithRetry(() => import('./ui/panels/PoseClassifierPanel'), 'PoseClassifierPanel')
+const HandPoseClassifierPanel = lazyWithRetry(() => import('./ui/panels/HandPoseClassifierPanel'), 'HandPoseClassifierPanel')
+const TextClassifierPanel = lazyWithRetry(() => import('./ui/panels/TextClassifierPanel'), 'TextClassifierPanel')
+const NumberClassifierPanel = lazyWithRetry(() => import('./ui/panels/NumberClassifierPanel'), 'NumberClassifierPanel')
+const ObjectDetectorPanel = lazyWithRetry(() => import('./ui/panels/ObjectDetectorPanel'), 'ObjectDetectorPanel')
+const VirtualPianoPanel = lazyWithRetry(() => import('./projects/M1-VirtualPiano/VirtualPianoPanel'), 'VirtualPianoPanel')
+const DrawingCanvasPanel = lazyWithRetry(() => import('./projects/M1-DrawingCanvas/DrawingCanvasPanel'), 'DrawingCanvasPanel')
+const FingerCounterPanel = lazyWithRetry(() => import('./projects/M1-FingerCounter/FingerCounterPanel'), 'FingerCounterPanel')
 
 interface NeuraAppProps {
     onBack?: () => void

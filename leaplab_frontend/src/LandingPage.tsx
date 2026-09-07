@@ -3,13 +3,14 @@
  * All rights reserved. Proprietary and confidential.
  * Unauthorized copying, distribution, or modification is strictly prohibited.
  */
-import React, { useEffect, useRef, useState, lazy, Suspense } from 'react';
+import React, { useEffect, useRef, useState, Suspense } from 'react';
 import LeapLabAuthButton from './auth/LeapLabAuthButton';
 import MyProjectsDashboard from './components/my-projects/MyProjectsDashboard';
 import './components/my-projects/keyframes.css';
+import { lazyWithRetry } from './utils/lazyWithRetry';
 
 /** 3D hero animation — lazy loaded for performance */
-const Robot3DAnimation = lazy(() => import('./components/Robot3DAnimation'));
+const Robot3DAnimation = lazyWithRetry(() => import('./components/Robot3DAnimation'), 'Robot3DAnimation');
 
 interface LandingPageProps {
   onSelect: (mode: 'intermediate' | 'junior' | 'python' | 'appinventor' | 'vision3d' | any) => void;

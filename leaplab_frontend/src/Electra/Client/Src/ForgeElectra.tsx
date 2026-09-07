@@ -3,7 +3,8 @@
  * All rights reserved. Proprietary and confidential.
  * Unauthorized copying, distribution, or modification is strictly prohibited.
  */
-import React, { useState, lazy, Suspense, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, Suspense, useEffect, useRef, useCallback, useMemo } from 'react';
+import { lazyWithRetry } from '../../../utils/lazyWithRetry';
 import { Node, Edge } from 'reactflow';
 import { Code, Library as LibraryIcon } from 'lucide-react';
 // Register official leap elements
@@ -12,8 +13,8 @@ import { useForgeStore, getSimulationRunner } from '../utils/store/useForgeStore
 import { getElectraVars, getLightThemeVars } from '../utils/electraTheme';
 
 // Lazy load complex inner components
-const ForgeCanvas = lazy(() => import('./components/ForgeCanvas'));
-const ForgeEditor = lazy(() => import('./components/Editor/ForgeEditor'));
+const ForgeCanvas = lazyWithRetry(() => import('./components/ForgeCanvas'), 'ForgeCanvas');
+const ForgeEditor = lazyWithRetry(() => import('./components/Editor/ForgeEditor'), 'ForgeEditor');
 import { LibraryManager } from './components/Library/LibraryManager';
 import { PartPicker as ComponentSidebar } from './components/Library/PartPicker';
 import { IgniteTopbar } from './components/Layout/Topbar';

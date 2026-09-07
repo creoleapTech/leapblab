@@ -41,14 +41,15 @@ import DialogRenderer from './components/DialogRenderer';
 
 import { PythonEditorTab } from '../components/PythonEditorTab';
 
+import { lazyWithRetry } from '../utils/lazyWithRetry';
 // Lazy load large components for better performance
-const BackdropLibrary = React.lazy(() => import('../components/BackdropLibrary'));
-const SpriteLibrary = React.lazy(() => import('../components/SpriteLibrary').then(m => ({ default: m.SpriteLibrary })));
-const JuniorExtensionLibrary = React.lazy(() => import('../leapignite/client/components/JuniorExtensionLibrary'));
+const BackdropLibrary = lazyWithRetry(() => import('../components/BackdropLibrary'), 'BackdropLibrary');
+const SpriteLibrary = lazyWithRetry(() => import('../components/SpriteLibrary').then(m => ({ default: m.SpriteLibrary } as any)) as any, 'SpriteLibrary');
+const JuniorExtensionLibrary = lazyWithRetry(() => import('../leapignite/client/components/JuniorExtensionLibrary'), 'JuniorExtensionLibrary');
 
 // Lazy load heavy tabs that import fabric.js and wav-encoder - prevents 60s startup delay
-const CostumesTab = React.lazy(() => import('../stage/CostumesTab').then(m => ({ default: m.CostumesTab })));
-const SoundsTab = React.lazy(() => import('../stage/SoundsTab').then(m => ({ default: m.SoundsTab })));
+const CostumesTab = lazyWithRetry(() => import('../stage/CostumesTab').then(m => ({ default: m.CostumesTab } as any)) as any, 'CostumesTab');
+const SoundsTab = lazyWithRetry(() => import('../stage/SoundsTab').then(m => ({ default: m.SoundsTab } as any)) as any, 'SoundsTab');
 
 import { TabErrorBoundary, SuspenseTab } from './components/TabErrorBoundary';
 import { log } from './utils/log';

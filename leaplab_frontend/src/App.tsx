@@ -11,57 +11,17 @@ import { UpdateBanner } from './components/UpdateBanner';
 import { getSharedProject, fetchCloudProjectContent } from './services/cloudProjectApi';
 import { useCloudProjectStore } from './store/cloudProjectStore';
 import { isEmbedded } from './hooks/useIsEmbedded';
+import { lazyWithRetry, isChunkLoadError } from './utils/lazyWithRetry';
+// vite:preloadError global handler is registered inside lazyWithRetry module
 
-// Retry helper for Vite chunk-load failures (stale cache after HMR / new deploy)
-function lazyWithRetry<T>(importFn: () => Promise<{ default: T }>) {
-    return lazy(async () => {
-        try {
-            const mod = await importFn();
-            try { sessionStorage.removeItem('chunk-retry'); } catch {}
-            return mod;
-        } catch (err: any) {
-            const msg = err?.message || String(err);
-            const isChunkError = msg.includes('Failed to fetch dynamically imported module')
-                || msg.includes('Importing a module script failed')
-                || msg.includes('Loading chunk')
-                || msg.includes('ChunkLoadError');
-            if (isChunkError) {
-                const hasRetried = (() => { try { return sessionStorage.getItem('chunk-retry') === '1'; } catch { return false; } })();
-                if (!hasRetried) {
-                    try { sessionStorage.setItem('chunk-retry', '1'); } catch {}
-                    window.location.reload();
-                    return new Promise(() => {}) as any;
-                }
-            }
-            throw err;
-        }
-    });
-}
-
-// Handle Vite preload errors globally (also covers <link rel="modulepreload"> failures)
-if (typeof window !== 'undefined') {
-    window.addEventListener('vite:preloadError', (e: Event) => {
-        e.preventDefault();
-        try {
-            const hasRetried = sessionStorage.getItem('chunk-retry') === '1';
-            if (!hasRetried) {
-                sessionStorage.setItem('chunk-retry', '1');
-                window.location.reload();
-            }
-        } catch {
-            window.location.reload();
-        }
-    });
-}
-
-const LandingPage = lazyWithRetry(() => import('./LandingPage'));
+const LandingPage = lazyWithRetry(() => import('./LandingPage'), 'LandingPage');
 
 const IntermediateApp = lazyWithRetry(() => {
     if (typeof window !== 'undefined' && typeof (window as any).define === 'function' && (window as any).define.amd) {
         (window as any).define = undefined;
     }
     return import('./embed/IntermediateApp');
-});
+}, 'IntermediateApp');
 
 // @ts-ignore
 const JuniorApp = lazyWithRetry(() => {
@@ -69,13 +29,13 @@ const JuniorApp = lazyWithRetry(() => {
         (window as any).define = undefined;
     }
     return import('./leapignite/client/JuniorApp');
-});
+}, 'JuniorApp');
 
 // @ts-ignore
-const PythonApp = lazyWithRetry(() => import('./leaplogix/client/LogixApp'));
+const PythonApp = lazyWithRetry(() => import('./leaplogix/client/LogixApp'), 'PythonApp');
 
 // @ts-ignore
-const PythonNotebook = lazyWithRetry(() => import('./python/PythonNotebook'));
+const PythonNotebook = lazyWithRetry(() => import('./python/PythonNotebook'), 'PythonNotebook');
 
 // @ts-ignore
 const AppInventor = lazyWithRetry(() => {
@@ -83,16 +43,16 @@ const AppInventor = lazyWithRetry(() => {
         (window as any).define = undefined;
     }
     return import('./creova');
-});
+}, 'AppInventor');
 
 // @ts-ignore
-const ElectraWorkspace = lazyWithRetry(() => import('./Electra/Client/Src/ElectraWorkspace'));
+const ElectraWorkspace = lazyWithRetry(() => import('./Electra/Client/Src/ElectraWorkspace'), 'ElectraWorkspace');
 
-const NeuraApp = lazyWithRetry(() => import('./neura/NeuraApp'));
+const NeuraApp = lazyWithRetry(() => import('./neura/NeuraApp'), 'NeuraApp');
 
-const Leap3DApp = lazyWithRetry(() => import('./vision3d'));
+const Leap3DApp = lazyWithRetry(() => import('./vision3d'), 'Leap3DApp');
 
-const PulseApp = lazyWithRetry(() => import('./PulseApp'));
+const PulseApp = lazyWithRetry(() => import('./PulseApp'), 'PulseApp');
 
 type AppMode = 'home' | 'intermediate' | 'junior' | 'python' | 'notebook' | 'creova' | 'appforge' | 'electra' | 'neura' | 'vision3d' | 'pulse';
 
@@ -107,6 +67,21 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
     }
     componentDidCatch(error: any, errorInfo: any) {
         console.error("ErrorBoundary caught:", error, errorInfo);
+        // Auto-recover stale chunk: reload once with cache-bust before showing error UI
+        if (isChunkLoadError(error)) {
+            try {
+                const hasRetried = sessionStorage.getItem('chunk-retry') === '1';
+                if (!hasRetried) {
+                    console.warn('[chunk-retry] ErrorBoundary auto-reload for stale chunk', (error as any)?.message);
+                    sessionStorage.setItem('chunk-retry', '1');
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('_r', Date.now().toString());
+                    window.location.replace(url.toString());
+                    setTimeout(() => { try { window.location.reload(); } catch {} }, 150);
+                    return;
+                }
+            } catch {}
+        }
         // Notify parent frame if embedded
         try {
             if (isEmbedded()) {
@@ -116,18 +91,22 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
     }
     render() {
         if (this.state.hasError) {
-            const errMsg = this.state.error?.message || String(this.state.error || '');
-            const isChunkError = errMsg.includes('Failed to fetch dynamically imported module')
-                || errMsg.includes('Importing a module script failed')
-                || errMsg.includes('Loading chunk')
-                || errMsg.includes('ChunkLoadError');
+            const isChunkError = isChunkLoadError(this.state.error);
             const handleDismiss = () => {
                 try { sessionStorage.removeItem('chunk-retry'); } catch {}
                 this.setState({ hasError: false, error: null });
             };
             const handleReload = () => {
                 try { sessionStorage.removeItem('chunk-retry'); } catch {}
-                window.location.reload();
+                try {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('_r', Date.now().toString());
+                    // force bypass of cached index.html
+                    window.location.replace(url.toString());
+                    setTimeout(() => { try { window.location.reload(); } catch {} }, 200);
+                } catch {
+                    window.location.reload();
+                }
             };
             if (isEmbedded()) {
                 // Compact inline error bar for embed context — does not cover the whole page
