@@ -53,6 +53,22 @@ export function getGrantedPort(): SerialPort | null {
 }
 
 /**
+ * Revokes the stored port permission (Chrome 103+: SerialPort.forget) and
+ * clears the cache, so the next Connect shows the picker again. Use when the
+ * stored grant points at a stale/locked port ("Failed to open serial port"
+ * on every attempt). Best-effort: older browsers simply clear the cache.
+ */
+export async function forgetGrantedPort(): Promise<void> {
+    const port = grantedPort;
+    grantedPort = null;
+    await stopWebSerialMonitor();
+    if (port) {
+        try { await (port as any).forget?.(); } catch { /* unsupported — ignore */ }
+        try { if ((port as any).readable || (port as any).writable) await port.close(); } catch { /* ignore */ }
+    }
+}
+
+/**
  * Opens the browser's device picker. Must be called from a user gesture
  * (button click). Resolves to null if the user cancels.
  */
@@ -133,12 +149,15 @@ async function openGrantedPort(baudRate: number): Promise<SerialPort | null> {
         } else {
             console.log(`[webflash-monitor] port already open — reopening at ${baudRate} baud...`);
         }
-        try { await monitorReader?.cancel(); } catch { /* ignore */ }
+        try { await Promise.race([monitorReader?.cancel(), new Promise(resolve => setTimeout(resolve, 250))]); } catch { /* ignore */ }
         try { monitorReader?.releaseLock(); } catch { /* ignore */ }
         monitorReader = null;
         try { await port.close(); } catch (err: any) {
             console.error(`[webflash-monitor] close before reopen failed: ${err?.name || ''} ${err?.message || err}`);
         }
+        // FTDI drivers on Windows need a beat after close before the next
+        // open() is accepted; reopening instantly yields NetworkError.
+        await new Promise(resolve => setTimeout(resolve, 250));
     }
     if (!port.readable) {
         try {
@@ -302,7 +321,7 @@ export async function startWebSerialMonitor(
 export async function stopWebSerialMonitor(): Promise<void> {
     monitorStopRequested = true;
     monitorSession++;
-    try { await monitorReader?.cancel(); } catch { /* ignore */ }
+    try { await Promise.race([monitorReader?.cancel(), new Promise(resolve => setTimeout(resolve, 300))]); } catch { /* ignore */ }
     // Give the cancelled read() a tick to exit before releasing the lock,
     // otherwise the next port.open() can race and throw InvalidStateError.
     await new Promise(resolve => setTimeout(resolve, 50));

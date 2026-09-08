@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type React from 'react';
 import { log } from '../utils/log';
-import { isWebSerialSupported, listPorts as webListPorts, requestPort as webRequestPort, uploadToBoard, startWebSerialMonitor, stopWebSerialMonitor, sendWebSerial, getGrantedPort, detectSketchBaud } from '../../webflash';
+import { isWebSerialSupported, listPorts as webListPorts, requestPort as webRequestPort, uploadToBoard, startWebSerialMonitor, stopWebSerialMonitor, sendWebSerial, getGrantedPort, forgetGrantedPort, detectSketchBaud } from '../../webflash';
 
 export function useHardwareControls(
     editorMode: string,
@@ -89,6 +89,10 @@ export function useHardwareControls(
                 }
             } else {
                 await stopWebSerialMonitor();
+                // Revoke the stored grant (Chrome 103+) so the next Connect
+                // re-prompts the picker — the cached port may be stale/locked
+                // ("Failed to open serial port" on every attempt).
+                await forgetGrantedPort();
                 setIsConnected(false);
                 addLog(`Disconnected from ${selectedPort}`);
             }
