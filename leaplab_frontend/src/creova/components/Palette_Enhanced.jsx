@@ -2,15 +2,18 @@
  * Copyright (c) 2026 Creoleap Technologies Pvt. Ltd.
  * Enhanced Palette Component - Matches Leap App Inventor functionality
  */
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { PALETTE_ENHANCED } from '../data/paletteComponents_Enhanced';
-import { Search, ChevronDown, ChevronRight, Info } from 'lucide-react';
+import { Search, ChevronDown, ChevronRight } from 'lucide-react';
 import ComponentIcon from './ComponentIcon';
 
 export default function PaletteEnhanced({ onAddComponent }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [collapsedCategories, setCollapsedCategories] = useState({});
     const [hoveredComponent, setHoveredComponent] = useState(null);
+    const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+    const hoverTimeoutRef = useRef(null);
 
     // Group by category
     const categories = PALETTE_ENHANCED.reduce((acc, curr) => {
@@ -27,20 +30,35 @@ export default function PaletteEnhanced({ onAddComponent }) {
     };
 
     const handleDragStart = (e, component) => {
+        // hide tooltip neatly during drag
+        setHoveredComponent(null);
+        if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
         e.dataTransfer.setData('componentType', component.type);
         e.dataTransfer.setData('componentData', JSON.stringify(component));
         // Store for touch devices where dataTransfer may not persist
         window.__dragComponent = { type: component.type, data: JSON.stringify(component) };
+        e.dataTransfer.effectAllowed = 'copy';
 
-        // Create drag preview
+        // Create neat drag preview - centered under cursor, not clipped
         const dragPreview = document.createElement('div');
-        dragPreview.className = 'bg-white border-2 border-blue-500 rounded-2xl p-4 shadow-2xl flex items-center gap-3 scale-90 origin-top-left';
-        dragPreview.innerHTML = `<div class="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center text-2xl text-blue-600">${component.icon}</div> <span class="text-sm font-extrabold text-slate-900 uppercase tracking-widest">${component.label}</span>`;
+        dragPreview.className = 'bg-white border border-slate-200 rounded-xl shadow-xl flex items-center gap-2.5 px-3 py-2.5';
         dragPreview.style.position = 'absolute';
         dragPreview.style.top = '-1000px';
+        dragPreview.style.left = '-1000px';
+        dragPreview.style.pointerEvents = 'none';
+        dragPreview.style.whiteSpace = 'nowrap';
+        dragPreview.innerHTML = `<div style="width:28px;height:28px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:8px;background:#f1f5f9;border:1px solid #e2e8f0;font-size:14px">${component.icon}</div> <span style="font-size:11px;font-weight:800;color:#1e293b;letter-spacing:0.04em;text-transform:uppercase;white-space:nowrap;">${component.label}</span>`;
         document.body.appendChild(dragPreview);
-        e.dataTransfer.setDragImage(dragPreview, 0, 0);
-        setTimeout(() => document.body.removeChild(dragPreview), 0);
+        // center drag image under cursor
+        const rect = dragPreview.getBoundingClientRect();
+        const offsetX = Math.min(120, Math.max(60, rect.width / 2));
+        const offsetY = rect.height / 2;
+        try {
+            e.dataTransfer.setDragImage(dragPreview, offsetX, offsetY);
+        } catch { /* ignore */ }
+        setTimeout(() => {
+            try { document.body.removeChild(dragPreview); } catch { /* ignore */ }
+        }, 0);
     };
 
     const handleDragEnd = () => {
@@ -61,8 +79,9 @@ export default function PaletteEnhanced({ onAddComponent }) {
         ghost.style.top = `${touch.clientY}px`;
         ghost.style.pointerEvents = 'none';
         ghost.style.zIndex = '99999';
-        ghost.className = 'bg-white border-2 border-blue-500 rounded-2xl p-3 shadow-2xl flex items-center gap-2 -translate-x-1/2 -translate-y-1/2';
-        ghost.innerHTML = `<span class="text-xs font-black text-blue-600 uppercase tracking-widest">${item.label}</span>`;
+        ghost.style.whiteSpace = 'nowrap';
+        ghost.className = 'bg-white border border-slate-200 rounded-xl shadow-xl flex items-center gap-2.5 px-3 py-2 -translate-x-1/2 -translate-y-1/2';
+        ghost.innerHTML = `<span style="width:26px;height:26px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:8px;background:#f1f5f9;border:1px solid #e2e8f0;font-size:13px">${item.icon}</span><span style="font-size:11px;font-weight:800;color:#1e293b;letter-spacing:0.04em;text-transform:uppercase;white-space:nowrap;">${item.label}</span>`;
         document.body.appendChild(ghost);
     };
 
@@ -76,7 +95,7 @@ export default function PaletteEnhanced({ onAddComponent }) {
         }
     };
 
-    const handleTouchEnd = (e, item) => {
+    const handleTouchEnd = (e) => {
         const ghost = document.getElementById('creova-touch-ghost');
         if (ghost) ghost.remove();
 
@@ -101,6 +120,34 @@ export default function PaletteEnhanced({ onAddComponent }) {
         }
 
         window.__touchDragComponent = null;
+    };
+
+    const handleCardEnter = (e, item) => {
+        if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+        const rect = e.currentTarget.getBoundingClientRect();
+        // position tooltip to the right of the palette, vertically centered on card
+        // palette is ~300-360px wide, so rect.right + 12 is safely outside
+        const x = rect.right + 12;
+        let y = rect.top + rect.height / 2;
+        // clamp to viewport
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const tooltipW = 288; // w-72
+        const tooltipH = 110;
+        if (x + tooltipW > vw - 16) {
+            // fallback to left side if not enough space (unlikely)
+            setTooltipPos({ x: Math.max(12, rect.left - tooltipW - 12), y: Math.min(Math.max(12, y - tooltipH/2), vh - tooltipH - 12) });
+        } else {
+            y = Math.min(Math.max(12, y - tooltipH/2), vh - tooltipH - 12);
+            setTooltipPos({ x, y });
+        }
+        setHoveredComponent(item);
+    };
+
+    const handleCardLeave = () => {
+        // small delay to avoid flicker when moving between cards
+        if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+        hoverTimeoutRef.current = setTimeout(() => setHoveredComponent(null), 80);
     };
 
     return (
@@ -154,9 +201,9 @@ export default function PaletteEnhanced({ onAddComponent }) {
                                 <span className="text-[10px] bg-slate-100 text-slate-900 px-3 py-1 rounded-md font-black shadow-sm border border-slate-200 shrink-0">&nbsp;{filteredItems.length}&nbsp;</span>
                             </button>
 
-                            {/* Category Items */}
+                            {/* Category Items — redesigned for readability: single-column, wide cards, no awkward break-all */}
                             {!isCollapsed && (
-                                <div className="grid grid-cols-2 bg-gradient-to-b from-slate-50/50 to-white" style={{ gap: '16px', padding: '20px' }}>
+                                <div className="flex flex-col bg-slate-50/50" style={{ gap: '8px', padding: '12px' }}>
                                     {filteredItems.map(item => (
                                         <div
                                             key={item.type}
@@ -165,45 +212,32 @@ export default function PaletteEnhanced({ onAddComponent }) {
                                             onDragEnd={handleDragEnd}
                                             onTouchStart={(e) => handleTouchStart(e, item)}
                                             onTouchMove={handleTouchMove}
-                                            onTouchEnd={(e) => handleTouchEnd(e, item)}
+                                            onTouchEnd={handleTouchEnd}
                                             onClick={() => onAddComponent?.(item.type, {})}
-                                            onMouseEnter={() => setHoveredComponent(item)}
-                                            onMouseLeave={() => setHoveredComponent(null)}
-                                            style={{ padding: '20px 14px', gap: '10px' }}
-                                            className="group/item relative flex flex-col items-center text-center cursor-grab active:cursor-grabbing border-2 border-slate-200 rounded-2xl bg-gradient-to-b from-white to-slate-50 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] before:absolute before:top-0 before:left-0 before:right-0 before:h-[3px] before:bg-gradient-to-r before:from-blue-500 before:to-cyan-400 before:scale-x-0 hover:before:scale-x-100 before:transition-transform before:duration-300 hover:border-blue-500 hover:bg-gradient-to-br hover:from-blue-500/5 hover:to-white hover:-translate-y-1 hover:scale-[1.02] hover:shadow-xl hover:shadow-blue-500/10 min-w-0 overflow-hidden"
-                                            title={item.description}
+                                            onMouseEnter={(e) => handleCardEnter(e, item)}
+                                            onMouseLeave={handleCardLeave}
+                                            className="group/item relative flex items-center gap-3 cursor-grab active:cursor-grabbing border border-slate-200 rounded-xl bg-white hover:border-blue-400 hover:bg-blue-50/40 hover:shadow-sm px-3 py-2.5 transition-all duration-200 min-w-0 select-none"
                                         >
-                                            <ComponentIcon type={item.type} size={36} className="transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] opacity-80 group-hover/item:scale-110 group-hover/item:rotate-6 group-hover/item:opacity-100" />
+                                            <div className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg bg-slate-50 group-hover/item:bg-white border border-slate-100 group-hover/item:border-blue-100 transition-colors">
+                                                <ComponentIcon type={item.type} size={20} className="transition-all duration-200 opacity-90 group-hover/item:scale-105" />
+                                            </div>
                                             <span
+                                                className="flex-1 min-w-0 text-left font-bold text-slate-800 uppercase tracking-wide leading-snug group-hover/item:text-blue-700 transition-colors"
                                                 style={{
-                                                    fontSize: item.label.length > 20 ? '8px' : item.label.length > 15 ? '9.5px' : '11px',
-                                                    wordBreak: 'break-all'
+                                                    fontSize: '11px',
+                                                    overflowWrap: 'anywhere',
+                                                    wordBreak: 'normal',
+                                                    hyphens: 'auto',
+                                                    lineHeight: '1.25'
                                                 }}
-                                                className="w-full px-1 font-extrabold text-slate-900 uppercase tracking-wider transition-colors duration-300 leading-tight group-hover/item:text-blue-600 group-hover/item:font-black"
                                             >
                                                 {item.label}
                                             </span>
 
-                                            {/* Info icon */}
-                                            {item.description && (
-                                                <Info className="h-3.5 w-3.5 text-slate-900 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                            )}
-
-                                            {/* Tooltip */}
-                                            {hoveredComponent?.type === item.type && item.description && (
-                                                <div className="fixed left-72 top-auto z-50 w-72 bg-white/95 backdrop-blur-md text-slate-900 text-xs rounded-2xl p-5 shadow-pro pointer-events-none border border-slate-200 animate-fade-in">
-                                                    <div className="font-extrabold mb-2 text-blue-600 uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
-                                                        <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(37,99,235,0.8)]" />
-                                                        {item.label}
-                                                    </div>
-                                                    <div className="text-slate-900 leading-relaxed font-medium">{item.description}</div>
-                                                    {item.visible !== undefined && (
-                                                        <div className="mt-2 text-slate-900 italic">
-                                                            {item.visible ? 'Visible component' : 'Non-visible component'}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
+                                            {/* Subtle affordance */}
+                                            <span className="shrink-0 w-6 h-6 rounded-full bg-slate-50 group-hover/item:bg-blue-600 flex items-center justify-center text-slate-400 group-hover/item:text-white transition-colors">
+                                                <span className="text-[14px] leading-none font-bold">+</span>
+                                            </span>
                                         </div>
                                     ))}
                                 </div>
@@ -217,7 +251,28 @@ export default function PaletteEnhanced({ onAddComponent }) {
             <div className="p-5 border-t border-slate-200 bg-white text-[12px] font-extrabold text-slate-900 text-center uppercase tracking-[0.15em]">
                 {PALETTE_ENHANCED.length} MODULES DETECTED
             </div>
+
+            {/* Portal tooltip — outside overflow-hidden, neatly positioned, not clipped to 'D' */}
+            {hoveredComponent && typeof document !== 'undefined' && createPortal(
+                <div
+                    className="fixed z-[9999] w-72 bg-white text-slate-900 text-xs rounded-2xl p-4 shadow-2xl border border-slate-200 pointer-events-none"
+                    style={{ left: tooltipPos.x, top: tooltipPos.y }}
+                    onMouseEnter={() => { if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current); }}
+                    onMouseLeave={handleCardLeave}
+                >
+                    <div className="font-extrabold mb-1.5 text-blue-600 uppercase tracking-[0.14em] text-[10px] flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(37,99,235,0.6)] shrink-0" />
+                        <span className="truncate">{hoveredComponent.label}</span>
+                    </div>
+                    <div className="text-slate-700 leading-relaxed font-medium text-[12px]">{hoveredComponent.description}</div>
+                    {hoveredComponent.visible !== undefined && (
+                        <div className="mt-2 text-[11px] text-slate-500 italic">
+                            {hoveredComponent.visible ? 'Visible component' : 'Non-visible component'}
+                        </div>
+                    )}
+                </div>,
+                document.body
+            )}
         </div>
     );
 }
-

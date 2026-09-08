@@ -161,7 +161,7 @@ export default function AppInventorLayout({
         rightContent={rightContent(activeTab, setActiveTab, handleBuildApk)}
       />
 
-      <div className={`flex-1 overflow-hidden ${activeTab === 'designer' ? 'flex flex-col gap-4 overflow-y-auto p-4 bg-slate-50 desktop:grid desktop:grid-cols-[220px_minmax(320px,_1fr)_260px] desktop:grid-rows-[minmax(0,_1.2fr)_minmax(0,_1fr)] desktop:gap-3 desktop:overflow-hidden wide:grid-cols-[230px_minmax(320px,_1fr)_250px_270px] wide:grid-rows-[none] wide:gap-3 ultra:grid-cols-[280px_minmax(400px,_1fr)_300px_320px] ultra:gap-4' : 'flex p-0'}`}>
+      <div className={`flex-1 overflow-hidden ${activeTab === 'designer' ? 'flex flex-col gap-4 overflow-y-auto p-4 bg-slate-50 desktop:grid desktop:grid-cols-[300px_minmax(320px,_1fr)_280px] desktop:grid-rows-[minmax(0,_1.2fr)_minmax(0,_1fr)] desktop:gap-3 desktop:overflow-hidden wide:grid-cols-[340px_minmax(320px,_1fr)_300px_320px] wide:grid-rows-[none] wide:gap-3 ultra:grid-cols-[360px_minmax(400px,_1fr)_320px_340px] ultra:gap-4' : 'flex p-0'}`}>
         {activeTab === 'designer' ? (
           <>
             <div className="min-h-[400px] overflow-hidden bg-white border border-slate-200 rounded-[20px] shadow-sm hover:shadow-md hover:-translate-y-px flex flex-col transition-all duration-300 desktop:col-[1] desktop:row-[1/span_2] desktop:min-h-0 wide:col-[1] wide:row-[1]">
