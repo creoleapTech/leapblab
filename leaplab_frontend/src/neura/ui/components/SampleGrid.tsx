@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react'
 import type { Sample } from '../../types/neura.types'
+import { openImageViewer } from './neuraImageViewer'
 
 interface SampleGridProps {
     samples: Sample[]
@@ -161,13 +162,16 @@ export default function SampleGrid({ samples, type, onRemove, onUndo }: SampleGr
                 {samples.map((sample, index) => (
                     <div
                         key={sample.id}
-                        className="group relative aspect-square rounded-lg overflow-hidden bg-white border border-slate-200 cursor-default transition-all duration-150 hover:shadow-md hover:scale-[1.02]"
+                        onClick={() => { if (type === 'image' && sample.data) openImageViewer(samples.filter(x => x.data).map((x, xi) => ({ src: x.data, label: `Image ${xi + 1}` })), samples.filter(x => x.data).findIndex(x => x.id === sample.id)) }}
+                        title={type === 'image' ? 'Click to view (80% screen)' : undefined}
+                        className={`group relative aspect-square rounded-lg overflow-hidden bg-white border border-slate-200 transition-all duration-150 hover:shadow-md hover:scale-[1.02] ${type === 'image' ? 'cursor-zoom-in' : 'cursor-default'}`}
                     >
                         {type === 'image' && (
                             <img
                                 src={sample.data}
                                 alt={`Sample ${index + 1}`}
-                                className="w-full h-full object-cover"
+                                className="w-full h-full object-cover pointer-events-none"
+                                draggable={false}
                             />
                         )}
                         {type === 'audio' && (
@@ -186,6 +190,10 @@ export default function SampleGrid({ samples, type, onRemove, onUndo }: SampleGr
                             <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-amber-100 to-amber-50 relative">
                                 <KeypointSkeleton data={sample.data} />
                             </div>
+                        )}
+
+                        {type === 'image' && (
+                            <span className="absolute bottom-1 right-1 w-5 h-5 rounded-md bg-black/55 text-white hidden group-hover:flex items-center justify-center text-[10px] pointer-events-none">⛶</span>
                         )}
 
                         {/* Delete button */}

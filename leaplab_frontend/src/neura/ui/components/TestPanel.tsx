@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react'
+import { openSingleImage } from './neuraImageViewer'
 
 interface TestPanelProps {
     prediction: { label: string; confidences: Record<string, number> } | null
@@ -159,7 +160,7 @@ export default function TestPanel({
                             <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full rounded-2xl -scale-x-100 ${videoFit === 'contain' ? 'object-contain bg-black' : 'object-cover'}`} />
                         )}
                         {!cameraOn && testImage && (
-                            <img src={testImage} alt="Test" className="w-full h-full object-contain" />
+                            <img src={testImage} alt="Test" onClick={() => openSingleImage(testImage, 'Test image')} title="Click to view (80% screen)" className="w-full h-full object-contain cursor-zoom-in" />
                         )}
                         {!cameraOn && !testImage && (
                             <div className="flex flex-col items-center text-center animate-fade-in p-6">

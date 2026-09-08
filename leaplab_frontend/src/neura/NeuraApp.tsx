@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useCallback, Suspense } from 'react'
+import { NeuraImageViewerHost } from './ui/components/neuraImageViewer'
 import type { ProjectType } from './types/neura.types'
 import Loader from '../components/Loader'
 import { useCloudProjectStore } from '../store/cloudProjectStore'
@@ -120,6 +121,8 @@ export default function NeuraApp({ onBack }: NeuraAppProps) {
                     </ProjectWorkspace>
                 )}
             </Suspense>
+            {/* Global 80% image viewer for all Neura folders/images */}
+            <NeuraImageViewerHost />
         </div>
     )
 }

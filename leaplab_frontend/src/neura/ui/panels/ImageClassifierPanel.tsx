@@ -7,6 +7,7 @@ import { MAX_SAMPLES_PER_CLASS } from '../../types/neura.types'
 import { nudgeToNonColliding } from '../layoutCollision'
 import AccuracyChart from '../components/AccuracyChart'
 import NotRelatedModal from '../components/NotRelatedModal'
+import { openImageViewer, openSingleImage } from '../components/neuraImageViewer'
 
 interface ImageClassifierPanelProps { mode: UseNeuraProjectReturn }
 
@@ -694,9 +695,10 @@ export default function ImageClassifierPanel({ mode }: ImageClassifierPanelProps
                                         {cls.samples.length > 0 ? (
                                             <>
                                                 <div className={`grid grid-cols-4 gap-2 ${expandedClasses[cls.id] ? 'max-h-[360px] overflow-auto neura-scrollbar pr-1' : ''}`}>
-                                                    {(expandedClasses[cls.id] ? cls.samples : cls.samples.slice(0, 8)).map(s => (
-                                                        <div key={s.id} className="relative aspect-square rounded-lg overflow-hidden bg-slate-50 border border-slate-200 group/thumb">
-                                                            <img src={s.data} alt="" className="w-full h-full object-cover" />
+                                                    {(expandedClasses[cls.id] ? cls.samples : cls.samples.slice(0, 8)).map((s, idx) => (
+                                                        <div key={s.id} onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); openImageViewer(cls.samples.map(x => ({ src: x.data, label: `${cls.name} — image ${cls.samples.indexOf(x) + 1}` })), cls.samples.indexOf(s)) }} title="Click to view (80% screen)" className="relative aspect-square rounded-lg overflow-hidden bg-slate-50 border border-slate-200 group/thumb cursor-zoom-in">
+                                                            <img src={s.data} alt="" className="w-full h-full object-cover pointer-events-none" draggable={false} />
+                                                            <span className="absolute bottom-1 right-1 w-5 h-5 rounded-md bg-black/55 text-white flex items-center justify-center text-[10px] opacity-0 group-hover/thumb:opacity-100 transition-opacity pointer-events-none">⛶</span>
                                                             <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); handleRemoveSample(cls.id, s.id) }} className="absolute top-1 right-1 w-5 h-5 rounded-md bg-white border border-slate-200 text-slate-600 flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity shadow-sm">×</button>
                                                         </div>
                                                     ))}
@@ -823,7 +825,7 @@ export default function ImageClassifierPanel({ mode }: ImageClassifierPanelProps
                                 )}
                                 {!camera.cameraOn && testImage && (
                                     <>
-                                        <img src={testImage} alt="" className="w-full h-full object-contain bg-black relative z-10" />
+                                        <img src={testImage} alt="" onClick={e => { e.stopPropagation(); openSingleImage(testImage, 'Test image') }} title="Click to view (80% screen)" className="w-full h-full object-contain bg-black relative z-10 cursor-zoom-in" />
                                         <button onPointerDown={e => e.stopPropagation()} onClick={() => { setTestImage(null); setPrediction(null) }} className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 text-white flex items-center justify-center z-10">×</button>
                                     </>
                                 )}

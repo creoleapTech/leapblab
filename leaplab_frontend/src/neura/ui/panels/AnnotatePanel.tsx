@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react'
 import type { UseNeuraProjectReturn } from '../../hooks/useNeuraProject'
 import type { BoundingBox } from '../../types/neura.types'
 import { ensureCocoSsd } from '../../ml/loadScript'
+import { openImageViewer, openSingleImage } from '../components/neuraImageViewer'
 
 interface AnnotatePanelProps {
     mode: UseNeuraProjectReturn
@@ -564,23 +565,38 @@ export default function AnnotatePanel({ mode }: AnnotatePanelProps) {
                                 }
                             }
                             return (
-                                <button
+                                <div
                                     key={sample.id}
-                                    onClick={() => setCurrentImageIndex(idx)}
-                                    className={`relative shrink-0 w-14 h-14 rounded-lg border-2 overflow-hidden cursor-pointer transition-all ${idx === currentImageIndex ? 'border-[#630ed4] shadow-md scale-105' : 'border-gray-200 hover:border-gray-300'}`}
+                                    className={`relative shrink-0 w-14 h-14 rounded-lg border-2 overflow-hidden cursor-pointer transition-all group/strip ${idx === currentImageIndex ? 'border-[#630ed4] shadow-md scale-105' : 'border-gray-200 hover:border-gray-300'}`}
                                 >
-                                    {thumbnail ? (
-                                        <img src={thumbnail} alt="" className="w-full h-full object-cover" />
-                                    ) : (
-                                        <div className="w-full h-full bg-gray-100 flex items-center justify-center text-xs">🖼️</div>
-                                    )}
+                                    <button
+                                        onClick={() => setCurrentImageIndex(idx)}
+                                        onDoubleClick={() => { if (thumbnail) openSingleImage(thumbnail, `Image ${idx + 1}`) }}
+                                        title="Click to select • Double-click to view (80% screen)"
+                                        className="absolute inset-0 p-0 border-none bg-transparent cursor-pointer"
+                                    >
+                                        {thumbnail ? (
+                                            <img src={thumbnail} alt="" className="w-full h-full object-cover pointer-events-none" draggable={false} />
+                                        ) : (
+                                            <div className="w-full h-full bg-gray-100 flex items-center justify-center text-xs">🖼️</div>
+                                        )}
+                                    </button>
                                     {hasBoxes && (
-                                        <div className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-[#006c44] rounded-full flex items-center justify-center">
+                                        <div className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-[#006c44] rounded-full flex items-center justify-center pointer-events-none">
                                             <span className="text-white text-[7px] font-bold">✓</span>
                                         </div>
                                     )}
-                                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[7px] text-center py-0.5">{idx + 1}</div>
-                                </button>
+                                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[7px] text-center py-0.5 pointer-events-none">{idx + 1}</div>
+                                    {thumbnail && (
+                                        <button
+                                            onClick={e => { e.stopPropagation(); openImageViewer(classSamples.map((x, xi) => { try { const p = JSON.parse(x.data); return { src: p.imageUrl || (x.data.startsWith('data:image') ? x.data : ''), label: `Image ${xi + 1}` } } catch { return { src: x.data.startsWith('data:image') ? x.data : '', label: `Image ${xi + 1}` } } }).filter(x => !!x.src), idx) }}
+                                            title="View (80% screen)"
+                                            className="absolute bottom-3 right-0.5 w-4 h-4 rounded bg-black/60 text-white hidden group-hover/strip:flex items-center justify-center text-[8px] hover:bg-black/80 border-none cursor-pointer"
+                                        >
+                                            ⛶
+                                        </button>
+                                    )}
+                                </div>
                             )
                         })}
                     </div>
@@ -614,6 +630,8 @@ export default function AnnotatePanel({ mode }: AnnotatePanelProps) {
                             <button onClick={handleRedo} disabled={redoStack.length === 0} className={`p-2 rounded-lg text-sm border-none ${redoStack.length === 0 ? 'cursor-not-allowed opacity-30 text-[#4a4455] bg-transparent' : 'cursor-pointer bg-transparent text-[#4a4455] hover:bg-gray-100'}`} title="Redo (Ctrl+Y / Ctrl+Shift+Z)" aria-label="Redo">↪️</button>
                             <div className="w-full h-px bg-gray-200 my-1" />
                             <button onClick={() => setShowLabels(v => !v)} className={`p-2 rounded-lg text-[11px] font-bold border-none cursor-pointer ${showLabels ? 'bg-violet-600 text-white' : 'bg-transparent text-[#4a4455]'}`} title="Toggle labels (L)">🏷️</button>
+                            <div className="w-full h-px bg-gray-200 my-1" />
+                            <button onClick={() => { if (annotationImage) openSingleImage(annotationImage, `Image ${currentImageIndex + 1}`) }} disabled={!annotationImage} className={`p-2 rounded-lg text-sm border-none ${!annotationImage ? 'cursor-not-allowed opacity-30 text-[#4a4455] bg-transparent' : 'cursor-pointer bg-transparent text-[#4a4455] hover:bg-gray-100'}`} title="View fullscreen (80% screen)">⛶</button>
                         </div>
 
                         {/* Box count / Timer */}

@@ -11,6 +11,7 @@ import { ensureTf } from '../../ml/loadScript'
 import { YoloTrainer } from '../../ml/yolo/YoloTrainer'
 import { ensureYoloNano, yoloDetect } from '../../ml/yolo/YoloNano'
 import { layoutNonColliding, nudgeToNonColliding } from '../layoutCollision'
+import { openImageViewer, openSingleImage } from '../components/neuraImageViewer'
 
 interface ObjectDetectorPanelProps { mode: UseNeuraProjectReturn }
 
@@ -1309,15 +1310,16 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
                                             {allSamples.length>0 ? (
                                                 <>
                                                     <div className="grid grid-cols-4 gap-2 max-h-[360px] overflow-auto pr-1 neura-scrollbar">
-                                                        {allSamples.slice(0, 32).map(({s, originClassId}) => {
+                                                        {allSamples.slice(0, 32).map(({s, originClassId}, idx, arr) => {
                                                             const annotated = isSampleAnnotated(s.data)
                                                             const boxes = getSampleBoxes(s.data)
                                                             return (
                                                                 <div key={s.id} className={`relative aspect-square rounded-lg overflow-hidden bg-slate-50 border-2 group/thumb ${annotated ? 'border-emerald-200' : 'border-amber-300 ring-1 ring-amber-200'}`}>
-                                                                    <img src={getSampleImageUrl(s.data)} alt="" className="w-full h-full object-cover" />
+                                                                    <img src={getSampleImageUrl(s.data)} alt="" onClick={e => { e.stopPropagation(); openImageViewer(arr.slice(0, 32).map(({s: x}, xi) => ({ src: getSampleImageUrl(x.data), label: `Dataset — image ${xi + 1}` })), idx) }} title="Click to view (80% screen)" className="w-full h-full object-cover cursor-zoom-in" draggable={false} />
                                                                     <div className={`absolute top-1 left-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm border pointer-events-none ${annotated ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-amber-400 text-white border-amber-400'}`}>{annotated?'✓':'!'}</div>
                                                                     {annotated && <div className="absolute bottom-1 left-1 bg-black/70 text-white text-[9px] font-bold px-1 py-0.5 rounded pointer-events-none">{boxes.length} box{boxes.length!==1?'es':''}</div>}
-                                                                    <button onPointerDown={e=>e.stopPropagation()} onClick={e=>{ e.stopPropagation(); openAnnotator(originClassId, s.id)}} className={`absolute inset-0 z-10 flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity ${annotated ? 'bg-black/40' : 'bg-amber-900/40'}`}><span className={`px-2 py-1 rounded-full text-[10px] font-bold shadow ${annotated?'bg-white text-emerald-700':'bg-amber-400 text-white'}`}>{annotated?'✎ Edit':'🖊️ Annotate'}</span></button>
+                                                                    <button title="View (80% screen)" onPointerDown={e=>e.stopPropagation()} onClick={e=>{ e.stopPropagation(); openImageViewer(arr.slice(0, 32).map(({s: x}) => ({ src: getSampleImageUrl(x.data), label: 'Dataset image' })), idx) }} className="absolute bottom-1 right-1 z-20 w-6 h-6 rounded-md bg-black/60 text-white flex items-center justify-center text-[11px] opacity-0 group-hover/thumb:opacity-100 transition-opacity hover:bg-black/80 border-none cursor-pointer">⛶</button>
+                                                                    <div className="absolute inset-0 z-10 flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity pointer-events-none"><button onPointerDown={e=>e.stopPropagation()} onClick={e=>{ e.stopPropagation(); openAnnotator(originClassId, s.id)}} className={`pointer-events-auto px-2 py-1 rounded-full text-[10px] font-bold shadow border-none cursor-pointer ${annotated?'bg-white text-emerald-700':'bg-amber-400 text-white'}`}>{annotated?'✎ Edit':'🖊️ Annotate'}</button></div>
                                                                     <button title="Delete image" onPointerDown={e=>e.stopPropagation()} onClick={e=>{ e.stopPropagation(); setConfirmState({ title: 'Delete this image?', message: 'This image and its boxes will be permanently removed. This cannot be undone.', confirmText: 'Delete image', variant: 'danger', icon: '🗑️', onConfirm: () => { handleRemoveSample(originClassId, s.id); setConfirmState(null) } })}} className="absolute top-1 right-1 z-20 w-6 h-6 rounded-full bg-white/95 border border-slate-200 text-slate-500 flex items-center justify-center shadow-md hover:bg-red-500 hover:text-white hover:border-red-500 text-[13px] font-bold">×</button>
                                                                 </div>
                                                             )
@@ -1404,19 +1406,18 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
                                                     )
                                                 })()}
                                                 <div className="grid grid-cols-4 gap-2">
-                                                    {cls.samples.slice(0, expandedClasses[cls.id] ? cls.samples.length : 8).map(s => {
+                                                    {cls.samples.slice(0, expandedClasses[cls.id] ? cls.samples.length : 8).map((s, idx) => {
                                                         const annotated = isSampleAnnotated(s.data)
                                                         const boxes = getSampleBoxes(s.data)
                                                         return (
                                                             <div key={s.id} className={`relative aspect-square rounded-lg overflow-hidden bg-slate-50 border-2 group/thumb ${annotated ? 'border-emerald-200' : 'border-amber-300 ring-1 ring-amber-200'}`}>
-                                                                <img src={getSampleImageUrl(s.data)} alt="" className="w-full h-full object-cover" />
+                                                                <img src={getSampleImageUrl(s.data)} alt="" onClick={e => { e.stopPropagation(); openImageViewer(cls.samples.map((x, xi) => ({ src: getSampleImageUrl(x.data), label: `${cls.name} — image ${xi + 1}` })), idx) }} title="Click to view (80% screen)" className="w-full h-full object-cover cursor-zoom-in" draggable={false} />
                                                                 {/* annotation status badge */}
                                                                 <div className={`absolute top-1 left-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm border pointer-events-none ${annotated ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-amber-400 text-white border-amber-400'}`} title={annotated ? `${boxes.length} box${boxes.length !== 1 ? 'es' : ''}` : 'Needs annotation'}>{annotated ? '✓' : '!'}</div>
                                                                 {annotated && <div className="absolute bottom-1 left-1 bg-black/70 text-white text-[9px] font-bold px-1 py-0.5 rounded pointer-events-none">{boxes.length} box{boxes.length !== 1 ? 'es' : ''}</div>}
-                                                                {/* Annotate/Edit overlay - below delete */}
-                                                                <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); openAnnotator(cls.id, s.id) }} className={`absolute inset-0 z-10 flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity ${annotated ? 'bg-emerald-900/0 group-hover/thumb:bg-black/40' : 'bg-amber-900/0 group-hover/thumb:bg-amber-900/40'}`}>
-                                                                    <span className={`px-2 py-1 rounded-full text-[10px] font-bold shadow ${annotated ? 'bg-white text-emerald-700' : 'bg-amber-400 text-white'}`}>{annotated ? '✎ Edit' : '🖊️ Annotate'}</span>
-                                                                </button>
+                                                                {/* Annotate/Edit pill */}
+                                                                <div className="absolute inset-0 z-10 flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity pointer-events-none"><button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); openAnnotator(cls.id, s.id) }} className={`pointer-events-auto px-2 py-1 rounded-full text-[10px] font-bold shadow border-none cursor-pointer ${annotated ? 'bg-white text-emerald-700' : 'bg-amber-400 text-white'}`}>{annotated ? '✎ Edit' : '🖊️ Annotate'}</button></div>
+                                                                <button title="View (80% screen)" onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); openSingleImage(getSampleImageUrl(s.data), `${cls.name} — image ${idx + 1}`) }} className="absolute bottom-1 right-1 z-20 w-6 h-6 rounded-md bg-black/60 text-white flex items-center justify-center text-[11px] opacity-0 group-hover/thumb:opacity-100 transition-opacity hover:bg-black/80 border-none cursor-pointer">⛶</button>
                                                                 {/* Delete - always visible, on top of overlay */}
                                                                 <button title="Delete image" onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); setConfirmState({ title: 'Delete this image?', message: 'This image and its boxes will be permanently removed. This cannot be undone.', confirmText: 'Delete image', variant: 'danger', icon: '🗑️', onConfirm: () => { handleRemoveSample(cls.id, s.id); setConfirmState(null) } })}} className="absolute top-1 right-1 z-20 w-6 h-6 rounded-full bg-white/95 backdrop-blur border border-slate-200 text-slate-500 flex items-center justify-center shadow-md hover:bg-red-500 hover:text-white hover:border-red-500 hover:shadow-lg transition-all text-[13px] font-bold leading-none">×</button>
                                                             </div>
@@ -1585,7 +1586,7 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
                                 )}
                                 {!camera.cameraOn && testImage && uploadedImage && (
                                     <>
-                                        <img src={uploadedImage.annotatedUrl || testImage} alt="" className="w-full h-full object-contain bg-black relative z-10" />
+                                        <img src={uploadedImage.annotatedUrl || testImage} alt="" onClick={e => { e.stopPropagation(); openSingleImage(uploadedImage.annotatedUrl || testImage, 'Test image') }} title="Click to view (80% screen)" className="w-full h-full object-contain bg-black relative z-10 cursor-zoom-in" />
                                         <button onPointerDown={e => e.stopPropagation()} onClick={() => { setTestImage(null); setUploadedImage(null); setUploadedDetections([]); setDetections([]); setScannedFrameUrl(null) }} className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 text-white flex items-center justify-center z-10">×</button>
                                     </>
                                 )}

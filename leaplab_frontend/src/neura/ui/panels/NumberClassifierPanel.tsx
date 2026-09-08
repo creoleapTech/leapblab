@@ -6,6 +6,7 @@ import { RELATEDNESS_THRESHOLD } from '../../ml/KNNClassifier'
 import { MAX_SAMPLES_PER_CLASS } from '../../types/neura.types'
 import AccuracyChart from '../components/AccuracyChart'
 import NotRelatedModal from '../components/NotRelatedModal'
+import { openImageViewer, openSingleImage } from '../components/neuraImageViewer'
 import { useTabularState } from '../../hooks/useTabularState'
 import DataPanel from './DataPanel'
 import SetupPanel from './SetupPanel'
@@ -976,8 +977,9 @@ export default function NumberClassifierPanel({ mode }: NumberClassifierPanelPro
                                             <>
                                                 <div className={`grid grid-cols-4 gap-2 ${expandedClasses[cls.id] ? 'max-h-[360px] overflow-auto neura-scrollbar pr-1' : ''}`}>
                                                     {(expandedClasses[cls.id] ? cls.samples : cls.samples.slice(0, 8)).map(s => (
-                                                        <div key={s.id} className="relative aspect-square rounded-lg overflow-hidden bg-white border border-slate-200 group/thumb flex items-center justify-center p-0.5">
-                                                            <img src={s.data} alt="" className="w-full h-full object-contain bg-white rounded-md" />
+                                                        <div key={s.id} onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); openImageViewer(cls.samples.map(x => ({ src: x.data, label: `${cls.name} — digit ${cls.samples.indexOf(x) + 1}` })), cls.samples.indexOf(s)) }} title="Click to view (80% screen)" className="relative aspect-square rounded-lg overflow-hidden bg-white border border-slate-200 group/thumb flex items-center justify-center p-0.5 cursor-zoom-in">
+                                                            <img src={s.data} alt="" className="w-full h-full object-contain bg-white rounded-md pointer-events-none" draggable={false} />
+                                                            <span className="absolute bottom-1 right-1 w-5 h-5 rounded-md bg-black/55 text-white flex items-center justify-center text-[10px] opacity-0 group-hover/thumb:opacity-100 transition-opacity pointer-events-none">⛶</span>
                                                             <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); handleRemoveSample(cls.id, s.id) }} className="absolute top-1 right-1 w-5 h-5 rounded-md bg-white border border-slate-200 text-slate-600 flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity shadow-sm">×</button>
                                                         </div>
                                                     ))}
@@ -1123,7 +1125,7 @@ export default function NumberClassifierPanel({ mode }: NumberClassifierPanelPro
 
                             {testImage && (
                                 <div className="mx-3 mt-2 relative rounded-xl overflow-hidden bg-black border border-slate-800" onPointerDown={e => e.stopPropagation()}>
-                                    <img src={testImage} alt="" className="w-full h-40 object-contain bg-black" />
+                                    <img src={testImage} alt="" onClick={e => { e.stopPropagation(); openSingleImage(testImage, 'Test digit') }} title="Click to view (80% screen)" className="w-full h-40 object-contain bg-black cursor-zoom-in" />
                                     <button onPointerDown={e => e.stopPropagation()} onClick={() => { setTestImage(null); setPrediction(null) }} className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 text-white flex items-center justify-center">×</button>
                                 </div>
                             )}

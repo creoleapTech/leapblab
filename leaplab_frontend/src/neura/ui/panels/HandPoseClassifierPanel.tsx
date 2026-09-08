@@ -7,6 +7,7 @@ import { MAX_SAMPLES_PER_CLASS } from '../../types/neura.types'
 import { nudgeToNonColliding } from '../layoutCollision'
 import AccuracyChart from '../components/AccuracyChart'
 import NotRelatedModal from '../components/NotRelatedModal'
+import { openSingleImage } from '../components/neuraImageViewer'
 
 interface HandPoseClassifierPanelProps { mode: UseNeuraProjectReturn }
 
@@ -811,7 +812,7 @@ export default function HandPoseClassifierPanel({ mode }: HandPoseClassifierPane
                                 )}
                                 {!camera.cameraOn && testImage && (
                                     <>
-                                        <img src={testImage} alt="" className="w-full h-full object-contain bg-black relative z-10" />
+                                        <img src={testImage} alt="" onClick={e => { e.stopPropagation(); openSingleImage(testImage, 'Test image') }} title="Click to view (80% screen)" className="w-full h-full object-contain bg-black relative z-10 cursor-zoom-in" />
                                         <button onPointerDown={e => e.stopPropagation()} onClick={() => { setTestImage(null); setPrediction(null) }} className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 text-white flex items-center justify-center z-10">×</button>
                                     </>
                                 )}
