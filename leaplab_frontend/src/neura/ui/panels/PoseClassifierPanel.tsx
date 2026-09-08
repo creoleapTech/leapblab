@@ -528,9 +528,9 @@ export default function PoseClassifierPanel({ mode }: PoseClassifierPanelProps) 
             const cur = getCanvasPoint(e.clientX, e.clientY)
             const s = dragStartRef.current
             const nx = s.origX + (cur.x - s.startX), ny = s.origY + (cur.y - s.startY)
-            if (s.id === 'brain') { const cand = nudgeToNonColliding('brain', {x:nx,y:ny}, classPositions, brainPos, visionPos, { expandedClasses } as any); setBrainPos(cand) }
-            else if (s.id === 'vision') { const cand = nudgeToNonColliding('vision', {x:nx,y:ny}, classPositions, brainPos, visionPos, { expandedClasses } as any); setVisionPos(cand) }
-            else { const cand = nudgeToNonColliding(s.id, {x:nx,y:ny}, classPositions, brainPos, visionPos, { expandedClasses } as any); setClassPositions(prev => ({ ...prev, [s.id]: cand })) }
+            if (s.id === 'brain') { const cand = nudgeToNonColliding('brain', {x:nx,y:ny}, classPositions, brainPos, visionPos, { expandedClasses, fallback: brainPos } as any); if (cand !== brainPos) setBrainPos(cand) }
+            else if (s.id === 'vision') { const cand = nudgeToNonColliding('vision', {x:nx,y:ny}, classPositions, brainPos, visionPos, { expandedClasses, fallback: visionPos } as any); if (cand !== visionPos) setVisionPos(cand) }
+            else { const fb = classPositions[s.id] ?? { x: nx, y: ny }; const cand = nudgeToNonColliding(s.id, {x:nx,y:ny}, classPositions, brainPos, visionPos, { expandedClasses, fallback: fb } as any); if (cand !== fb) setClassPositions(prev => { const cur = prev[s.id]; if (cur && cand.x === cur.x && cand.y === cur.y) return prev; return { ...prev, [s.id]: cand } }) }
         }
     }
     const handleViewportMouseUp = () => { setIsPanning(false); panStartRef.current = null; if (draggingId) setDraggingId(null) }
@@ -604,9 +604,9 @@ export default function PoseClassifierPanel({ mode }: PoseClassifierPanelProps) 
                 const curX = (cx - rect.left - pan.x) / zoom, curY = (cy - rect.top - pan.y) / zoom
                 const s = dragStartRef.current
                 const nx = s.origX + (curX - s.startX), ny = s.origY + (curY - s.startY)
-                if (s.id === 'brain') { const cand = nudgeToNonColliding('brain', {x:nx,y:ny}, classPositions, brainPos, visionPos, { expandedClasses } as any); setBrainPos(cand) }
-            else if (s.id === 'vision') { const cand = nudgeToNonColliding('vision', {x:nx,y:ny}, classPositions, brainPos, visionPos, { expandedClasses } as any); setVisionPos(cand) }
-            else { const cand = nudgeToNonColliding(s.id, {x:nx,y:ny}, classPositions, brainPos, visionPos, { expandedClasses } as any); setClassPositions(prev => ({ ...prev, [s.id]: cand })) }
+                if (s.id === 'brain') { const cand = nudgeToNonColliding('brain', {x:nx,y:ny}, classPositions, brainPos, visionPos, { expandedClasses, fallback: brainPos } as any); if (cand !== brainPos) setBrainPos(cand) }
+            else if (s.id === 'vision') { const cand = nudgeToNonColliding('vision', {x:nx,y:ny}, classPositions, brainPos, visionPos, { expandedClasses, fallback: visionPos } as any); if (cand !== visionPos) setVisionPos(cand) }
+            else { const fb = classPositions[s.id] ?? { x: nx, y: ny }; const cand = nudgeToNonColliding(s.id, {x:nx,y:ny}, classPositions, brainPos, visionPos, { expandedClasses, fallback: fb } as any); if (cand !== fb) setClassPositions(prev => { const cur = prev[s.id]; if (cur && cand.x === cur.x && cand.y === cur.y) return prev; return { ...prev, [s.id]: cand } }) }
             }
         }
         const onUp = () => { setIsPanning(false); panStartRef.current = null; setDraggingId(null) }
