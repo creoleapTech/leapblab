@@ -583,7 +583,9 @@ export default function App() {
                             <p className="m-0 mb-5 text-sm text-slate-600 leading-relaxed font-medium">
                                 You are switching from <strong className="text-slate-900 font-semibold">{getModeDisplayName(switchPrompt.from)}</strong> into <strong className="text-slate-900 font-semibold">{getModeDisplayName(switchPrompt.to)}</strong>.
                                 {switchPrompt.tab ? ` (target tab: ${switchPrompt.tab})` : ''}
-                                The existing code in the current editor will stop running.
+                                {switchPrompt.from === 'pulse'
+                                    ? ' Your current quiz session will stop.'
+                                    : ' The existing code in the current editor will stop running.'}
                             </p>
                             <div className="flex justify-end gap-2.5">
                                 <button type="button" onClick={cancelSwitch} className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-xs font-semibold cursor-pointer transition-all hover:bg-slate-50">
@@ -622,7 +624,9 @@ export default function App() {
                         <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 flex flex-col">
                             <h2 className="m-0 mb-2.5 text-lg font-bold text-slate-900">Exit to Home?</h2>
                             <p className="m-0 mb-5 text-sm text-slate-600 leading-relaxed font-medium">
-                                Are you sure you want to exit? The code in the current editor will stop running.
+                                {mode === 'pulse'
+                                    ? 'Are you sure you want to exit? Your current quiz session will stop.'
+                                    : 'Are you sure you want to exit? The code in the current editor will stop running.'}
                             </p>
                             <div className="flex justify-end gap-2.5">
                                 <button type="button" onClick={cancelExit} className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-xs font-semibold cursor-pointer transition-all hover:bg-slate-50">

@@ -256,10 +256,11 @@ e.target.value = null;
                 <span className="text-[16px] font-bold uppercase tracking-[0.08em] text-slate-900">Media</span>
                 <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="w-9 h-9 flex items-center justify-center p-0 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-full border border-blue-100/50 transition-all active:scale-95 cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-full text-[11px] font-extrabold uppercase tracking-wide shadow-sm hover:shadow-md transition-all active:scale-95 cursor-pointer"
                     title="Upload Media"
                 >
-                    <Upload className="h-5 w-5" />
+                    <Upload className="h-3.5 w-3.5" />
+                    Upload
                 </button>
             </div>
 
@@ -271,6 +272,18 @@ e.target.value = null;
                 onChange={handleFileUpload}
                 className="hidden"
             />
+
+            {/* Primary Upload Action — always visible without scrolling (UI Improvement) */}
+            <div className="px-3 pt-3 pb-3 bg-white border-b border-slate-100 shrink-0">
+                <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-bold shadow-sm hover:shadow-md hover:-translate-y-px transition-all active:scale-[0.98] cursor-pointer"
+                >
+                    <Upload size={14} strokeWidth={2.5} />
+                    Browse Files
+                </button>
+                <p className="text-[10px] text-center text-slate-400 font-medium mt-1.5 tracking-wide">or drag &amp; drop files here</p>
+            </div>
 
             {/* Search and Filters Section - Refined Spacing */}
             <div className="p-3 flex flex-col gap-2.5 bg-white border-b border-slate-100 shrink-0">
@@ -357,7 +370,7 @@ e.target.value = null;
                                     <button
                                         type="button"
                                         onClick={() => fileInputRef.current?.click()}
-                                        className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-700 to-violet-600 text-white rounded-xl text-xs font-bold shadow-xs hover:shadow-md hover:-translate-y-0.5 transition-all border-none cursor-pointer mb-2"
+                                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all border-none cursor-pointer mb-2"
                                     >
                                         <Upload size={12} strokeWidth={2.5} />
                                         Browse Files
