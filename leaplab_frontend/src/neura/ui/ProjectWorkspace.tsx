@@ -7,10 +7,11 @@ import { fileService } from '../../Electra/Client/Src/services/FileService'
 import ClassCard from './components/ClassCard'
 import DiscardConfirmModal from './components/DiscardConfirmModal'
 import { useCloudProjectStore } from '../../store/cloudProjectStore'
+import { useKeyboardShortcuts } from '../../creova/hooks/useKeyboardShortcuts'
 
 interface ProjectWorkspaceProps {
     type: ProjectType
-    onBack: () => void
+    onBack: (hasChanges?: boolean) => void
     template?: { name: string; classes: string[] }
     children: (props: {
         mode: ReturnType<typeof useNeuraProject>
@@ -256,6 +257,15 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
         }
         e.target.value = ''
     }, [mode])
+
+    // Keyboard shortcuts for File actions (Ctrl/Cmd+S, Ctrl/Cmd+Shift+S, Ctrl/Cmd+N, Ctrl/Cmd+O)
+    // These match the shortcuts displayed in the File dropdown menu (FileDropdownMenu.tsx:59,76,113)
+    useKeyboardShortcuts({
+        onSave: handleSave,
+        onSaveAs: handleSaveAs,
+        onNew: handleNewProject,
+        onOpen: handleOpenProject,
+    })
 
     const sidebarContent = (
         <>

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 export interface KeyboardShortcutHandlers {
   onSave?: () => void | Promise<void>;
@@ -13,32 +13,55 @@ export function useKeyboardShortcuts(
   handlers: KeyboardShortcutHandlers,
   deps: React.DependencyList = []
 ): void {
-  const { onSave, onSaveAs, onNew, onOpen, onUndo, onRedo } = handlers;
+  const handlersRef = useRef(handlers);
+  // Keep ref in sync so latest handlers are always invoked even if deps are stale
+  useEffect(() => {
+    handlersRef.current = handlers;
+  });
 
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey && (e.key === 'S' || e.key === 's')) {
+      const mod = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
+
+      // Ctrl/Cmd+Shift+S: Save As (must be checked before plain Save)
+      if (mod && e.shiftKey && key === 's') {
         e.preventDefault();
-        if (onSaveAs) await onSaveAs();
-      } else if (e.ctrlKey && (e.key === 's' || e.key === 'S')) {
+        if (handlersRef.current.onSaveAs) await handlersRef.current.onSaveAs();
+        return;
+      }
+      if (mod && key === 's') {
         e.preventDefault();
-        if (onSave) await onSave();
-      } else if (e.ctrlKey && (e.key === 'n' || e.key === 'N')) {
+        if (handlersRef.current.onSave) await handlersRef.current.onSave();
+        return;
+      }
+      if (mod && key === 'n') {
         e.preventDefault();
-        if (onNew) await onNew();
-      } else if (e.ctrlKey && (e.key === 'o' || e.key === 'O')) {
+        if (handlersRef.current.onNew) await handlersRef.current.onNew();
+        return;
+      }
+      if (mod && key === 'o') {
         e.preventDefault();
-        if (onOpen) await onOpen();
-      } else if (e.ctrlKey && (e.key === 'z' || e.key === 'Z')) {
+        if (handlersRef.current.onOpen) await handlersRef.current.onOpen();
+        return;
+      }
+      if (mod && key === 'z' && !e.shiftKey) {
         e.preventDefault();
-        if (onUndo) await onUndo();
-      } else if (e.ctrlKey && (e.key === 'y' || e.key === 'Y')) {
+        if (handlersRef.current.onUndo) await handlersRef.current.onUndo();
+        return;
+      }
+      // Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z: Redo
+      if (mod && (key === 'y' || (e.shiftKey && key === 'z'))) {
         e.preventDefault();
-        if (onRedo) await onRedo();
+        if (handlersRef.current.onRedo) await handlersRef.current.onRedo();
+        return;
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, deps);
+    // Empty deps - listener is stable and uses ref; keep deps param for backwards compatibility
+    // but we intentionally do not use it to avoid stale closure bugs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 }

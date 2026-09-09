@@ -690,38 +690,40 @@ export default function ForgeElectra({
   // Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+S: Save
-      if (e.ctrlKey && e.key === 's') {
-        e.preventDefault();
-        handleSaveProject();
-      }
-      // Ctrl+Shift+S: Save As
-      else if (e.ctrlKey && e.shiftKey && e.key === 'S') {
+      const mod = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
+      // Ctrl/Cmd+Shift+S: Save As (must be checked before plain Save)
+      if (mod && e.shiftKey && key === 's') {
         e.preventDefault();
         handleSaveAsProject();
       }
-      // Ctrl+N: New Project
-      else if (e.ctrlKey && e.key === 'n') {
+      // Ctrl/Cmd+S: Save
+      else if (mod && key === 's') {
+        e.preventDefault();
+        handleSaveProject();
+      }
+      // Ctrl/Cmd+N: New Project
+      else if (mod && key === 'n') {
         e.preventDefault();
         handleNewProject();
       }
-      // Ctrl+O: Open Project
-      else if (e.ctrlKey && e.key === 'o') {
+      // Ctrl/Cmd+O: Open Project
+      else if (mod && key === 'o') {
         e.preventDefault();
         handleOpenProject();
       }
-      // Ctrl+Z: Undo
-      else if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
+      // Ctrl/Cmd+Z: Undo
+      else if (mod && key === 'z' && !e.shiftKey) {
         e.preventDefault();
         handleUndo();
       }
-      // Ctrl+Y or Ctrl+Shift+Z: Redo
-      else if (e.ctrlKey && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) {
+      // Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z: Redo
+      else if (mod && (key === 'y' || (e.shiftKey && key === 'z'))) {
         e.preventDefault();
         handleRedo();
       }
-      // Ctrl+X: Cut
-      else if (e.ctrlKey && e.key === 'x') {
+      // Ctrl/Cmd+X: Cut
+      else if (mod && key === 'x') {
         // Don't intercept if user is in code editor or input field
         const activeElement = document.activeElement;
         const isInEditor = activeElement?.classList.contains('monaco-editor') ||
@@ -733,8 +735,8 @@ export default function ForgeElectra({
           handleCut();
         }
       }
-      // Ctrl+C: Copy
-      else if (e.ctrlKey && e.key === 'c') {
+      // Ctrl/Cmd+C: Copy
+      else if (mod && key === 'c') {
         // Don't intercept if user is in code editor or input field
         const activeElement = document.activeElement;
         const isInEditor = activeElement?.classList.contains('monaco-editor') ||
@@ -746,8 +748,8 @@ export default function ForgeElectra({
           handleCopy();
         }
       }
-      // Ctrl+V: Paste
-      else if (e.ctrlKey && e.key === 'v') {
+      // Ctrl/Cmd+V: Paste
+      else if (mod && key === 'v') {
         // Don't intercept if user is in code editor or input field
         const activeElement = document.activeElement;
         const isInEditor = activeElement?.classList.contains('monaco-editor') ||

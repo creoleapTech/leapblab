@@ -1,5 +1,5 @@
 import React from 'react';
-import { FilePlus, FolderOpen, Download, FileText, Share2 } from 'lucide-react';
+import { FilePlus, FolderOpen, Download, FileText, Save as SaveIcon, Share2 } from 'lucide-react';
 
 interface FileDropdownMenuProps {
   isOpen: boolean;
@@ -7,6 +7,7 @@ interface FileDropdownMenuProps {
   brandName: string;
   onNew?: () => void;
   onOpen?: () => void;
+  onSave?: () => void;
   onDownload?: () => void;
   onSaveAs?: () => void;
   onShare?: () => void;
@@ -20,6 +21,7 @@ export const FileDropdownMenu: React.FC<FileDropdownMenuProps> = ({
   brandName,
   onNew,
   onOpen,
+  onSave,
   onDownload,
   onSaveAs,
   onShare,
@@ -77,6 +79,23 @@ export const FileDropdownMenu: React.FC<FileDropdownMenuProps> = ({
       </button>
 
       <div className={`h-px my-1.5 mx-3 ${isElectra ? 'bg-white/10' : 'bg-gradient-to-r from-transparent via-black/10 to-transparent'}`} />
+
+      <button
+        type="button"
+        className={`flex items-center justify-between w-full px-3.5 py-2 border-0 bg-transparent text-sm font-medium text-left cursor-pointer transition-all tracking-normal ${
+          isElectra ? 'text-zinc-100 hover:bg-cyan-500/10 hover:text-cyan-400' : 'text-gray-700 hover:bg-purple-100/60 hover:text-purple-700'
+        }`}
+        onClick={() => {
+          onSave?.();
+          onClose();
+        }}
+      >
+        <div className="flex items-center gap-2.5">
+          <SaveIcon size={16} strokeWidth={2} className={isElectra ? 'text-cyan-400 opacity-85' : 'text-purple-600 opacity-85'} />
+          <span>Save</span>
+        </div>
+        <span className={`text-xs font-mono px-1.5 py-0.5 rounded font-medium ${isElectra ? 'bg-zinc-800 text-zinc-400' : 'bg-black/5 text-gray-400'}`}>Ctrl+S</span>
+      </button>
 
       {onDownload && (
         <button

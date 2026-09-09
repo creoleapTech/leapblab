@@ -29,7 +29,7 @@ import { FileDropdownMenu } from './FileDropdownMenu';
 import { EditDropdownMenu } from './EditDropdownMenu';
 
 interface IgniteTopbarProps {
-  onBack: () => void;
+  onBack: (hasChanges?: boolean) => void;
   onSave: () => void;
   onSaveAs?: () => void;
   onDownload?: () => void;
@@ -224,6 +224,7 @@ export const IgniteTopbar: React.FC<IgniteTopbarProps> = ({
                     brandName={brandName}
                     onNew={onNew}
                     onOpen={onOpen}
+                    onSave={onSave}
                     onDownload={onDownload}
                     onSaveAs={onSaveAs}
                     onShare={handleShareClick}
@@ -420,6 +421,15 @@ export const IgniteTopbar: React.FC<IgniteTopbarProps> = ({
                 >
                   <FolderOpen size={18} strokeWidth={2} className="opacity-80 shrink-0" />
                   <span>Open Project</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { onSave?.(); setMobileMenuOpen(false); }}
+                  className={`flex items-center gap-3.5 w-full py-2.5 px-3 text-[16px] font-medium rounded-lg text-left transition-colors bg-transparent border-0 cursor-pointer ${isElectra ? 'hover:bg-[#22d3ee]/8 text-[#f4f4f5] hover:text-[#22d3ee]' : 'hover:bg-white/8 text-white/90 hover:text-white'
+                    }`}
+                >
+                  <Save size={18} strokeWidth={2} className="opacity-80 shrink-0" />
+                  <span>Save</span>
                 </button>
                 {onDownload && (
                   <button
