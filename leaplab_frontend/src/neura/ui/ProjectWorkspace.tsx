@@ -8,6 +8,7 @@ import ClassCard from './components/ClassCard'
 import DiscardConfirmModal from './components/DiscardConfirmModal'
 import { useCloudProjectStore } from '../../store/cloudProjectStore'
 import { useKeyboardShortcuts } from '../../creova/hooks/useKeyboardShortcuts'
+import { showToast } from '../../leapignite/client/components/Toast'
 
 interface ProjectWorkspaceProps {
     type: ProjectType
@@ -99,16 +100,24 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
     const totalSamples = mode.getTotalSamples()
 
     const fileInputRef = useRef<HTMLInputElement>(null)
+    const [isSaving, setIsSaving] = useState(false)
 
     const handleSave = useCallback(async () => {
         if (!mode.project) return
+        if (isSaving) return
+        setIsSaving(true)
+        showToast('Saving project...', 'info', 30000)
         try {
             await fileService.saveProject(mode.project.name, 'neura', mode.project)
+            showToast('Project saved successfully!', 'success')
         } catch (e: any) {
             console.error('[Neura] Save failed', e)
+            showToast(e?.message || 'Failed to save project.', 'error')
             throw e
+        } finally {
+            setIsSaving(false)
         }
-    }, [mode.project])
+    }, [mode.project, isSaving])
 
     const handleDownload = useCallback(() => {
         if (!mode.project) return
@@ -409,6 +418,7 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
                 onSaveAs={handleSaveAs}
                 onTitleChange={(name) => mode.setProjectName(name)}
                 brandName="NEURA"
+                isSaving={isSaving}
                 rightContent={
                     <div className="flex items-center gap-2">
                         {!mode.hideSidebar && (
