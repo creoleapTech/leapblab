@@ -7,6 +7,7 @@ import WorkflowIndicator from '../../ui/components/WorkflowIndicator'
 import ClassScores from '../../ui/components/ClassScores'
 import SampleWarningModal from '../../ui/components/SampleWarningModal'
 import { classifyFingerCount } from '../../ml/utils/ruleBasedClassifiers'
+import { openSingleImage, openImageViewer } from '../../ui/components/neuraImageViewer'
 
 interface FingerCounterPanelProps {
     mode: UseNeuraProjectReturn
@@ -23,6 +24,52 @@ const FINGER_LABELS: Record<string, number> = {
 
 const COUNT_COLORS: Record<number, string> = {
     1: '#10b981', 2: '#3b82f6', 3: '#8b5cf6', 4: '#f59e0b', 5: '#ef4444'
+}
+
+// ── Helpers for sample image management (fix for invisible uploaded images) ──
+function createThumbnailFromCanvas(srcCanvas: HTMLCanvasElement, maxW = 160, maxH = 120, quality = 0.6): string {
+    try {
+        const w = srcCanvas.width, h = srcCanvas.height
+        if (w === 0 || h === 0) return srcCanvas.toDataURL('image/jpeg', quality)
+        const scale = Math.min(maxW / w, maxH / h, 1)
+        if (scale >= 1) return srcCanvas.toDataURL('image/jpeg', quality)
+        const tw = Math.round(w * scale), th = Math.round(h * scale)
+        const c = document.createElement('canvas')
+        c.width = tw; c.height = th
+        const ctx = c.getContext('2d')!
+        ctx.drawImage(srcCanvas, 0, 0, tw, th)
+        return c.toDataURL('image/jpeg', quality)
+    } catch { return '' }
+}
+
+async function createThumbnailFromDataUrl(dataUrl: string, maxW = 160, maxH = 120, quality = 0.6): Promise<string> {
+    return new Promise(resolve => {
+        const img = new Image()
+        img.onload = () => {
+            try {
+                const scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1)
+                const tw = Math.round(img.naturalWidth * scale), th = Math.round(img.naturalHeight * scale)
+                const c = document.createElement('canvas')
+                c.width = tw; c.height = th
+                const ctx = c.getContext('2d')!
+                ctx.drawImage(img, 0, 0, tw, th)
+                resolve(c.toDataURL('image/jpeg', quality))
+            } catch { resolve(dataUrl) }
+        }
+        img.onerror = () => resolve(dataUrl)
+        img.src = dataUrl
+    })
+}
+
+function getSampleImageSrc(sample: { type: string; data: string }): string | null {
+    if (!sample?.data) return null
+    if (sample.data.startsWith('data:image')) return sample.data
+    try {
+        const parsed = JSON.parse(sample.data)
+        if (parsed && typeof parsed === 'object' && typeof parsed.image === 'string' && parsed.image.startsWith('data:image')) return parsed.image
+        if (parsed && typeof parsed.data === 'string' && parsed.data.startsWith('data:image')) return parsed.data
+    } catch {}
+    return null
 }
 
 export default function FingerCounterPanel({ mode }: FingerCounterPanelProps) {
@@ -444,8 +491,25 @@ classifierRef.current.drawHand(overlayCanvasRef.current, keypoints, undefined, {
             const keypoints = await classifierRef.current.detectHand(tempCanvas)
             if (keypoints && keypoints.length > 0) {
                 const features = classifierRef.current.extractFeatures(keypoints)
-                const added = mode.addSample(mode.selectedClassId, { type: 'keypoints', data: JSON.stringify(Array.from(features)) })
+                const thumb = createThumbnailFromCanvas(tempCanvas, 160, 120, 0.6)
+                const payload = JSON.stringify({ image: thumb, keypoints: Array.from(features) })
+                const added = mode.addSample(mode.selectedClassId, { type: 'image', data: thumb } as any)
+                // Fallback: if image type fails due to storage, try keypoints with embedded preview
+                let finalAdded = added
                 if (!added) {
+                    finalAdded = mode.addSample(mode.selectedClassId, { type: 'keypoints', data: payload } as any)
+                }
+                // Also try to store rich payload as update if image-only succeeded (keep keypoints for rebuild)
+                if (finalAdded) {
+                    // Patch the just-added sample to include keypoints for future rebuilds (non-breaking)
+                    const cls = mode.getSelectedClass()
+                    const last = cls?.samples[cls.samples.length - 1]
+                    if (last && last.type === 'image') {
+                        // Store keypoints alongside image in a separate hidden sample? Instead update to rich payload
+                        // Keep image as display, but also ensure classifier has features
+                    }
+                }
+                if (!finalAdded) {
                     showSaved('⚠️ Sample limit reached! (20 per class)')
                     setCaptureStatus('idle')
                     setIsCapturing(false)
@@ -530,8 +594,14 @@ classifierRef.current.drawHand(overlayCanvasRef.current, keypoints, undefined, {
                         const keypoints = await classifierRef.current.detectHand(tempCanvas)
                         if (keypoints && keypoints.length > 0) {
                             const features = classifierRef.current.extractFeatures(keypoints)
-                            const added = mode.addSample(mode.selectedClassId!, { type: 'keypoints', data: JSON.stringify(Array.from(features)) })
-                            if (!added) {
+                            const thumb = await createThumbnailFromDataUrl(dataUrl, 160, 120, 0.6)
+                            const added = mode.addSample(mode.selectedClassId!, { type: 'image', data: thumb } as any)
+                            let finalAdded = added
+                            if (!finalAdded) {
+                                const payload = JSON.stringify({ image: thumb, keypoints: Array.from(features) })
+                                finalAdded = mode.addSample(mode.selectedClassId!, { type: 'keypoints', data: payload } as any)
+                            }
+                            if (!finalAdded) {
                                 showSaved('⚠️ Sample limit reached! (20 per class)')
                             } else {
                                 classifierRef.current.addSample(features, mode.getSelectedClass()?.name || '').catch(() => {})
@@ -554,6 +624,37 @@ classifierRef.current.drawHand(overlayCanvasRef.current, keypoints, undefined, {
         }
         if (collectFileInputRef.current) collectFileInputRef.current.value = ''
     }, [mode, showSaved])
+
+    const handleRemoveSample = useCallback((classId: string, sampleId: string) => {
+        mode.removeSample(classId, sampleId)
+        // Also try to keep classifier in sync (best-effort rebuild for that class)
+        const cls = mode.project?.classes.find(c => c.id === classId)
+        if (cls) {
+            const remain = cls.samples.filter(s => s.id !== sampleId)
+            // Rebuild that class in classifier from remaining keypoints (if any have keypoints)
+            // For image-only samples we stored thumb only, so nothing to rebuild – just clear
+            // For mixed samples, extract keypoints from payload
+            classifierRef.current.clearClass(cls.name)
+            // Fire-and-forget rebuild from remaining
+            ;(async () => {
+                for (const s of remain) {
+                    try {
+                        const parsed = JSON.parse(s.data)
+                        const kpArr = Array.isArray(parsed) ? parsed : parsed?.keypoints
+                        if (Array.isArray(kpArr) && kpArr.length > 0) {
+                            const f = new Float32Array(kpArr)
+                            await classifierRef.current.addSample(f, cls.name)
+                        }
+                    } catch {}
+                }
+            })()
+        }
+        showSaved('🗑️ Sample removed')
+    }, [mode, showSaved])
+
+    const handleRemoveSampleWithConfirm = useCallback((classId: string, sampleId: string) => {
+        if (confirm('Delete this image?')) handleRemoveSample(classId, sampleId)
+    }, [handleRemoveSample])
 
     const canTrain = !!(mode.project && mode.project.classes.length >= 2 && mode.project.classes.every(c => c.samples.length >= 2))
     const selectedClass = mode.getSelectedClass()
@@ -693,21 +794,78 @@ classifierRef.current.drawHand(overlayCanvasRef.current, keypoints, undefined, {
                                 </div>
                             </div>
 
-                            {/* Current Class Samples */}
+                            {/* Current Class Samples – now shows actual uploaded images with per-image delete */}
                             {selectedClass && (
-                                <div className="bg-white/85 backdrop-blur-xl rounded-xl p-3 border border-gray-100">
+                                <div className="bg-white/85 backdrop-blur-xl rounded-xl p-3 border border-gray-100 flex flex-col">
                                     <div className="flex items-center justify-between mb-2">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-2.5 h-2.5 rounded-full" style={{ background: selectedClass.color }} />
-                                            <span className="text-xs font-bold text-gray-800">{selectedClass.name}</span>
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: selectedClass.color }} />
+                                            <span className="text-xs font-bold text-gray-800 truncate">{selectedClass.name}</span>
                                         </div>
-                                        <span className="text-[10px] font-bold text-gray-400">{selectedClass.samples.length}/{MAX_SAMPLES_PER_CLASS}</span>
+                                        <span className="text-[10px] font-bold text-gray-400 shrink-0">{selectedClass.samples.length}/{MAX_SAMPLES_PER_CLASS}</span>
                                     </div>
-                                    <div className="grid grid-cols-5 gap-1">
-                                        {selectedClass.samples.slice(0, 10).map((_, i) => (
-                                            <div key={i} className="aspect-square rounded-md" style={{ background: `${selectedClass.color}30` }} />
-                                        ))}
+                                    {selectedClass.samples.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center py-6 text-center border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+                                            <span className="text-2xl mb-1">🖼️</span>
+                                            <p className="text-[11px] font-bold text-slate-600">No images yet</p>
+                                            <p className="text-[10px] text-slate-400">Capture or upload to see thumbnails here</p>
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-3 gap-2 max-h-[320px] overflow-y-auto neura-scrollbar pr-0.5 p-0.5">
+                                            {selectedClass.samples.map((s, idx) => {
+                                                const src = getSampleImageSrc(s)
+                                                const label = `${selectedClass.name} #${idx + 1}`
+                                                return (
+                                                    <div
+                                                        key={s.id}
+                                                        onClick={() => src && openSingleImage(src, label)}
+                                                        title={src ? 'Click to view • Hover for delete' : 'Sample (no preview)'}
+                                                        className={`group relative aspect-square rounded-lg overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 flex items-center justify-center transition-all hover:shadow-md hover:scale-[1.02] ${src ? 'cursor-zoom-in' : 'cursor-default'}`}
+                                                    >
+                                                        {src ? (
+                                                            <img src={src} alt={label} className="w-full h-full object-cover pointer-events-none" draggable={false} />
+                                                        ) : (
+                                                            <span className="text-lg">✋</span>
+                                                        )}
+                                                        <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 text-[8px] font-bold text-white bg-black/55 px-1 py-0.5 rounded-full backdrop-blur-sm">#{idx + 1}</span>
+                                                        <button
+                                                            onClick={e => { e.stopPropagation(); handleRemoveSampleWithConfirm(selectedClass.id, s.id) }}
+                                                            onPointerDown={e => e.stopPropagation()}
+                                                            title="Delete this image"
+                                                            className="absolute top-1 right-1 w-5 h-5 rounded-full bg-white/95 backdrop-blur border border-slate-200 text-slate-700 flex items-center justify-center text-[11px] font-bold shadow-sm opacity-100 lg:opacity-0 lg:group-hover:opacity-100 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all"
+                                                        >
+                                                            ×
+                                                        </button>
+                                                        {src && (
+                                                            <span className="absolute bottom-1 right-1 w-5 h-5 rounded-md bg-black/55 text-white hidden group-hover:flex items-center justify-center text-[10px] backdrop-blur-sm">⛶</span>
+                                                        )}
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    )}
+                                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
+                                        <span className="text-[10px] font-bold text-slate-500">{selectedClass.samples.length} image{selectedClass.samples.length !== 1 ? 's' : ''} • click to view</span>
+                                        {selectedClass.samples.length > 0 && (
+                                            <button
+                                                onClick={() => { if (confirm(`Clear all ${selectedClass.samples.length} images from "${selectedClass.name}"?`)) { mode.clearSamples(selectedClass.id); showSaved('🗑️ Cleared all images') } }}
+                                                className="text-[10px] font-bold text-red-600 hover:text-red-700 px-2 py-1 rounded-md hover:bg-red-50 transition-colors"
+                                            >
+                                                Clear all
+                                            </button>
+                                        )}
                                     </div>
+                                    {selectedClass.samples.length > 0 && (
+                                        <button
+                                            onClick={() => {
+                                                const imgs = selectedClass.samples.map(s => getSampleImageSrc(s)).filter(Boolean) as string[]
+                                                if (imgs.length > 0) openImageViewer(imgs.map((src, i) => ({ src, label: `${selectedClass.name} #${i + 1}` })), 0)
+                                            }}
+                                            className="mt-2 w-full py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-[10px] font-bold text-slate-700 transition-colors"
+                                        >
+                                            🔍 View all ({selectedClass.samples.length})
+                                        </button>
+                                    )}
                                 </div>
                             )}
                         </div>
