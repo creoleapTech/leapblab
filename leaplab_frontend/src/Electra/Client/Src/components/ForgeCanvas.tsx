@@ -158,15 +158,47 @@ const ForgeCanvasInner: React.FC<ForgeCanvasProps> = ({
     setEdges(storeEdges);
   }, [storeEdges, setEdges]);
 
-  // ── Double-click-drag pan mode ─────────────────────────────────────────
-  // Middle-click + drag always pans the viewport.
-  // Double-click on empty canvas: toggles "pan-drag mode" — while active,
-  // left-click-hold + drag also pans the viewport. Single clicks without drag
-  // still fire onPaneClick (waypoints/deselect). Escape or double-click
-  // again exits pan mode.
+  // ── Canvas panning ───────────────────────────────────────────────────
+  // FIX: Previously left-drag panning required `panDragEnabled` (double-click
+  // toggle), making hand/pan intermittent when zoomed in – user had to
+  // discover the double-click gesture. Now left-drag consistently pans
+  // (like Wokwi/Tinkercad) – double-click toggle is kept for backward
+  // compat but is no longer required. Middle-drag always pans.
+  // Space+drag also pans (Figma-style).
   const [panDragEnabled, setPanDragEnabled] = useState(false);
+  const [isSpaceHeld, setIsSpaceHeld] = useState(false);
 
-  // ── Escape exits pan-drag mode ─────────────────────────────────────
+  // Space held → temporary hand/pan (even without panDragEnabled)
+  useEffect(() => {
+    const isTypingTarget = (t: EventTarget | null) => {
+      const el = t as HTMLElement | null;
+      const tag = el?.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable;
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target)) return;
+      if (e.code === 'Space' && !e.repeat && !isSpaceHeld) {
+        // Prevent page scroll on Space
+        if (!e.ctrlKey && !e.metaKey && !e.altKey) e.preventDefault();
+        setIsSpaceHeld(true);
+      }
+      if (e.key === 'Escape' && panDragEnabled) setPanDragEnabled(false);
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') setIsSpaceHeld(false);
+    };
+    const onBlur = () => setIsSpaceHeld(false);
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
+    };
+  }, [panDragEnabled, isSpaceHeld]);
+
+  // Keep legacy Escape listener for panDragEnabled (now also handled above)
   useEffect(() => {
     if (!panDragEnabled) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -175,6 +207,16 @@ const ForgeCanvasInner: React.FC<ForgeCanvasProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [panDragEnabled]);
+
+  // Effective pan config: left+middle always pan on empty pane, except
+  // while wiring (wireDraft/pendingSource) where left-drag is reserved
+  // for wire creation. This makes zoomed-in panning consistent.
+  const effectivePanOnDrag: any = useMemo(() => {
+    if (wireDraft || pendingSource) return [1]; // only middle while wiring
+    // Always allow left-drag panning – fixes intermittent hand state
+    // (panDragEnabled and Space are now additive, not gating)
+    return [0, 1];
+  }, [wireDraft, pendingSource]);
 
   // ── Keyboard zoom shortcuts (Wokwi-style) ──────────────────────────
   useEffect(() => {
@@ -588,17 +630,14 @@ const ForgeCanvasInner: React.FC<ForgeCanvasProps> = ({
         edgeTypes={edgeTypes}
         defaultEdgeOptions={{ type: 'wire', updatable: false }}
         nodesConnectable={false}
-        nodesDraggable
-        // Double-click-drag pan: Double-click on empty canvas toggles
-        // pan-drag mode — while active, left-click-hold + drag pans the
-        // viewport. Middle-click always pans regardless of mode.
-        // Node drag and pin interactions always take priority.
-        //   double-click empty   → toggle pan-drag mode
-        //   left-drag (pan mode) → canvas pans
-        //   middle-drag          → canvas pans (always)
-        //   drag component       → component moves (with edge auto-scroll)
-        //   drag pin             → wire draft
-        panOnDrag={panDragEnabled ? [0, 1] : [1]}
+        nodesDraggable={!isSpaceHeld}
+        // Panning: left-drag and middle-drag consistently pan the canvas
+        // (especially critical when zoomed in). Double-click toggle and
+        // Space+drag are kept as additive hand states, but left-drag no
+        // longer gates on panDragEnabled – fixes intermittent hand/pan.
+        // While wiring (wireDraft/pendingSource) left-drag is reserved for
+        // wire creation, so only middle-drag pans.
+        panOnDrag={effectivePanOnDrag as any}
         selectionOnDrag={false}
         panOnScroll={false}
         fitView
@@ -610,7 +649,12 @@ const ForgeCanvasInner: React.FC<ForgeCanvasProps> = ({
         zoomOnScroll
         zoomOnPinch
         zoomOnDoubleClick={false}
-        style={{ background: 'transparent', cursor: panDragEnabled ? 'grab' : undefined }}
+        style={{
+          background: 'transparent',
+          // Always show grab hand when pan is available; grabbing while
+          // Space held or legacy panDragEnabled gives consistent feedback
+          cursor: wireDraft || pendingSource ? 'crosshair' : isSpaceHeld || (effectivePanOnDrag as number[]).includes(0) ? 'grab' : undefined,
+        }}
       >
         <Background
           variant={BackgroundVariant.Dots}

@@ -121,6 +121,22 @@ export const PartPicker: React.FC<PartPickerProps> = ({ onSelect, onClose, curre
   const handleDragStart = (event: React.DragEvent, componentType: string) => {
     event.dataTransfer.setData('application/forge-component', componentType);
     event.dataTransfer.effectAllowed = 'move';
+    // Use the card itself as drag image to avoid flicker from inner
+    // leap-element interactive states (pushbutton pressed gradient etc.).
+    // Without this, the browser snapshots the inner SVG while its
+    // :active / pressed Lit state toggles during mousedown → flicker.
+    const target = event.currentTarget as HTMLElement;
+    if (target && event.dataTransfer.setDragImage) {
+      const rect = target.getBoundingClientRect();
+      // Center the ghost under cursor for stable dragging
+      const offsetX = rect.width / 2;
+      const offsetY = rect.height / 2;
+      try {
+        event.dataTransfer.setDragImage(target, offsetX, offsetY);
+      } catch {
+        // Some browsers (e.g. older Safari) throw if called outside dragstart
+      }
+    }
   };
 
   const isESP32Board = currentBoard === 'esp32-c3' || currentBoard === 'esp32';
@@ -203,8 +219,9 @@ export const PartPicker: React.FC<PartPickerProps> = ({ onSelect, onClose, curre
                       title={comp.name}
                     >
                       <div
-                        style={{ transform: `scale(${getComponentScale(comp.id, 0.7)})` }}
-                        className="origin-center w-full h-full flex items-center justify-center opacity-95"
+                        style={{ transform: `scale(${getComponentScale(comp.id, 0.7)})`, pointerEvents: 'none' }}
+                        className="origin-center w-full h-full flex items-center justify-center opacity-95 select-none"
+                        aria-hidden="true"
                       >
                         {React.createElement(`leap-${comp.id}` as any, {
                           color: comp.id === 'led' ? 'red' : undefined,
