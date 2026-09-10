@@ -69,6 +69,8 @@ function LogixAppInner({ onBack, onSwitchToNotebook, onSwitchToBlocks, onSwitchT
         isOpen: false, title: "", message: "", variant: "default", confirmText: "", cancelText: "", onConfirm: null, onCancel: null, isAlert: false,
     });
     const [replInput, setReplInput] = useState("");
+    const [replHistory, setReplHistory] = useState([]);
+    const [replHistIdx, setReplHistIdx] = useState(-1);
     const replInputRef = useRef(null);
 
     // ── Confirm / Alert dialog (replaces window.confirm / alert) ──────────
@@ -127,7 +129,7 @@ function LogixAppInner({ onBack, onSwitchToNotebook, onSwitchToBlocks, onSwitchT
 
     // ── Python Execution ────────────────────────────────────────────────────
     const {
-        isRunning, isWaitingForInput, inputPromptText,
+        isRunning, isWaitingForInput, setIsWaitingForInput, inputPromptText, setInputPromptText,
         terminalInputValue, setTerminalInputValue,
         inputResolverRef, terminalInputRef, skulptRef, runStopRequestedRef,
         initSkulpt, handleRun, handleStop, handleTerminalInputSubmit, handleTerminalInputKey,
@@ -144,6 +146,7 @@ function LogixAppInner({ onBack, onSwitchToNotebook, onSwitchToBlocks, onSwitchT
     // ── Sprite Manager ──────────────────────────────────────────────────────
     const sprite = useSpriteManager({ sprites, setSprites, setSelectedSpriteId, addLog });
 
+    const replStartedRef = useRef(false);
     const isPythonBannerText = useCallback((text) => {
         const t = text.trim();
         if (!t) return true;
@@ -154,6 +157,17 @@ function LogixAppInner({ onBack, onSwitchToNotebook, onSwitchToBlocks, onSwitchT
         if (/^help\s*,\s*copyright/.test(t)) return true;
         return false;
     }, []);
+
+    // ── REPL auto-start for Electron (fake also works for web) ────────────
+    useEffect(() => {
+        if (activePanel === "repl" && window.electronAPI?.isElectron) {
+            if (!replStartedRef.current) {
+                replStartedRef.current = true;
+                window.electronAPI.pythonReplStart();
+                addLog(">>> Python REPL Ready (LeapLab)", "success");
+            }
+        }
+    }, [activePanel, addLog]);
 
     // ── Skulpt Init ───────────────────────────────────────────────────────
     useEffect(() => {
@@ -389,22 +403,88 @@ function LogixAppInner({ onBack, onSwitchToNotebook, onSwitchToBlocks, onSwitchT
     }, [handleModalCancel, modalInput, modalState]);
 
     // ── REPL handlers ──────────────────────────────────────────────────────
-    const handleReplSubmit = useCallback(() => {
+    const handleReplSubmit = useCallback(async () => {
         const line = replInput.trim();
         if (!line) return;
-        addLog(`>>> ${line}`, "input");
-        if (window.electronAPI?.isElectron) {
-            window.electronAPI.pythonReplSend(line);
+
+        if (isWaitingForInput) {
+            addLog(line, "input");
+            if ((window).electronAPI?.isElectron) {
+                (window).electronAPI.pythonSendInput(line);
+            } else if (inputResolverRef.current) {
+                inputResolverRef.current(line);
+                inputResolverRef.current = null;
+                setIsWaitingForInput(false);
+                setInputPromptText("");
+                setTerminalInputValue("");
+            }
+            setReplInput("");
+            setActivePanel("terminal");
+            return;
         }
+
+        const newHist = [line, ...replHistory].slice(0, 50);
+        setReplHistory(newHist);
+        setReplHistIdx(-1);
+        addLog(line, "repl-in");
         setReplInput("");
-    }, [replInput, addLog]);
+
+        try {
+            if (window.electronAPI?.isElectron) {
+                await window.electronAPI.pythonReplSend(line);
+            } else {
+                if (!skulptRef.current) {
+                    throw new Error("Python engine (Skulpt) not initialized. Try refreshing the page.");
+                }
+                const trimmed = line.trim();
+                const isSingleLine = !trimmed.includes("\n");
+                const isKeyword = /^(import|from|def |class |for |while |if |elif |else|try|except|with|return|raise|break|continue|pass|del |assert |global |nonlocal |print\(|exec\(|eval\()/.test(trimmed);
+                const hasAssignment = /[^=!<>]=[^=]/.test(` ${trimmed} `);
+                const endsWithColon = trimmed.endsWith(":");
+                const shouldWrap = isSingleLine && !isKeyword && !hasAssignment && !endsWithColon;
+                let codeToRun = line;
+                if (shouldWrap) {
+                    codeToRun = `print(repr(${trimmed}))`;
+                }
+                const start = performance.now();
+                await skulptRef.current.runRepl(codeToRun);
+                const duration = performance.now() - start;
+                if (duration > 100) {
+                    addLog(`⏱ Executed in ${(duration / 1000).toFixed(3)}s`, "info");
+                }
+            }
+        } catch (e) {
+            const msg = e?.message || String(e);
+            if (msg && !msg.includes("not initialized")) {
+                if (!msg.includes("NameError") && !msg.includes("Syntax")) {
+                    addLog(msg, "error");
+                }
+            } else if (msg.includes("not initialized")) {
+                addLog(msg, "error");
+            }
+        }
+        setActivePanel("terminal");
+    }, [replInput, replHistory, isWaitingForInput, addLog, setActivePanel, inputResolverRef, setIsWaitingForInput, setInputPromptText, setTerminalInputValue, skulptRef]);
 
     const handleReplKey = useCallback((e) => {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             handleReplSubmit();
+            return;
         }
-    }, [handleReplSubmit]);
+        if (e.key === "ArrowUp") {
+            e.preventDefault();
+            const idx = Math.min(replHistIdx + 1, replHistory.length - 1);
+            setReplHistIdx(idx);
+            setReplInput(replHistory[idx] || "");
+        }
+        if (e.key === "ArrowDown") {
+            e.preventDefault();
+            const idx = Math.max(replHistIdx - 1, -1);
+            setReplHistIdx(idx);
+            setReplInput(idx === -1 ? "" : replHistory[idx]);
+        }
+    }, [handleReplSubmit, replHistory, replHistIdx]);
 
     // ── Workflow mode change ──────────────────────────────────────────────
     const handleWorkflowModeChange = useCallback((nextMode) => {

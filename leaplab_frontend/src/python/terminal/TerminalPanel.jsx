@@ -272,7 +272,7 @@ export default function TerminalPanel({
                     <div ref={terminalScrollRef} className="flex-1 overflow-y-auto py-2 px-3.5 font-mono text-xs leading-relaxed">
                         {terminalOutput.length === 0 ? (
                             <div className="text-emerald-500 italic">
-                                <div>// LeapBlocks Python Terminal</div>
+                                <div>// LeapLab Python Terminal</div>
                                 <div>// Click Run or Run All to execute</div>
                                 <div>// Open the REPL tab for interactive commands</div>
                             </div>
@@ -357,7 +357,7 @@ export default function TerminalPanel({
                             </div>
                         ) : (
                             <>
-                                <div className="text-slate-500">Python 3 — LeapBlocks Interactive Shell</div>
+                                <div className="text-slate-500">Python 3 — LeapLab Interactive Shell</div>
                                 <div className="text-slate-500 mb-2">Type Python code and press Enter. Use up/down arrows for history.</div>
                             </>
                         )}
