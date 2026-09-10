@@ -17,26 +17,30 @@ export default function IdeWorkspace() {
 
     return (
         <div className="flex-1 flex overflow-hidden min-h-0 bg-slate-900">
-            {/* Left Sidebar */}
-            <SidePanel
-                sidePanel={ctx.sidePanel} setSidePanel={ctx.setSidePanel}
-                projectFiles={ctx.projectFiles} activeFile={ctx.activeFile} setActiveFile={ctx.setActiveFile}
-                handleAddPythonFiles={ctx.handleAddPythonFiles} handleAddImageFiles={ctx.handleAddImageFiles} handleAddTextFiles={ctx.handleAddTextFiles} handleAddCsvFiles={ctx.handleAddCsvFiles}
-                handleDeleteFile={ctx.handleDeleteFile}
-                onAddNewFile={ctx.handleCreateNewFile} onAddNewTextFile={ctx.handleCreateNewTextFile} onRenameFile={ctx.handleRenameFile}
-                spriteFilter={ctx.spriteFilter} setSpriteFilter={ctx.setSpriteFilter}
-                addSpriteFromLibrary={ctx.addSpriteFromLibrary}
-                SPRITE_LIBRARY={ctx.getSpriteLibrary()} BACKDROP_LIBRARY={BACKDROP_LIBRARY}
-                backdrop={ctx.backdrop} handleSetBackdrop={(bd) => { ctx.setBackdropImg(bd.img || null); ctx.addLog('Backdrop: ' + bd.name, 'success'); }}
-                EXTENSIONS={ctx.EXTENSIONS} installedExtensions={ctx.installedExtensions}
-                installExtension={(ext) => {
-                    if (ctx.installedExtensions.find(e => e.id === ext.id)) { ctx.addLog(ext.name + ' already installed', 'info'); return; }
-                    ctx.setInstalledExtensions(prev => [...prev, ext]);
-                    ctx.setProjectFiles(prev => ({ ...prev, [ctx.activeFile]: (prev[ctx.activeFile] || '') + "\n" + ext.code + "\n" }));
-                    ctx.addLog('Extension added: ' + ext.name, 'success');
-                }}
-                packages={ctx.packages} pipFilter={ctx.pipFilter} setPipFilter={ctx.setPipFilter} handleInstall={ctx.handleInstall}
-            />
+            {/* Left Sidebar — IDE: pure code, no sprite modules */}
+            <div className="w-60 shrink-0 flex flex-col overflow-hidden border-r border-gray-200 bg-white">
+                <SidePanel
+                    className="w-full h-full bg-white flex flex-col overflow-hidden"
+                    hideModules={true}
+                    sidePanel={ctx.sidePanel} setSidePanel={ctx.setSidePanel}
+                    projectFiles={ctx.projectFiles} activeFile={ctx.activeFile} setActiveFile={ctx.setActiveFile}
+                    handleAddPythonFiles={ctx.handleAddPythonFiles} handleAddImageFiles={ctx.handleAddImageFiles} handleAddTextFiles={ctx.handleAddTextFiles} handleAddCsvFiles={ctx.handleAddCsvFiles}
+                    handleDeleteFile={ctx.handleDeleteFile}
+                    onAddNewFile={ctx.handleCreateNewFile} onAddNewTextFile={ctx.handleCreateNewTextFile} onRenameFile={ctx.handleRenameFile}
+                    spriteFilter={ctx.spriteFilter} setSpriteFilter={ctx.setSpriteFilter}
+                    addSpriteFromLibrary={ctx.addSpriteFromLibrary}
+                    SPRITE_LIBRARY={ctx.getSpriteLibrary()} BACKDROP_LIBRARY={BACKDROP_LIBRARY}
+                    backdrop={ctx.backdrop} handleSetBackdrop={(bd) => { ctx.setBackdropImg(bd.img || null); ctx.addLog('Backdrop: ' + bd.name, 'success'); }}
+                    EXTENSIONS={ctx.EXTENSIONS} installedExtensions={ctx.installedExtensions}
+                    installExtension={(ext) => {
+                        if (ctx.installedExtensions.find(e => e.id === ext.id)) { ctx.addLog(ext.name + ' already installed', 'info'); return; }
+                        ctx.setInstalledExtensions(prev => [...prev, ext]);
+                        ctx.setProjectFiles(prev => ({ ...prev, [ctx.activeFile]: (prev[ctx.activeFile] || '') + "\n" + ext.code + "\n" }));
+                        ctx.addLog('Extension added: ' + ext.name, 'success');
+                    }}
+                    packages={ctx.packages} pipFilter={ctx.pipFilter} setPipFilter={ctx.setPipFilter} handleInstall={ctx.handleInstall}
+                />
+            </div>
 
             {/* Center: Code Editor */}
             <div className="flex-1 flex flex-col overflow-hidden border-r border-slate-800">

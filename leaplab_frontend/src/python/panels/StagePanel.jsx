@@ -83,6 +83,8 @@ export default function StagePanel({
     BACKDROP_LIBRARY,
     handleSetBackdrop,
     deleteSprite,
+    className,
+    style,
 }) {
     const spriteList = Array.isArray(sprites) ? sprites : [];
     const backdropLibrary = Array.isArray(BACKDROP_LIBRARY) ? BACKDROP_LIBRARY : [];
@@ -102,7 +104,7 @@ export default function StagePanel({
     const [showBackdrops, setShowBackdrops] = React.useState(true);
 
     return (
-        <div className="w-[380px] flex flex-col border-l border-gray-200 bg-white shrink-0 min-h-0 overflow-y-auto">
+        <div style={style} className={className || "w-[380px] flex flex-col border-l border-gray-200 bg-white shrink-0 min-h-0 overflow-y-auto"}>
             <div className="p-3 border-b border-gray-200">
                 <div className="text-xs font-bold text-gray-500 mb-2 tracking-wider uppercase">
                     Stage

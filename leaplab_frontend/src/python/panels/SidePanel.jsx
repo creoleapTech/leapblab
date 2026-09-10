@@ -41,6 +41,7 @@ function FilesPanel({
     onAddNewFile,
     onAddNewTextFile,
     onRenameFile,
+    hideModules = false,
 }) {
     const [renameTarget, setRenameTarget] = React.useState(null);
     const [renameValue, setRenameValue] = React.useState("");
@@ -171,24 +172,28 @@ function FilesPanel({
                 />
             </div>
 
-            <div className="border-t border-gray-200 py-2.5 px-3 bg-gray-50">
-                <span className="text-[11px] font-bold text-gray-500 tracking-wider">
-                    MODULES/LIBRARIES
-                </span>
-            </div>
-            <div className="p-3 pt-2 pb-3 bg-gray-50 shrink-0">
-                <div
-                    onClick={() => onOpenSpritesPanel?.()}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenSpritesPanel?.(); } }}
-                    className="flex items-center gap-2 py-1.5 px-2 rounded bg-white border border-gray-200 cursor-pointer hover:border-violet-400 hover:bg-violet-50 transition-colors select-none"
-                    title="Open Sprite Library"
-                >
-                    <Package size={14} className="text-violet-600" />
-                    <span className="text-xs text-gray-800">Sprite</span>
-                </div>
-            </div>
+            {!hideModules && (
+                <>
+                    <div className="border-t border-gray-200 py-2.5 px-3 bg-gray-50">
+                        <span className="text-[11px] font-bold text-gray-500 tracking-wider">
+                            MODULES/LIBRARIES
+                        </span>
+                    </div>
+                    <div className="p-3 pt-2 pb-3 bg-gray-50 shrink-0">
+                        <div
+                            onClick={() => onOpenSpritesPanel?.()}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenSpritesPanel?.(); } }}
+                            className="flex items-center gap-2 py-1.5 px-2 rounded bg-white border border-gray-200 cursor-pointer hover:border-violet-400 hover:bg-violet-50 transition-colors select-none"
+                            title="Open Sprite Library"
+                        >
+                            <Package size={14} className="text-violet-600" />
+                            <span className="text-xs text-gray-800">Sprite</span>
+                        </div>
+                    </div>
+                </>
+            )}
         </>
     );
 }
@@ -518,9 +523,12 @@ export default function SidePanel({
     pipFilter,
     setPipFilter,
     handleInstall,
+    className,
+    style,
+    hideModules = false,
 }) {
     return (
-        <div className="w-60 bg-white border-r border-gray-200 flex flex-col shrink-0 overflow-hidden">
+        <div style={style} className={className || "w-60 bg-white border-r border-gray-200 flex flex-col shrink-0 overflow-hidden"}>
             {sidePanel === "files" && (
                 <FilesPanel
                     projectFiles={projectFiles}
@@ -537,6 +545,7 @@ export default function SidePanel({
                     onOpenPipPanel={() => setSidePanel?.("pip")}
                     onOpenExtensionsPanel={() => setSidePanel?.("extensions")}
                     onOpenSpritesPanel={() => setSidePanel?.("sprites")}
+                    hideModules={hideModules}
                 />
             )}
 

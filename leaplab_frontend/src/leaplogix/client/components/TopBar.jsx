@@ -4,7 +4,7 @@
  * Unauthorized copying, distribution, or modification is strictly prohibited.
  */
 import React, { useState, useRef, useEffect } from "react";
-import { Home, Play, Square, Undo, Redo, Save, Download, Settings, Upload, Plus, File, FileCode2, FileText, Share, ChevronDown, FolderOpen, Menu as MenuIcon, Code, Monitor, Rocket, ArrowLeft } from "lucide-react";
+import { Home, Play, Square, Undo, Redo, Save, Download, Settings, Plus, File, FileCode2, FileText, Share, ChevronDown, FolderOpen, Menu as MenuIcon, Code, Monitor, Rocket } from "lucide-react";
 import Logo, { CreoleapLogo } from "../../../components/Logo";
 import { useLogix } from "../context/LogixContext";
 import LeapLabAuthButton from "../../../auth/LeapLabAuthButton";
@@ -218,15 +218,6 @@ export default function TopBar() {
                             />
                         )}
 
-                        {windowWidth >= 1400 && ctx.workflowMode === "upload" && (
-                            <ActionButton
-                                variant="subtle"
-                                icon={<Upload size={13} strokeWidth={2.5} />}
-                                label="Upload Code"
-                                onClick={() => ctx.handleUploadFirmware()}
-                            />
-                        )}
-
                         {windowWidth >= 1200 && (
                             <button
                                 type="button"
@@ -268,20 +259,6 @@ export default function TopBar() {
                         )}
                     </div>
                 </header>
-                {/* Back button below topbar – right corner */}
-                <div className="fixed top-[76px] right-3 sm:right-6 z-[998] flex">
-                    <button
-                        onClick={() => {
-                            sessionStorage.setItem('landingActiveTab', 'modules');
-                            sessionStorage.removeItem('myProjectsSelectedMode');
-                            ctx.onBack(false);
-                        }}
-                        className="flex items-center gap-1.5 px-3.5 py-2 bg-white border border-gray-200 rounded-xl shadow-lg text-xs font-bold text-gray-700 hover:bg-gray-50 hover:border-gray-300 hover:shadow-xl transition-all cursor-pointer"
-                        title="Back to Home"
-                    >
-                        <ArrowLeft size={14} strokeWidth={2.2} /> Back
-                    </button>
-                </div>
                 <MobileDrawer
                     isOpen={mobileMenuOpen}
                     onClose={() => setMobileMenuOpen(false)}
@@ -358,7 +335,7 @@ export default function TopBar() {
                                     { id: 'stage', label: 'Stage', icon: <Monitor size={13} strokeWidth={2} />, activeIcon: <Monitor size={13} strokeWidth={2.5} fill="currentColor" /> },
                                     { id: 'upload', label: 'Upload', icon: <Rocket size={13} strokeWidth={2} />, activeIcon: <Rocket size={13} strokeWidth={2.5} fill="currentColor" /> },
                                 ]}
-             ok perfect also add on colours into them make the                    activeMode={ctx.workflowMode}
+                                activeMode={ctx.workflowMode}
                                 onChange={(mode) => {
                                     ctx.setWorkflowMode(mode);
                                     setMobileMenuOpen(false);
@@ -366,18 +343,6 @@ export default function TopBar() {
                             />
                             <div className="h-px bg-white/10 my-2" />
                         </>
-                    )}
-
-                    {windowWidth < 1400 && ctx.workflowMode === "upload" && (
-                        <button onClick={() => {
-                            ctx.handleUploadFirmware();
-                            setMobileMenuOpen(false);
-                        }}
-                            className="flex items-center gap-2.5 w-full px-2.5 py-2 border-none rounded-lg bg-purple-600/20 text-purple-300 text-[13px] font-medium cursor-pointer text-left transition-all hover:bg-purple-600/30 mb-2"
-                        >
-                            <Upload size={13} strokeWidth={2.5} color="#a78bfa" />
-                            Upload Code
-                        </button>
                     )}
 
                     {windowWidth < 900 && (

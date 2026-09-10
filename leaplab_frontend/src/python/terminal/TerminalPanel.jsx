@@ -3,7 +3,7 @@
  * All rights reserved. Proprietary and confidential.
  * Unauthorized copying, distribution, or modification is strictly prohibited.
  */
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Play, Square, Trash2, Package, CornerDownLeft, Search, Copy, Check, X } from "lucide-react";
 import PipPanel from "../panels/PipPanel";
 
@@ -58,6 +58,34 @@ export default function TerminalPanel({
     const [contextMenu, setContextMenu] = useState(null);
     const searchInputRef = useRef(null);
     const terminalScrollRef = useRef(null);
+    const isDraggingRef = useRef(false);
+    const startYRef = useRef(0);
+    const startHeightRef = useRef(0);
+
+    const handleTerminalResizeStart = useCallback((e) => {
+        e.preventDefault();
+        isDraggingRef.current = true;
+        startYRef.current = e.clientY;
+        startHeightRef.current = terminalHeight;
+        document.body.style.cursor = 'row-resize';
+        document.body.style.userSelect = 'none';
+        const handleMove = (ev) => {
+            if (!isDraggingRef.current) return;
+            const delta = startYRef.current - ev.clientY;
+            const maxAllowed = Math.min(520, window.innerHeight - 200);
+            const newHeight = Math.min(Math.max(startHeightRef.current + delta, 120), maxAllowed);
+            setTerminalHeight(newHeight);
+        };
+        const handleUp = () => {
+            isDraggingRef.current = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            document.removeEventListener('mousemove', handleMove);
+            document.removeEventListener('mouseup', handleUp);
+        };
+        document.addEventListener('mousemove', handleMove);
+        document.addEventListener('mouseup', handleUp);
+    }, [terminalHeight]);
 
     const filteredOutput = searchQuery
         ? terminalOutput.filter((log) => log.text.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -126,6 +154,14 @@ export default function TerminalPanel({
 
     return (
         <div className="flex flex-col border-t border-slate-200 bg-white shrink-0" style={{ height: terminalHeight }}>
+            {/* Horizontal resizer — between editor & terminal */}
+            <div
+                onMouseDown={handleTerminalResizeStart}
+                className="h-1.5 cursor-row-resize shrink-0 flex items-center justify-center bg-slate-50 hover:bg-purple-50 border-b border-slate-200 transition-colors group"
+                title="Drag up or down to resize terminal"
+            >
+                <div className="w-8 h-1 rounded-full bg-gray-300 group-hover:bg-purple-400 transition-colors" />
+            </div>
             <div className="flex bg-slate-100 border-b border-slate-200 h-8 items-center">
                 {tabs.map(({ id, label, icon }) => (
                     <button

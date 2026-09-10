@@ -3,7 +3,7 @@
  * All rights reserved. Proprietary and confidential.
  * Unauthorized copying, distribution, or modification is strictly prohibited.
  */
-import React from "react";
+import React, { useState, useCallback, useRef } from "react";
 import { useLogix } from "../context/LogixContext";
 import MonacoEditor from "../../../python/editor/MonacoEditor";
 import SerialMonitor from "../../../components/SerialMonitor";
@@ -15,6 +15,69 @@ import { getUniqueFileName } from "../utils/fileUtils";
 
 export default function UploadWorkspace() {
     const ctx = useLogix();
+
+    // ── Adjustable layout ────────────────────────────────────────────────
+    const [sidebarWidth, setSidebarWidth] = useState(278);
+    const [terminalHeight, setTerminalHeight] = useState(260);
+    const isDraggingSidebarRef = useRef(false);
+    const isDraggingTerminalRef = useRef(false);
+    const startXRef = useRef(0);
+    const startWidthRef = useRef(0);
+    const startYRef = useRef(0);
+    const startHeightRef = useRef(0);
+
+    const handleSidebarResizeStart = useCallback((e) => {
+        e.preventDefault();
+        isDraggingSidebarRef.current = true;
+        startXRef.current = e.clientX;
+        startWidthRef.current = sidebarWidth;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        const handleMove = (ev) => {
+            if (!isDraggingSidebarRef.current) return;
+            const delta = ev.clientX - startXRef.current;
+            const newWidth = Math.min(Math.max(startWidthRef.current + delta, 180), 520);
+            setSidebarWidth(newWidth);
+        };
+        const handleUp = () => {
+            isDraggingSidebarRef.current = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            document.removeEventListener('mousemove', handleMove);
+            document.removeEventListener('mouseup', handleUp);
+        };
+        document.addEventListener('mousemove', handleMove);
+        document.addEventListener('mouseup', handleUp);
+    }, [sidebarWidth]);
+
+    const handleTerminalResizeStart = useCallback((e) => {
+        e.preventDefault();
+        isDraggingTerminalRef.current = true;
+        startYRef.current = e.clientY;
+        startHeightRef.current = terminalHeight;
+        document.body.style.cursor = 'row-resize';
+        document.body.style.userSelect = 'none';
+        const handleMove = (ev) => {
+            if (!isDraggingTerminalRef.current) return;
+            const delta = startYRef.current - ev.clientY;
+            const maxAllowed = Math.min(600, window.innerHeight - 220);
+            const newHeight = Math.min(Math.max(startHeightRef.current + delta, 140), maxAllowed);
+            setTerminalHeight(newHeight);
+            // trigger monaco resize if needed
+            if (ctx.editorRef.current) {
+                // Monaco auto-resizes via flex, no explicit call needed
+            }
+        };
+        const handleUp = () => {
+            isDraggingTerminalRef.current = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            document.removeEventListener('mousemove', handleMove);
+            document.removeEventListener('mouseup', handleUp);
+        };
+        document.addEventListener('mousemove', handleMove);
+        document.addEventListener('mouseup', handleUp);
+    }, [terminalHeight, ctx.editorRef]);
 
     const handleCreateUploadPythonFile = () => {
         ctx.openTextPrompt("New MicroPython File", "Enter a file name for the new MicroPython file.", "module.py", (requestedName) => {
@@ -139,18 +202,24 @@ export default function UploadWorkspace() {
                     >
                         <Redo size={15} />
                     </button>
-                    <div className={`flex items-center gap-2 text-xs ${ctx.uploadProgressMessage ? "text-gray-800" : "text-gray-400"}`}>
-                        {ctx.uploadProgressMessage ? (
-                            ctx.isUploadingFirmware ? <Loader size={15} className="animate-spin" /> : <CheckCircle size={15} className="text-green-600" />
-                        ) : <AlertCircle size={15} className="text-gray-400" />}
-                        <span>{ctx.uploadProgressMessage || "Board ready"}</span>
-                    </div>
+                    <div className="w-px h-5.5 bg-gray-200 hidden sm:block" />
+                    <button
+                        onClick={ctx.handleUploadFirmware}
+                        disabled={ctx.isUploadingFirmware}
+                        className={`flex items-center gap-2 border-none rounded-lg px-4 py-2 text-xs font-bold text-white transition-all shadow-sm ${
+                            ctx.isUploadingFirmware ? "bg-purple-300 cursor-not-allowed" : "bg-purple-600 hover:bg-purple-700 cursor-pointer hover:shadow-md"
+                        }`}
+                        title={ctx.isUploadingFirmware ? "Uploading..." : "Upload Code to Board"}
+                    >
+                        {ctx.isUploadingFirmware ? <Loader size={15} className="animate-spin" /> : <Upload size={15} />}
+                        {ctx.isUploadingFirmware ? "Uploading..." : "Upload Code"}
+                    </button>
                 </div>
             </div>
 
             <div className="flex-1 flex min-h-0">
-                {/* Left sidebar - file list */}
-                <aside className="w-[278px] border-r border-gray-200 bg-[#F7F7FB] flex flex-col min-w-0 relative">
+                {/* Left sidebar - file list — adjustable width */}
+                <aside style={{ width: sidebarWidth }} className="border-r border-gray-200 bg-[#F7F7FB] flex flex-col min-w-0 relative shrink-0 overflow-hidden">
                     <div className="p-3 border-b border-gray-200 flex items-center justify-between gap-2">
                         <div>
                             <div className="text-xs font-bold text-gray-800">Project Files</div>
@@ -199,6 +268,15 @@ export default function UploadWorkspace() {
                     </div>
                 </aside>
 
+                {/* Vertical resizer — between sidebar & editor */}
+                <div
+                    onMouseDown={handleSidebarResizeStart}
+                    className="w-1.5 cursor-col-resize shrink-0 flex items-center justify-center bg-[#F7F7FB] hover:bg-purple-100 border-r border-gray-200 transition-colors group"
+                    title="Drag left or right to resize file list"
+                >
+                    <div className="w-0.5 h-8 rounded-full bg-gray-300 group-hover:bg-purple-400 transition-colors" />
+                </div>
+
                 {/* Center: Editor + Output */}
                 <div className="flex-1 flex flex-col min-w-0 min-h-0">
                     <div className="flex-1 flex flex-col min-h-0">
@@ -222,7 +300,16 @@ export default function UploadWorkspace() {
                         </div>
                     </div>
 
-                    <div className="flex-1 min-h-[200px] border-t border-gray-200 bg-[#F8F9FB] flex flex-col">
+                    {/* Horizontal resizer — between editor & terminal */}
+                    <div
+                        onMouseDown={handleTerminalResizeStart}
+                        className="h-2 cursor-row-resize shrink-0 flex items-center justify-center bg-[#F8F9FB] hover:bg-purple-50 border-t border-b border-gray-200 transition-colors group"
+                        title="Drag up or down to resize terminal"
+                    >
+                        <div className="w-8 h-1 rounded-full bg-gray-300 group-hover:bg-purple-400 transition-colors" />
+                    </div>
+
+                    <div style={{ height: terminalHeight }} className="border-t-0 border-gray-200 bg-[#F8F9FB] flex flex-col shrink-0 overflow-hidden">
                         <div className="flex items-center justify-between pt-2.5 px-3 gap-2.5">
                             <div className="flex gap-2">
                                 {[{ id: "terminal", label: "Terminal", icon: TerminalSquare }, { id: "log", label: "Log", icon: ClipboardList }, { id: "serial", label: "Serial Monitor", icon: Plug }].map((tab) => {
@@ -241,16 +328,12 @@ export default function UploadWorkspace() {
                                     );
                                 })}
                             </div>
-                            <button
-                                onClick={ctx.handleUploadFirmware}
-                                disabled={ctx.isUploadingFirmware}
-                                className={`flex items-center gap-2 border-none rounded-lg px-3.5 py-2 text-xs font-bold text-white transition-colors ${
-                                    ctx.isUploadingFirmware ? "bg-purple-300 cursor-not-allowed" : "bg-purple-600 hover:bg-purple-700 cursor-pointer"
-                                }`}
-                            >
-                                {ctx.isUploadingFirmware ? <Loader size={15} className="animate-spin" /> : <Upload size={15} />}
-                                {ctx.isUploadingFirmware ? "Uploading..." : "Upload Code"}
-                            </button>
+                            <div className={`flex items-center gap-2 text-xs font-medium ${ctx.uploadProgressMessage ? (ctx.isUploadingFirmware ? "text-purple-700" : "text-gray-600") : "text-gray-400"}`}>
+                                {ctx.uploadProgressMessage ? (
+                                    ctx.isUploadingFirmware ? <Loader size={15} className="animate-spin text-purple-600" /> : <CheckCircle size={15} className="text-green-600" />
+                                ) : <AlertCircle size={15} className="text-gray-400" />}
+                                <span className="truncate max-w-[260px]">{ctx.uploadProgressMessage || "Board ready"}</span>
+                            </div>
                         </div>
                         <div className="flex-1 min-h-0 p-3 pt-2.5">
                             <div className="h-full border border-gray-200 rounded-xl overflow-hidden bg-white">
