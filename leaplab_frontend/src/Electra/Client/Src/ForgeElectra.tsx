@@ -101,11 +101,20 @@ export default function ForgeElectra({
     setImportedLibraries,
   } = useForgeStore();
 
-  // Undo/Redo History Management
-  const [history, setHistory] = useState<Array<{ nodes: any[]; edges: any[]; code: string }>>([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
+  // ── Undo/Redo History ────────────────────────────────────────────
+  // Single state object avoids stale-closure bugs from separate history/index states.
+  // History captures full circuit + code snapshot for reliable revert of:
+  // add/delete/move component, add/remove wires, code edits, board changes.
+  const [historyState, setHistoryState] = useState<{ history: Array<{ nodes: any[]; edges: any[]; code: string }>; index: number }>({ history: [], index: -1 });
+  const history = historyState.history;
+  const historyIndex = historyState.index;
   const [code, setCode] = useState(initialBoard === 'esp32-c3' ? ESP32_DEFAULT_CODE : ARDUINO_DEFAULT_CODE);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Ref mirror for synchronous reads inside callbacks (prevents stale index)
+  const historyRef = useRef(historyState);
+  useEffect(() => { historyRef.current = historyState; }, [historyState]);
+  // Flag to suppress debounced push while restoring via undo/redo
+  const isRestoringRef = useRef(false);
 
 
 
@@ -155,87 +164,80 @@ export default function ForgeElectra({
     }
   };
 
-  // Save current state to history
-  const saveToHistory = (overrideNodes?: any[], overrideEdges?: any[], overrideCode?: string) => {
+  // Save current state to history – synchronous via functional updater
+  const saveToHistory = useCallback((overrideNodes?: any[], overrideEdges?: any[], overrideCode?: string) => {
     const storeState = useForgeStore.getState();
-    const currentNodes = overrideNodes || storeState.nodes;
-    const currentEdges = overrideEdges || storeState.edges;
+    const currentNodes = overrideNodes ?? storeState.nodes;
+    const currentEdges = overrideEdges ?? storeState.edges;
     const currentCode = overrideCode !== undefined ? overrideCode : code;
 
-    // Do not save empty state before board is initialized
     if (currentNodes.length === 0) return;
 
-    const newState = {
+    const snapshot = {
       nodes: JSON.parse(JSON.stringify(currentNodes)),
       edges: JSON.parse(JSON.stringify(currentEdges)),
-      code: currentCode
+      code: currentCode,
     };
 
-    setHistory(prevHistory => {
-      const newHistory = prevHistory.slice(0, historyIndex + 1);
-      if (newHistory.length > 0) {
-        const last = newHistory[newHistory.length - 1];
+    setHistoryState(prev => {
+      const base = prev.history.slice(0, prev.index + 1);
+      if (base.length > 0) {
+        const last = base[base.length - 1];
         if (
-          JSON.stringify(last.nodes) === JSON.stringify(newState.nodes) &&
-          JSON.stringify(last.edges) === JSON.stringify(newState.edges) &&
-          last.code === newState.code
+          JSON.stringify(last.nodes) === JSON.stringify(snapshot.nodes) &&
+          JSON.stringify(last.edges) === JSON.stringify(snapshot.edges) &&
+          last.code === snapshot.code
         ) {
-          return prevHistory;
+          return prev; // no-op duplicate
         }
       }
-      newHistory.push(newState);
-      if (newHistory.length > 50) newHistory.shift();
-      return newHistory;
+      let nextHistory = [...base, snapshot];
+      let nextIndex = base.length; // index of pushed snapshot
+      if (nextHistory.length > 50) {
+        nextHistory = nextHistory.slice(-50);
+        nextIndex = nextHistory.length - 1;
+      }
+      return { history: nextHistory, index: nextIndex };
     });
-    setHistoryIndex(prev => Math.min(prev + 1, 49));
-  };
+  }, [code]);
 
-  // Undo operation
-  const handleUndo = () => {
-    if (historyIndex > 0) {
-      const prevState = history[historyIndex - 1];
-      const currentStore = useForgeStore.getState();
-      
-      const boardNodeInPrev = prevState.nodes.find((n: any) => ['esp32-c3', 'esp32', 'arduino-uno'].includes(n.data?.type));
-      let restoredNodes = [...prevState.nodes];
-
-      // If board node is somehow missing from target history state, restore current board node
-      if (!boardNodeInPrev) {
-        const currentBoardNode = currentStore.nodes.find((n: any) => ['esp32-c3', 'esp32', 'arduino-uno'].includes(n.data?.type));
-        if (currentBoardNode) {
-          restoredNodes.unshift(currentBoardNode);
-        }
-      }
-
-      setNodes(restoredNodes);
-      setEdges(prevState.edges);
-      setCode(prevState.code);
-      setHistoryIndex(historyIndex - 1);
+  const handleUndo = useCallback(() => {
+    const { history: h, index } = historyRef.current;
+    if (index <= 0) return;
+    isRestoringRef.current = true;
+    const prevState = h[index - 1];
+    const currentStore = useForgeStore.getState();
+    const boardNodeInPrev = prevState.nodes.find((n: any) => ['esp32-c3', 'esp32', 'arduino-uno'].includes(n.data?.type));
+    let restoredNodes = [...prevState.nodes];
+    if (!boardNodeInPrev) {
+      const currentBoardNode = currentStore.nodes.find((n: any) => ['esp32-c3', 'esp32', 'arduino-uno'].includes(n.data?.type));
+      if (currentBoardNode) restoredNodes.unshift(currentBoardNode);
     }
-  };
+    setNodes(restoredNodes);
+    setEdges(prevState.edges);
+    setCode(prevState.code);
+    setHistoryState(prev => ({ history: prev.history, index: prev.index - 1 }));
+    setTimeout(() => { isRestoringRef.current = false; }, 50);
+  }, [setNodes, setEdges]);
 
-  // Redo operation
-  const handleRedo = () => {
-    if (historyIndex < history.length - 1) {
-      const nextState = history[historyIndex + 1];
-      const currentStore = useForgeStore.getState();
-
-      const boardNodeInNext = nextState.nodes.find((n: any) => ['esp32-c3', 'esp32', 'arduino-uno'].includes(n.data?.type));
-      let restoredNodes = [...nextState.nodes];
-
-      if (!boardNodeInNext) {
-        const currentBoardNode = currentStore.nodes.find((n: any) => ['esp32-c3', 'esp32', 'arduino-uno'].includes(n.data?.type));
-        if (currentBoardNode) {
-          restoredNodes.unshift(currentBoardNode);
-        }
-      }
-
-      setNodes(restoredNodes);
-      setEdges(nextState.edges);
-      setCode(nextState.code);
-      setHistoryIndex(historyIndex + 1);
+  const handleRedo = useCallback(() => {
+    const { history: h, index } = historyRef.current;
+    if (index >= h.length - 1) return;
+    isRestoringRef.current = true;
+    const nextState = h[index + 1];
+    const currentStore = useForgeStore.getState();
+    const boardNodeInNext = nextState.nodes.find((n: any) => ['esp32-c3', 'esp32', 'arduino-uno'].includes(n.data?.type));
+    let restoredNodes = [...nextState.nodes];
+    if (!boardNodeInNext) {
+      const currentBoardNode = currentStore.nodes.find((n: any) => ['esp32-c3', 'esp32', 'arduino-uno'].includes(n.data?.type));
+      if (currentBoardNode) restoredNodes.unshift(currentBoardNode);
     }
-  };
+    setNodes(restoredNodes);
+    setEdges(nextState.edges);
+    setCode(nextState.code);
+    setHistoryState(prev => ({ history: prev.history, index: prev.index + 1 }));
+    setTimeout(() => { isRestoringRef.current = false; }, 50);
+  }, [setNodes, setEdges]);
 
   // Stop simulation when navigating away from ForgeElectra
   useEffect(() => {
@@ -246,25 +248,32 @@ export default function ForgeElectra({
     };
   }, []);
 
-  // Save to history when nodes, edges, or code changes (debounced)
+  // Circuit changes (add/delete/move/wire) → 350ms debounce for snappy undo
   useEffect(() => {
+    if (isRestoringRef.current) return;
     const timer = setTimeout(() => {
-      if (history.length > 0) {
-        const lastState = history[historyIndex];
-        const storeState = useForgeStore.getState();
-        const hasChanged =
-          JSON.stringify(lastState?.nodes) !== JSON.stringify(storeState.nodes) ||
-          JSON.stringify(lastState?.edges) !== JSON.stringify(storeState.edges) ||
-          lastState?.code !== code;
-
-        if (hasChanged) {
-          saveToHistory();
-        }
-      }
-    }, 1000); // 1 second debounce
-
+      const { history: h, index } = historyRef.current;
+      if (h.length === 0) return;
+      const lastState = h[index];
+      const s = useForgeStore.getState();
+      const circuitChanged =
+        JSON.stringify(lastState?.nodes) !== JSON.stringify(s.nodes) ||
+        JSON.stringify(lastState?.edges) !== JSON.stringify(s.edges);
+      if (circuitChanged) saveToHistory();
+    }, 350);
     return () => clearTimeout(timer);
-  }, [nodes, edges, code]);
+  }, [nodes, edges, saveToHistory]);
+
+  // Code typing → 800ms debounce (avoids history spam while typing)
+  useEffect(() => {
+    if (isRestoringRef.current) return;
+    const timer = setTimeout(() => {
+      const { history: h, index } = historyRef.current;
+      if (h.length === 0) return;
+      if (h[index]?.code !== code) saveToHistory();
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [code, saveToHistory]);
 
   const loadProjectData = useCallback((data: any, rProjectName?: string | null, rProjectPath?: string | null) => {
     const loadedNodes = (data.nodes || data.circuit?.nodes || []) as Node[];
@@ -293,8 +302,7 @@ export default function ForgeElectra({
       setProjectPath(null);
     }
 
-    setHistory([]);
-    setHistoryIndex(-1);
+    setHistoryState({ history: [], index: -1 });
     setTimeout(() => {
       saveToHistory();
     }, 0);
@@ -420,8 +428,7 @@ export default function ForgeElectra({
       setCode(board === 'esp32-c3' ? ESP32_DEFAULT_CODE : ARDUINO_DEFAULT_CODE);
       setProjectName('Untitled Project');
       setProjectPath(null);
-      setHistory([]);
-      setHistoryIndex(-1);
+      setHistoryState({ history: [], index: -1 });
       saveToHistory();
 
       // Add board back to canvas
@@ -469,8 +476,7 @@ export default function ForgeElectra({
           const cleanName = folderName ? folderName.replace(/\.(leap|lbp)$/i, '') : 'Loaded Project';
           setProjectName(cleanName);
 
-          setHistory([]);
-          setHistoryIndex(-1);
+          setHistoryState({ history: [], index: -1 });
           saveToHistory();
         }
       } catch (err) {
@@ -520,8 +526,7 @@ export default function ForgeElectra({
           setProjectName(nameWithoutExt);
           setProjectPath(null);
 
-          setHistory([]);
-          setHistoryIndex(-1);
+          setHistoryState({ history: [], index: -1 });
           saveToHistory();
           alert('Project imported successfully!');
         } else {
@@ -547,8 +552,7 @@ export default function ForgeElectra({
     }
     setProjectPath(project.id);
     setProjectName(project.name);
-    setHistory([]);
-    setHistoryIndex(-1);
+    setHistoryState({ history: [], index: -1 });
     saveToHistory();
     setShowWebOpenModal(false);
   };
@@ -849,8 +853,7 @@ export default function ForgeElectra({
       label: targetBoard === 'esp32-c3' ? 'ESP32-C3' : 'Arduino Uno'
     });
 
-    setHistory([]);
-    setHistoryIndex(-1);
+    setHistoryState({ history: [], index: -1 });
     saveToHistory();
   };
 
@@ -958,6 +961,8 @@ export default function ForgeElectra({
                   };
                 }
                 state.addNode(type, pos, { label: type.toUpperCase() });
+                // Push history quickly so Undo can revert immediately (debounced circuit effect is 350ms, but immediate is snappier)
+                setTimeout(() => saveToHistory(), 80);
               }}
               onClose={() => setShowPartPicker(false)}
               currentBoard={board as any}
@@ -980,6 +985,10 @@ export default function ForgeElectra({
                   }
                   setShowEditor(!showEditor);
                 }}
+                onUndo={handleUndo}
+                onRedo={handleRedo}
+                canUndo={historyIndex > 0}
+                canRedo={historyIndex < history.length - 1}
               />
             </Suspense>
 

@@ -26,20 +26,28 @@ import { SelectionToolbar } from './SelectionToolbar';
 import { WireEdge } from './Edges/WireEdge';
 
 import { getComponentPins } from '../lib/PinMap';
-import { Plus, Play, Square, RotateCcw, Code, Sun, Moon, ZoomIn, ZoomOut, Maximize, Hand, Copy, Clipboard, Trash2 } from 'lucide-react';
+import { Plus, Play, Square, RotateCcw, Code, Sun, Moon, ZoomIn, ZoomOut, Maximize, Hand, Copy, Clipboard, Trash2, Undo2, Redo2 } from 'lucide-react';
 
 interface ForgeCanvasProps {
   onToggleSimulation?: () => void;
   isCompiling?: boolean;
   showEditor?: boolean;
   onToggleEditor?: () => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
 }
 
 const ForgeCanvasInner: React.FC<ForgeCanvasProps> = ({
   onToggleSimulation,
   isCompiling,
   showEditor = true,
-  onToggleEditor
+  onToggleEditor,
+  onUndo,
+  onRedo,
+  canUndo = false,
+  canRedo = false,
 }) => {
   const nodeTypes = useMemo(() => ({
     leap: LeapNode,
@@ -1022,6 +1030,27 @@ const ForgeCanvasInner: React.FC<ForgeCanvasProps> = ({
           title="Reset Simulation"
         >
           <RotateCcw size={16} />
+        </button>
+
+        {/* ── Undo / Redo – Circuit Editor History ── */}
+        <div className="canvas-divider toolbar-hide-mobile" />
+        <button
+          onClick={onUndo}
+          disabled={!canUndo}
+          className={`canvas-btn secondary toolbar-hide-mobile ${!canUndo ? 'opacity-40 cursor-not-allowed' : ''}`}
+          title={canUndo ? 'Undo (Ctrl+Z)' : 'Nothing to undo'}
+          aria-label="Undo"
+        >
+          <Undo2 size={16} />
+        </button>
+        <button
+          onClick={onRedo}
+          disabled={!canRedo}
+          className={`canvas-btn secondary toolbar-hide-mobile ${!canRedo ? 'opacity-40 cursor-not-allowed' : ''}`}
+          title={canRedo ? 'Redo (Ctrl+Y)' : 'Nothing to redo'}
+          aria-label="Redo"
+        >
+          <Redo2 size={16} />
         </button>
 
         {/* Zoom In Button */}
