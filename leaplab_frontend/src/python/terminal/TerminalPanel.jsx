@@ -153,16 +153,16 @@ export default function TerminalPanel({
     ];
 
     return (
-        <div className="flex flex-col border-t border-slate-200 bg-white shrink-0" style={{ height: terminalHeight }}>
-            {/* Horizontal resizer — between editor & terminal */}
+        <div className="flex flex-col border-t border-violet-100/60 bg-gradient-to-b from-white to-slate-50/40 shrink-0 shadow-[0_-2px_12px_rgba(139,92,246,0.04)]" style={{ height: terminalHeight }}>
+            {/* Horizontal resizer — between editor & terminal — premium */}
             <div
                 onMouseDown={handleTerminalResizeStart}
-                className="h-1.5 cursor-row-resize shrink-0 flex items-center justify-center bg-slate-50 hover:bg-purple-50 border-b border-slate-200 transition-colors group"
+                className="h-1.5 cursor-row-resize shrink-0 flex items-center justify-center bg-gradient-to-r from-slate-50 via-white to-violet-50/20 hover:from-violet-50 hover:via-indigo-50 hover:to-violet-50 border-b border-violet-100/50 transition-colors group"
                 title="Drag up or down to resize terminal"
             >
-                <div className="w-8 h-1 rounded-full bg-gray-300 group-hover:bg-purple-400 transition-colors" />
+                <div className="w-8 h-1 rounded-full bg-gradient-to-r from-gray-300 via-gray-400 to-gray-300 group-hover:from-violet-400 group-hover:via-indigo-500 group-hover:to-violet-400 transition-colors shadow-sm" />
             </div>
-            <div className="flex bg-slate-100 border-b border-slate-200 h-8 items-center">
+            <div className="flex bg-gradient-to-r from-slate-50 via-white to-violet-50/20 border-b border-violet-100/50 h-8 items-center">
                 {tabs.map(({ id, label, icon }) => (
                     <button
                         key={id}

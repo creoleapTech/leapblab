@@ -141,17 +141,17 @@ export default function UploadWorkspace() {
     };
 
     return (
-        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-            {/* Upload Toolbar */}
-            <div className="h-12 bg-white flex items-center px-3 justify-between border-b border-gray-200 gap-4 shrink-0">
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-gradient-to-br from-white via-slate-50/20 to-violet-50/10">
+            {/* Upload Toolbar — premium gradient */}
+            <div className="h-12 bg-gradient-to-r from-white via-white to-violet-50/40 backdrop-blur-sm flex items-center px-3 justify-between border-b border-violet-100/60 shadow-[0_2px_12px_rgba(139,92,246,0.06)] gap-4 shrink-0">
                 <div className="flex items-center gap-2">
-                    <div className="flex rounded-lg overflow-hidden bg-[#ECE7F8] border border-gray-200">
+                    <div className="flex rounded-lg overflow-hidden bg-gradient-to-r from-[#ede9fe] via-[#f5f3ff] to-[#ede9fe] border border-violet-200/60 shadow-sm">
                         {["project", "board"].map(view => (
                             <button
                                 key={view}
                                 onClick={() => ctx.setUploadView(view)}
-                                className={`flex items-center gap-1.5 px-3.5 py-1.75 border-none text-xs font-bold cursor-pointer transition-colors ${
-                                    ctx.uploadView === view ? "bg-purple-600 text-white" : "bg-transparent text-gray-800"
+                                className={`flex items-center gap-1.5 px-3.5 py-1.75 border-none text-xs font-bold cursor-pointer transition-all ${
+                                    ctx.uploadView === view ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md" : "bg-transparent text-slate-700 hover:text-violet-700"
                                 }`}
                             >
                                 {view === "project" ? <><FileText size={14} /> MicroPython</> : <><FileCode2 size={14} /> Board C++</>}
@@ -160,16 +160,16 @@ export default function UploadWorkspace() {
                     </div>
                     <button
                         onClick={() => ctx.setIsBoardModalOpen(true)}
-                        className="flex items-center gap-1.5 border border-gray-200 bg-white rounded-lg px-3 py-1.75 text-xs font-semibold text-gray-800 cursor-pointer hover:bg-gray-50"
+                        className="flex items-center gap-1.5 border border-violet-200/60 bg-gradient-to-r from-white to-violet-50/30 rounded-lg px-3 py-1.75 text-xs font-semibold text-slate-700 cursor-pointer hover:from-violet-50 hover:to-indigo-50 hover:border-violet-300 hover:text-violet-700 shadow-sm transition-all"
                     >
-                        <Cpu size={14} className="text-purple-600" /> {ctx.selectedBoardName}
+                        <Cpu size={14} className="text-violet-600" /> {ctx.selectedBoardName}
                     </button>
                 </div>
                 <div className="flex items-center gap-2">
                     <select
                         value={ctx.selectedPort}
                         onChange={(e) => ctx.setSelectedPort(e.target.value)}
-                        className="border border-gray-200 rounded-lg px-2.5 py-1.75 text-xs text-gray-800 min-w-[180px] outline-none bg-white"
+                        className="border border-violet-200/60 rounded-lg px-2.5 py-1.75 text-xs text-slate-700 min-w-[180px] outline-none bg-gradient-to-r from-white to-violet-50/20 focus:border-violet-300 focus:ring-2 focus:ring-violet-100 shadow-sm"
                     >
                         <option value="">{ctx.ports.length ? "Select Port" : "No Ports Found"}</option>
                         {ctx.ports.map((port) => <option key={port.path} value={port.path}>{formatPortLabel(port)}</option>)}
@@ -177,37 +177,37 @@ export default function UploadWorkspace() {
                     <button
                         onClick={ctx.refreshPorts}
                         title="Refresh Ports"
-                        className="w-8.5 h-8.5 rounded-lg border border-gray-200 bg-white text-gray-800 flex items-center justify-center cursor-pointer hover:bg-gray-50"
+                        className="w-8.5 h-8.5 rounded-lg border border-violet-200/60 bg-gradient-to-br from-white to-violet-50/30 text-slate-700 flex items-center justify-center cursor-pointer hover:from-violet-50 hover:to-indigo-50 hover:border-violet-300 hover:text-violet-700 shadow-sm transition-all"
                     >
                         <RefreshCw size={15} />
                     </button>
                     <button
                         onClick={ctx.handleConnectToBoard}
-                        className={`flex items-center gap-1.5 border-none rounded-lg px-3 py-2 text-xs font-bold cursor-pointer transition-colors ${
-                            ctx.isConnected ? "bg-green-600 text-white" : "bg-indigo-50 text-gray-800 hover:bg-indigo-100"
+                        className={`flex items-center gap-1.5 border-none rounded-lg px-3.5 py-2 text-xs font-bold cursor-pointer transition-all shadow-sm ${
+                            ctx.isConnected ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-emerald-500/20" : "bg-gradient-to-r from-indigo-50 to-violet-50 text-slate-700 hover:from-indigo-100 hover:to-violet-100 border border-violet-200/50"
                         }`}
                     >
                         <Plug size={14} /> {ctx.isConnected ? "Disconnect" : "Connect"}
                     </button>
-                    <div className="w-px h-5.5 bg-gray-200" />
+                    <div className="w-px h-5.5 bg-gradient-to-b from-transparent via-violet-200/60 to-transparent" />
                     <button
                         onClick={() => ctx.editorRef.current?.trigger('keyboard', 'undo', null)}
-                        className="border border-gray-200 bg-white rounded-lg w-8.5 h-8.5 flex items-center justify-center cursor-pointer text-gray-800 hover:bg-gray-50"
+                        className="border border-violet-200/50 bg-gradient-to-br from-white to-slate-50 rounded-lg w-8.5 h-8.5 flex items-center justify-center cursor-pointer text-slate-600 hover:from-violet-50 hover:to-indigo-50 hover:border-violet-300 hover:text-violet-700 shadow-sm transition-all"
                     >
                         <Undo size={15} />
                     </button>
                     <button
                         onClick={() => ctx.editorRef.current?.trigger('keyboard', 'redo', null)}
-                        className="border border-gray-200 bg-white rounded-lg w-8.5 h-8.5 flex items-center justify-center cursor-pointer text-gray-800 hover:bg-gray-50"
+                        className="border border-violet-200/50 bg-gradient-to-br from-white to-slate-50 rounded-lg w-8.5 h-8.5 flex items-center justify-center cursor-pointer text-slate-600 hover:from-violet-50 hover:to-indigo-50 hover:border-violet-300 hover:text-violet-700 shadow-sm transition-all"
                     >
                         <Redo size={15} />
                     </button>
-                    <div className="w-px h-5.5 bg-gray-200 hidden sm:block" />
+                    <div className="w-px h-5.5 bg-gradient-to-b from-transparent via-violet-200/60 to-transparent hidden sm:block" />
                     <button
                         onClick={ctx.handleUploadFirmware}
                         disabled={ctx.isUploadingFirmware}
-                        className={`flex items-center gap-2 border-none rounded-lg px-4 py-2 text-xs font-bold text-white transition-all shadow-sm ${
-                            ctx.isUploadingFirmware ? "bg-purple-300 cursor-not-allowed" : "bg-purple-600 hover:bg-purple-700 cursor-pointer hover:shadow-md"
+                        className={`flex items-center gap-2 border-none rounded-lg px-4 py-2 text-xs font-bold text-white transition-all shadow-md ${
+                            ctx.isUploadingFirmware ? "bg-gradient-to-r from-violet-300 to-indigo-300 cursor-not-allowed shadow-none" : "bg-gradient-to-r from-violet-600 via-indigo-600 to-violet-700 hover:from-violet-700 hover:via-indigo-700 hover:to-violet-800 cursor-pointer shadow-violet-500/25 hover:shadow-violet-500/30 hover:scale-[1.02]"
                         }`}
                         title={ctx.isUploadingFirmware ? "Uploading..." : "Upload Code to Board"}
                     >
@@ -218,12 +218,12 @@ export default function UploadWorkspace() {
             </div>
 
             <div className="flex-1 flex min-h-0">
-                {/* Left sidebar - file list — adjustable width */}
-                <aside style={{ width: sidebarWidth }} className="border-r border-gray-200 bg-[#F7F7FB] flex flex-col min-w-0 relative shrink-0 overflow-hidden">
-                    <div className="p-3 border-b border-gray-200 flex items-center justify-between gap-2">
+                {/* Left sidebar - file list — adjustable width — premium */}
+                <aside style={{ width: sidebarWidth }} className="border-r border-violet-100/60 bg-gradient-to-b from-[#fdfcff] via-[#f8f7ff] to-[#f5f3ff] flex flex-col min-w-0 relative shrink-0 overflow-hidden shadow-[2px_0_12px_rgba(139,92,246,0.04)]">
+                    <div className="p-3 border-b border-violet-100/60 bg-gradient-to-r from-white via-white to-violet-50/30 flex items-center justify-between gap-2">
                         <div>
-                            <div className="text-xs font-bold text-gray-800">Project Files</div>
-                            <div className="text-[10px] text-gray-400 mt-0.5">
+                            <div className="text-xs font-bold bg-gradient-to-r from-violet-700 to-indigo-700 bg-clip-text text-transparent">Project Files</div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">
                                 {ctx.uploadView === "board" ? "Main sketch, library headers, and C++ source files." : "Click a file, then type in the center editor."}
                             </div>
                         </div>
@@ -238,13 +238,13 @@ export default function UploadWorkspace() {
                                 <div
                                     key={file}
                                     onClick={() => ctx.setUploadActiveFile(file)}
-                                    className={`px-3 py-2.5 cursor-pointer flex items-center justify-between gap-2 border-l-3 transition-colors ${
-                                        isSelected ? "border-purple-600 bg-[#EFE8FF]" : "border-transparent hover:bg-gray-100/50"
+                                    className={`px-3 py-2.5 cursor-pointer flex items-center justify-between gap-2 border-l-[3px] transition-all ${
+                                        isSelected ? "border-violet-600 bg-gradient-to-r from-violet-500/10 via-indigo-500/10 to-violet-500/10 shadow-sm" : "border-transparent hover:bg-gradient-to-r hover:from-violet-50/60 hover:to-indigo-50/40"
                                     }`}
                                 >
                                     <div className="flex items-center gap-2 min-w-0">
-                                        <div className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 ${
-                                            isBoardSource ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"
+                                        <div className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 shadow-sm ${
+                                            isBoardSource ? "bg-gradient-to-br from-blue-500 via-indigo-500 to-violet-600 text-white" : "bg-gradient-to-br from-emerald-400 via-teal-500 to-cyan-600 text-white"
                                         }`}>
                                             {isBoardSource ? <FileCode2 size={13} /> : <FileText size={13} />}
                                         </div>
@@ -287,20 +287,20 @@ export default function UploadWorkspace() {
                     </div>
                 </aside>
 
-                {/* Vertical resizer — between sidebar & editor */}
+                {/* Vertical resizer — between sidebar & editor — premium */}
                 <div
                     onMouseDown={handleSidebarResizeStart}
-                    className="w-1.5 cursor-col-resize shrink-0 flex items-center justify-center bg-[#F7F7FB] hover:bg-purple-100 border-r border-gray-200 transition-colors group"
+                    className="w-1.5 cursor-col-resize shrink-0 flex items-center justify-center bg-gradient-to-b from-[#f8f7ff] to-[#f5f3ff] hover:from-violet-100 hover:to-indigo-100 border-r border-violet-100/60 transition-colors group"
                     title="Drag left or right to resize file list"
                 >
-                    <div className="w-0.5 h-8 rounded-full bg-gray-300 group-hover:bg-purple-400 transition-colors" />
+                    <div className="w-0.5 h-8 rounded-full bg-gradient-to-b from-gray-300 to-gray-400 group-hover:from-violet-400 group-hover:to-indigo-500 transition-colors shadow-sm" />
                 </div>
 
-                {/* Center: Editor + Output */}
-                <div className="flex-1 flex flex-col min-w-0 min-h-0">
+                {/* Center: Editor + Output — premium */}
+                <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-gradient-to-b from-white via-white to-slate-50/30">
                     <div className="flex-1 flex flex-col min-h-0">
-                        <div className={`h-8.5 border-b border-gray-200 flex items-center justify-between px-3 text-xs text-gray-800 gap-3 ${
-                            ctx.uploadView === "board" ? "bg-white" : "bg-gray-100"
+                        <div className={`h-8.5 border-b border-violet-100/50 flex items-center justify-between px-3 text-xs text-slate-700 gap-3 bg-gradient-to-r ${
+                            ctx.uploadView === "board" ? "from-white via-white to-violet-50/20" : "from-slate-50 via-white to-violet-50/10"
                         }`}>
                             <div className="flex items-center gap-2 min-w-0">
                                 {ctx.uploadActiveFile === ctx.activeBoardFile ? <FileCode2 size={14} /> : <FileText size={14} />}
@@ -319,16 +319,16 @@ export default function UploadWorkspace() {
                         </div>
                     </div>
 
-                    {/* Horizontal resizer — between editor & terminal */}
+                    {/* Horizontal resizer — between editor & terminal — premium */}
                     <div
                         onMouseDown={handleTerminalResizeStart}
-                        className="h-2 cursor-row-resize shrink-0 flex items-center justify-center bg-[#F8F9FB] hover:bg-purple-50 border-t border-b border-gray-200 transition-colors group"
+                        className="h-2 cursor-row-resize shrink-0 flex items-center justify-center bg-gradient-to-r from-[#fdfcff] via-[#f8f7ff] to-[#f5f3ff] hover:from-violet-50 hover:via-indigo-50 hover:to-violet-50 border-t border-b border-violet-100/60 transition-colors group"
                         title="Drag up or down to resize terminal"
                     >
-                        <div className="w-8 h-1 rounded-full bg-gray-300 group-hover:bg-purple-400 transition-colors" />
+                        <div className="w-8 h-1 rounded-full bg-gradient-to-r from-gray-300 via-gray-400 to-gray-300 group-hover:from-violet-400 group-hover:via-indigo-500 group-hover:to-violet-400 transition-colors shadow-sm" />
                     </div>
 
-                    <div style={{ height: terminalHeight }} className="border-t-0 border-gray-200 bg-[#F8F9FB] flex flex-col shrink-0 overflow-hidden">
+                    <div style={{ height: terminalHeight }} className="border-t-0 bg-gradient-to-b from-[#fdfcff] via-[#f8f7ff] to-[#f5f3ff]/60 flex flex-col shrink-0 overflow-hidden border-violet-100/40 shadow-[0_-2px_12px_rgba(139,92,246,0.04)]">
                         <div className="flex items-center justify-between pt-2.5 px-3 gap-2.5">
                             <div className="flex gap-2">
                                 {[{ id: "terminal", label: "Terminal", icon: TerminalSquare }, { id: "log", label: "Log", icon: ClipboardList }, { id: "serial", label: "Serial Monitor", icon: Plug }].map((tab) => {
@@ -338,8 +338,8 @@ export default function UploadWorkspace() {
                                         <button
                                             key={tab.id}
                                             onClick={() => ctx.setUploadPanelTab(tab.id)}
-                                            className={`flex items-center gap-1.5 border rounded-lg px-3 py-1.75 text-xs font-semibold cursor-pointer transition-colors ${
-                                                active ? "border-purple-600 bg-[#F3EEFF] text-purple-600" : "border-gray-200 bg-white text-gray-800 hover:bg-gray-50"
+                                            className={`flex items-center gap-1.5 border rounded-lg px-3 py-1.75 text-xs font-semibold cursor-pointer transition-all shadow-sm ${
+                                                active ? "border-violet-500 bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-violet-500/20" : "border-violet-200/50 bg-gradient-to-r from-white to-violet-50/20 text-slate-700 hover:from-violet-50 hover:to-indigo-50 hover:border-violet-300 hover:text-violet-700"
                                             }`}
                                         >
                                             <Icon size={14} />{tab.label}

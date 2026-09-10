@@ -34,13 +34,13 @@ function DropdownMenu({ label, icon: Icon, items, isOpen, onToggle, onClose }) {
             <button
                 type="button"
                 onClick={onToggle}
-                className={`flex items-center gap-1.5 px-4 py-2 border-0 text-white text-sm font-semibold rounded-full transition-all tracking-wide cursor-pointer ${
-                    isOpen ? 'bg-white/20 backdrop-blur-xs' : 'bg-transparent hover:bg-white/10'
+                className={`flex items-center gap-1.5 px-4 py-2 border text-white text-sm font-semibold rounded-full transition-all tracking-wide cursor-pointer backdrop-blur-sm ${
+                    isOpen ? 'bg-gradient-to-r from-violet-600/25 to-indigo-600/25 border-violet-400/30 shadow-[0_2px_10px_rgba(139,92,246,0.2)]' : 'bg-white/[0.06] border-white/10 hover:from-white/10 hover:to-violet-500/10 hover:border-violet-300/20 hover:bg-gradient-to-r'
                 }`}
             >
-                {Icon && <Icon size={16} strokeWidth={2.2} className="opacity-90" />}
+                {Icon && <Icon size={16} strokeWidth={2.2} className="opacity-90 drop-shadow-sm" />}
                 {label}
-                <ChevronDown size={14} strokeWidth={2.5} className={`opacity-50 transition-transform duration-200 ${isOpen ? 'rotate-180' : 'rotate-0'}`} />
+                <ChevronDown size={14} strokeWidth={2.5} className={`opacity-60 transition-transform duration-200 ${isOpen ? 'rotate-180 text-violet-200' : 'rotate-0'}`} />
             </button>
             {isOpen && (
                 <div className="absolute top-full mt-1.5 left-0 bg-white/90 backdrop-blur-xl rounded-xl shadow-2xl border border-white/60 min-w-[200px] overflow-hidden z-[1000] py-1.5 animate-[logixMenuSlideIn_0.18s_ease-out]">
@@ -112,22 +112,22 @@ export default function TopBar() {
         <TopbarShareButton size={18} onSave={ctx.handleSaveProject} projectName={ctx.projectName}>
             {({ onClick: handleShareClick, loading: shareLoading }) => (
                 <>
-                <header className="sticky top-0 h-[68px] bg-gradient-to-r from-[#0a0a1f] via-[#0a015a] to-[#080a25] flex items-center px-3 sm:px-6 justify-between text-white z-[1000] shrink-0 flex-nowrap shadow-[0_4px_20px_rgba(8,10,37,0.5),inset_0_-1px_0_rgba(255,255,255,0.06)] border-b border-sky-400/10">
+                <header className="sticky top-0 h-[68px] bg-gradient-to-r from-[#020208] via-[#0f0a4a] to-[#1e0a6a] flex items-center px-3 sm:px-6 justify-between text-white z-[1000] shrink-0 flex-nowrap shadow-[0_4px_24px_rgba(124,58,237,0.18),0_1px_0_rgba(255,255,255,0.08)_inset] border-b border-violet-500/20 backdrop-blur-sm">
                     <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                         <button onClick={() => {
                             sessionStorage.setItem('landingActiveTab', 'modules');
                             sessionStorage.removeItem('myProjectsSelectedMode');
                             ctx.onBack(false);
-                        }} className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 bg-white/10 border border-white/10 rounded-xl text-white cursor-pointer transition-all shrink-0 hover:bg-white/20" title="Back to Home">
-                            <Home size={18} strokeWidth={2.2} />
+                        }} className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-br from-white/[0.14] to-white/[0.06] backdrop-blur-md border border-white/20 rounded-xl text-white cursor-pointer transition-all shrink-0 hover:from-white/20 hover:to-white/10 hover:border-violet-300/30 shadow-[0_2px_10px_rgba(0,0,0,0.12)]" title="Back to Home">
+                            <Home size={18} strokeWidth={2.2} className="drop-shadow-sm" />
                         </button>
                         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 min-w-0 cursor-pointer" onClick={() => {
                             sessionStorage.setItem('landingActiveTab', 'modules');
                             sessionStorage.removeItem('myProjectsSelectedMode');
                             ctx.onBack(false);
                         }}>
-                            <Logo height={48} className="w-auto" />
-                            <span className="hidden sm:inline text-white text-[16px] sm:text-[18px] lg:text-[22px] font-black tracking-[0.08em] font-sans border-l border-white/15 pl-1.5 sm:pl-2 whitespace-nowrap">LOGIX</span>
+                            <Logo height={48} className="w-auto drop-shadow-[0_2px_8px_rgba(139,92,246,0.35)]" />
+                            <span className="hidden sm:inline bg-gradient-to-r from-white via-violet-100 to-indigo-200 bg-clip-text text-transparent text-[16px] sm:text-[18px] lg:text-[22px] font-black tracking-[0.08em] font-sans border-l border-white/15 pl-1.5 sm:pl-2 whitespace-nowrap drop-shadow-sm">LOGIX</span>
                         </div>
 
                         {windowWidth >= 768 && (
@@ -251,7 +251,7 @@ export default function TopBar() {
                         {windowWidth < 1500 && (
                             <button
                                 onClick={() => setMobileMenuOpen(true)}
-                                className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/10 border border-white/15 text-white cursor-pointer ml-0.5 shrink-0 hover:bg-white/20"
+                                className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-white/12 to-white/6 backdrop-blur-md border border-white/15 text-white cursor-pointer ml-0.5 shrink-0 hover:from-white/20 hover:to-violet-500/10 hover:border-violet-300/30 shadow-[0_2px_10px_rgba(0,0,0,0.12)] transition-all"
                                 title="Open Menu"
                             >
                                 <MenuIcon size={18} strokeWidth={2.2} />

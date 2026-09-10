@@ -75,9 +75,9 @@ export default function StageWorkspace() {
     }, [rightWidth]);
 
     return (
-        <div className="flex-1 flex overflow-hidden min-h-0">
-            {/* Left — adjustable file list */}
-            <div style={{ width: leftWidth }} className="shrink-0 flex flex-col overflow-hidden border-r border-gray-200 bg-white">
+        <div className="flex-1 flex overflow-hidden min-h-0 bg-gradient-to-br from-white via-slate-50/20 to-violet-50/10">
+            {/* Left — adjustable file list — premium */}
+            <div style={{ width: leftWidth }} className="shrink-0 flex flex-col overflow-hidden border-r border-violet-100/60 bg-gradient-to-b from-white via-[#fdfcff] to-[#f5f3ff] shadow-[2px_0_12px_rgba(139,92,246,0.04)]">
                 <SidePanel
                     className="w-full h-full bg-white flex flex-col overflow-hidden"
                     sidePanel={ctx.sidePanel} setSidePanel={ctx.setSidePanel}
@@ -100,13 +100,13 @@ export default function StageWorkspace() {
                 />
             </div>
 
-            {/* Vertical resizer — left */}
+            {/* Vertical resizer — left — premium */}
             <div
                 onMouseDown={handleLeftResizeStart}
-                className="w-1.5 cursor-col-resize shrink-0 flex items-center justify-center bg-slate-50 hover:bg-purple-100 border-r border-gray-200 transition-colors group"
+                className="w-1.5 cursor-col-resize shrink-0 flex items-center justify-center bg-gradient-to-b from-slate-50 to-violet-50/30 hover:from-violet-100 hover:to-indigo-100 border-r border-violet-100/60 transition-colors group"
                 title="Drag left or right to resize file list"
             >
-                <div className="w-0.5 h-8 rounded-full bg-gray-300 group-hover:bg-purple-400 transition-colors" />
+                <div className="w-0.5 h-8 rounded-full bg-gradient-to-b from-gray-300 to-gray-400 group-hover:from-violet-400 group-hover:to-indigo-500 transition-colors shadow-sm" />
             </div>
 
             {/* Center — editor + terminal (terminal height adjustable inside EditorPanel/TerminalPanel) */}
@@ -134,17 +134,17 @@ export default function StageWorkspace() {
                 />
             </div>
 
-            {/* Vertical resizer — right */}
+            {/* Vertical resizer — right — premium */}
             <div
                 onMouseDown={handleRightResizeStart}
-                className="w-1.5 cursor-col-resize shrink-0 flex items-center justify-center bg-white hover:bg-purple-100 border-l border-r border-gray-200 transition-colors group"
+                className="w-1.5 cursor-col-resize shrink-0 flex items-center justify-center bg-gradient-to-b from-white via-violet-50/20 to-indigo-50/20 hover:from-violet-100 hover:to-indigo-100 border-l border-r border-violet-100/60 transition-colors group"
                 title="Drag left or right to resize stage"
             >
-                <div className="w-0.5 h-8 rounded-full bg-gray-300 group-hover:bg-purple-400 transition-colors" />
+                <div className="w-0.5 h-8 rounded-full bg-gradient-to-b from-gray-300 to-gray-400 group-hover:from-violet-400 group-hover:to-indigo-500 transition-colors shadow-sm" />
             </div>
 
-            {/* Right — adjustable stage */}
-            <div style={{ width: rightWidth }} className="shrink-0 flex flex-col overflow-hidden border-l border-gray-200 bg-white">
+            {/* Right — adjustable stage — premium */}
+            <div style={{ width: rightWidth }} className="shrink-0 flex flex-col overflow-hidden border-l border-violet-100/60 bg-gradient-to-b from-white via-[#fdfcff] to-[#f5f3ff] shadow-[-2px_0_12px_rgba(139,92,246,0.04)]">
                 <StagePanel
                     className="w-full h-full bg-white flex flex-col min-h-0 overflow-y-auto"
                     sprites={ctx.sprites} selectedSpriteId={ctx.selectedSpriteId}

@@ -48,8 +48,8 @@ function FilesPanel({
     return (
         <>
             <div className="flex-1 min-h-0 flex flex-col relative">
-                <div className="py-2.5 px-3 flex justify-between items-center border-b border-gray-200">
-                    <span className="text-xs font-bold text-gray-800">Project Files</span>
+                <div className="py-2.5 px-3 flex justify-between items-center border-b border-violet-100/50 bg-gradient-to-r from-white via-white to-violet-50/20">
+                    <span className="text-xs font-bold bg-gradient-to-r from-violet-700 to-indigo-700 bg-clip-text text-transparent">Project Files</span>
                     <div className="flex gap-1">
                         {onAddNewFile && (
                             <button
@@ -79,10 +79,10 @@ function FilesPanel({
                             onClick={() => {
                                 if (renameTarget !== file) setActiveFile(file);
                             }}
-                            className={`py-2 px-3 cursor-pointer flex items-center justify-between gap-2 border-l-[3px] transition-colors ${
+                            className={`py-2 px-3 cursor-pointer flex items-center justify-between gap-2 border-l-[3px] transition-all ${
                                 activeFile === file
-                                    ? "bg-green-50 text-green-800 border-green-500"
-                                    : "bg-transparent text-gray-800 border-transparent hover:bg-gray-50"
+                                    ? "bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 text-emerald-800 border-emerald-500 shadow-sm"
+                                    : "bg-transparent text-slate-700 border-transparent hover:bg-gradient-to-r hover:from-violet-50/60 hover:to-indigo-50/40 hover:text-violet-800"
                             }`}
                         >
                             <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -174,22 +174,22 @@ function FilesPanel({
 
             {!hideModules && (
                 <>
-                    <div className="border-t border-gray-200 py-2.5 px-3 bg-gray-50">
-                        <span className="text-[11px] font-bold text-gray-500 tracking-wider">
+                    <div className="border-t border-violet-100/50 py-2.5 px-3 bg-gradient-to-r from-slate-50 via-white to-violet-50/20">
+                        <span className="text-[11px] font-bold bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-transparent tracking-wider">
                             MODULES/LIBRARIES
                         </span>
                     </div>
-                    <div className="p-3 pt-2 pb-3 bg-gray-50 shrink-0">
+                    <div className="p-3 pt-2 pb-3 bg-gradient-to-b from-slate-50/50 to-violet-50/20 shrink-0">
                         <div
                             onClick={() => onOpenSpritesPanel?.()}
                             role="button"
                             tabIndex={0}
                             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenSpritesPanel?.(); } }}
-                            className="flex items-center gap-2 py-1.5 px-2 rounded bg-white border border-gray-200 cursor-pointer hover:border-violet-400 hover:bg-violet-50 transition-colors select-none"
+                            className="flex items-center gap-2 py-1.5 px-2 rounded-lg bg-gradient-to-r from-white to-violet-50/30 border border-violet-200/60 cursor-pointer hover:from-violet-500 hover:to-indigo-500 hover:text-white hover:border-violet-500 hover:shadow-md transition-all select-none group"
                             title="Open Sprite Library"
                         >
-                            <Package size={14} className="text-violet-600" />
-                            <span className="text-xs text-gray-800">Sprite</span>
+                            <Package size={14} className="text-violet-600 group-hover:text-white transition-colors" />
+                            <span className="text-xs font-semibold text-slate-700 group-hover:text-white">Sprite</span>
                         </div>
                     </div>
                 </>

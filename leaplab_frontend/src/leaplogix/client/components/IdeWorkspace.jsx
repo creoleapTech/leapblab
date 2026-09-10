@@ -16,9 +16,9 @@ export default function IdeWorkspace() {
     const ctx = useLogix();
 
     return (
-        <div className="flex-1 flex overflow-hidden min-h-0 bg-slate-900">
-            {/* Left Sidebar — IDE: pure code, no sprite modules */}
-            <div className="w-60 shrink-0 flex flex-col overflow-hidden border-r border-gray-200 bg-white">
+        <div className="flex-1 flex overflow-hidden min-h-0 bg-gradient-to-br from-slate-900 via-[#0a0a1f] to-[#1e1b4b]">
+            {/* Left Sidebar — fixed wrapper, SidePanel fills it — premium light */}
+            <div className="w-60 shrink-0 flex flex-col overflow-hidden border-r border-violet-200/30 bg-gradient-to-b from-white via-[#fdfcff] to-[#f5f3ff] shadow-[2px_0_12px_rgba(0,0,0,0.08)]">
                 <SidePanel
                     className="w-full h-full bg-white flex flex-col overflow-hidden"
                     hideModules={true}
@@ -42,8 +42,8 @@ export default function IdeWorkspace() {
                 />
             </div>
 
-            {/* Center: Code Editor */}
-            <div className="flex-1 flex flex-col overflow-hidden border-r border-slate-800">
+            {/* Center: Code Editor — premium */}
+            <div className="flex-1 flex flex-col overflow-hidden border-r border-violet-900/20 bg-gradient-to-b from-white via-slate-50/30 to-violet-50/20 shadow-inner">
                 {Object.keys(ctx.projectFiles).length === 0 ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-4 font-mono">
                         <FileCode2 size={48} strokeWidth={1.2} className="opacity-40" />
@@ -68,8 +68,8 @@ export default function IdeWorkspace() {
                 )}
             </div>
 
-            {/* Right: Terminal / REPL */}
-            <div className="w-96 flex flex-col overflow-hidden shrink-0">
+            {/* Right: Terminal / REPL — premium dark */}
+            <div className="w-96 flex flex-col overflow-hidden shrink-0 bg-gradient-to-b from-slate-900 via-[#0f0a1f] to-[#1a1033] border-l border-violet-900/20 shadow-[-4px_0_16px_rgba(0,0,0,0.12)]">
                 <style>{`.ide-terminal-full > div:first-child { height: 100% !important; flex: 1 !important; }`}</style>
                 <div className="ide-terminal-full flex-1 flex flex-col overflow-hidden">
                     <TerminalPanel

@@ -533,7 +533,7 @@ function LogixAppInner({ onBack, onSwitchToNotebook, onSwitchToBlocks, onSwitchT
 
     return (
         <LogixProvider value={contextValue}>
-            <div className="flex flex-col h-screen w-screen bg-slate-50 text-slate-800 overflow-hidden font-sans">
+            <div className="flex flex-col h-screen w-screen bg-gradient-to-br from-[#faf8ff] via-[#f8fafc] to-[#ede9fe]/30 text-slate-800 overflow-hidden font-sans">
                 <TopBar />
 
                 {workflowMode === "stage" ? (
