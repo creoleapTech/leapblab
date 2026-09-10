@@ -96,12 +96,30 @@ export default function HandPoseClassifierPanel({ mode }: HandPoseClassifierPane
         })
     }, [mode.project?.classes.map(c => c.id).join(',')])
 
-    // When project is opened from LeapLab/My Projects, ensure no overlap (name-tab clipping)
+    // When project is opened from LeapLab/My Projects or File → New/Open, reset all UI so previous dataset and Train state don't persist
     useEffect(() => {
         if (!mode.project?.id) return
         setExpandedClasses({})
         setZoom(1)
         setPan({ x: 32, y: 24 })
+        setIsCapturing(null)
+        setDragOverClass(null)
+        setIsTestDragging(false)
+        setIsTraining(false)
+        setTrainingError(null)
+        setPrediction(null)
+        setIsProcessing(false)
+        setTestImage(null)
+        setModelLoading(false)
+        setInferenceTime(0)
+        setSavedMessage(null)
+        setShowAddClass(false)
+        setNewClassName('')
+        setEditingClassId(null)
+        setEditName('')
+        setIsPanning(false)
+        setDraggingId(null)
+        classifierRef.current.clear()
         setTimeout(() => {
             setClassPositions(prev => {
                 const ids = mode.project!.classes.map(c => c.id)

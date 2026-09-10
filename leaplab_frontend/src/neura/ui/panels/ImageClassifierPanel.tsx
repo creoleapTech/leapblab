@@ -97,13 +97,34 @@ export default function ImageClassifierPanel({ mode }: ImageClassifierPanelProps
         })
     }, [mode.project?.classes.map(c => c.id).join(',')])
 
-    // When project is opened from LeapLab/My Projects, ensure canvas is not overlapping
+    // When project is opened from LeapLab/My Projects or File → New/Open, reset all UI so previous dataset images and Train state don't persist
     useEffect(() => {
         if (!mode.project?.id) return
-        // Reset expanded state that could cause height miscalc, and reset view
+        // Reset UI that otherwise persists across projects (fixes dataset images lingering and Train button stuck)
         setExpandedClasses({})
         setZoom(1)
         setPan({ x: 32, y: 24 })
+        setIsCapturing(null)
+        setDragOverClass(null)
+        setIsTestDragging(false)
+        setIsTraining(false)
+        setTrainingError(null)
+        setPrediction(null)
+        setIsProcessing(false)
+        setTestImage(null)
+        setModelLoading(false)
+        setInferenceTime(0)
+        setSavedMessage(null)
+        setCopyMenuFor(null)
+        setCurrentEpoch(0)
+        setEpochResults([])
+        setShowAddClass(false)
+        setNewClassName('')
+        setEditingClassId(null)
+        setEditName('')
+        setIsPanning(false)
+        setDraggingId(null)
+        classifierRef.current.clear()
         // Re-layout brain/vision to the right of all classes (fixes name-tab clipping)
         // Defer to next tick so classPositions effect has run
         setTimeout(() => {

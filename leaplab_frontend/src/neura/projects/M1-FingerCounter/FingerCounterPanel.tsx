@@ -156,6 +156,34 @@ export default function FingerCounterPanel({ mode }: FingerCounterPanelProps) {
         if (mode.mode !== 'test') testCameraStartedRef.current = false
     }, [mode.mode])
 
+    // New file / LeapLab open – clear previous dataset images and train state
+    useEffect(() => {
+        if (!mode.project?.id) return
+        setIsCapturing(false)
+        setCaptureStatus('idle')
+        setPrediction(null)
+        setIsProcessing(false)
+        setHandDetected(false)
+        setInferenceTime(0)
+        setSavedMessage(null)
+        setCurrentCount(0)
+        setCountHistory([])
+        setTestImage(null)
+        setFingerFlags([0, 0, 0, 0, 0])
+        if (savedTimeoutRef.current) clearTimeout(savedTimeoutRef.current)
+        classifierRef.current.clear()
+        if (burstIntervalRef.current) { clearInterval(burstIntervalRef.current); burstIntervalRef.current = null }
+        // Clear overlay canvases
+        if (overlayCanvasRef.current) {
+            const ctx = overlayCanvasRef.current.getContext('2d')
+            ctx?.clearRect(0, 0, overlayCanvasRef.current.width, overlayCanvasRef.current.height)
+        }
+        if (canvasRef.current) {
+            const ctx = canvasRef.current.getContext('2d')
+            ctx?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
+        }
+    }, [mode.project?.id])
+
     // Rule-based classifier: no KNN rebuild needed
     useEffect(() => {
         if (mode.mode !== 'test' || testImage) return

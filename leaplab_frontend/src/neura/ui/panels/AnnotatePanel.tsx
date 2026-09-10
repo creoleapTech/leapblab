@@ -110,6 +110,29 @@ export default function AnnotatePanel({ mode }: AnnotatePanelProps) {
         setRedoStack([])
     }, [mode.currentAnnotation?.id, currentImageIndex])
 
+    // New file / LeapLab open – clear previous dataset images and train state
+    useEffect(() => {
+        if (!mode.project?.id) return
+        setUndoStack([])
+        setRedoStack([])
+        setIsDrawing(false)
+        setDrawStart(null)
+        setDrawCurrent(null)
+        setDragBox(null)
+        setResizeBox(null)
+        setEditingBoxId(null)
+        setEditingLabel('')
+        setIsAutoDetecting(false)
+        setShowBoxList(true)
+        setShowLabels(true)
+        setIsDragging(false)
+        setCurrentImageIndex(0)
+        setAnnotationImage(null)
+        setImageSize(null)
+        setSavedMessage(null)
+        // currentAnnotation will be re-set by the classSamples effect for the new project
+    }, [mode.project?.id])
+
     const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
         if (!file || !file.type.startsWith('image/')) return

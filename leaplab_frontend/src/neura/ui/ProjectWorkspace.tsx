@@ -475,9 +475,9 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
                     </div>
                 )}
 
-                {/* Main content */}
+                {/* Main content – keyed by project id so File → New/Open fully resets panel state (dataset images, Train button, canvas) */}
                 <main className="flex-1 bg-[#faf8ff] min-w-0 flex flex-col overflow-y-auto neura-scrollbar relative">
-                    <div className="animate-fade-in flex-1 flex flex-col min-h-0 relative">
+                    <div key={mode.project?.id || 'no-project'} className="animate-fade-in flex-1 flex flex-col min-h-0 relative">
                         {children({ mode })}
                     </div>
                 </main>
