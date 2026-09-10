@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import type { NeuraProject, ClassData, Sample, ProjectType, BoundingBox, Annotation, AnnotationToolType } from '../types/neura.types'
 import { MAX_SAMPLES_PER_CLASS } from '../types/neura.types'
+import { saveNeuraProject, loadNeuraProject, migrateLocalStorageToIDB, deleteNeuraProject } from '../storage/neuraIDB'
 
 const generateId = () => Math.random().toString(36).substring(2, 10) + Date.now().toString(36)
 
@@ -71,6 +72,9 @@ export interface UseNeuraProjectReturn {
     setDataAccuracy: (acc: number | null) => void
     dataModelTrained: boolean
     setDataModelTrained: (trained: boolean) => void
+    // Auto-save status for UI (fixes false "Auto-saved" when localStorage quota exceeded)
+    saveStatus: 'idle' | 'saving' | 'saved' | 'error'
+    saveError: string | null
 }
 
 export function useNeuraProject(
@@ -131,6 +135,12 @@ export function useNeuraProject(
         setModelTrainedState(trained)
         setProject(prev => ({ ...prev, modelTrained: trained, updatedAt: Date.now() }))
     }, [])
+
+    // Auto-save status – true persistence via IndexedDB (fixes localStorage quota false "Auto-saved")
+    const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+    const [saveError, setSaveError] = useState<string | null>(null)
+    const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+    const isHydratingRef = useRef(true)
 
     // Data Mode separate training state
     const [dataAccuracy, setDataAccuracyState] = useState<number | null>(() => {
@@ -266,6 +276,10 @@ export function useNeuraProject(
         setAnnotations([])
         setCurrentAnnotation(null)
         try { localStorage.removeItem(`neura-annotations-${type}`) } catch { /* ignore */ }
+        try { localStorage.removeItem(`neura-project-${type}`) } catch {}
+        deleteNeuraProject(type).catch(() => {})
+        setSaveStatus('idle')
+        setSaveError(null)
     }, [type])
 
     const getSelectedClass = useCallback(() => {
@@ -483,16 +497,84 @@ export function useNeuraProject(
         }
     }, [project, selectedClassId])
 
-    // Save to localStorage on every project change (no auto-download)
+    // Hydrate from IndexedDB on mount (large image projects exceed localStorage quota)
     useEffect(() => {
-        if (project) {
+        let cancelled = false
+        ;(async () => {
             try {
-                const data = JSON.stringify(project)
-                localStorage.setItem(`neura-project-${type}`, data)
-            } catch {
-                // localStorage full — silently ignore; user can manually export
-                console.warn('[Neura] localStorage full. Use File > Save to export your project.')
+                // Migrate any existing localStorage project to IDB once
+                await migrateLocalStorageToIDB(type)
+                const idbProject = await loadNeuraProject(type)
+                if (cancelled || !idbProject) {
+                    isHydratingRef.current = false
+                    return
+                }
+                // Validate that IDB project matches requested type/name (same logic as localStorage init)
+                const defaultName = getDefaultName(type)
+                const savedMatches = idbProject.type === type && idbProject.classes && (idbProject.name === project.name || idbProject.name === defaultName || !projectName || idbProject.name === projectName)
+                if (!savedMatches) {
+                    isHydratingRef.current = false
+                    return
+                }
+                // Only hydrate if IDB is newer or has more samples (prevents overwriting fresh empty project)
+                const localSampleCount = project.classes.reduce((s, c) => s + c.samples.length, 0)
+                const idbSampleCount = (idbProject.classes || []).reduce((s: number, c: any) => s + (c.samples?.length || 0), 0)
+                const shouldHydrate = idbSampleCount > localSampleCount || (idbProject.updatedAt || 0) > (project.updatedAt || 0)
+                if (shouldHydrate) {
+                    setProject(idbProject)
+                    if (typeof idbProject.accuracy !== 'undefined') setAccuracy(idbProject.accuracy ?? null)
+                    if (typeof idbProject.modelTrained !== 'undefined') setModelTrainedState(!!idbProject.modelTrained)
+                    if (typeof idbProject.dataAccuracy !== 'undefined') setDataAccuracyState(idbProject.dataAccuracy ?? null)
+                    if (typeof idbProject.dataModelTrained !== 'undefined') setDataModelTrainedState(!!idbProject.dataModelTrained)
+                    console.log(`[Neura] Hydrated ${type} from IndexedDB (${idbSampleCount} samples)`)
+                }
+            } catch (e) {
+                console.warn('[Neura] IDB hydrate failed', e)
+            } finally {
+                if (!cancelled) isHydratingRef.current = false
             }
+        })()
+        return () => { cancelled = true }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [type])
+
+    // Persist to IndexedDB (primary) + localStorage (fallback) – debounced, with real status
+    useEffect(() => {
+        if (isHydratingRef.current) return
+        if (!project) return
+        // Don't spam saves for empty initial project
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
+        setSaveStatus('saving')
+        setSaveError(null)
+        saveTimeoutRef.current = setTimeout(async () => {
+            // Try IDB first (handles large base64 images)
+            const idbRes = await saveNeuraProject(type, project)
+            if (idbRes.ok) {
+                setSaveStatus('saved')
+                setSaveError(null)
+                // Also try lightweight localStorage for fast boot next time (best-effort, ignore quota)
+                try {
+                    // If project is huge, localStorage will throw – that's ok, IDB is source of truth
+                    localStorage.setItem(`neura-project-${type}`, JSON.stringify(project))
+                } catch {}
+                setTimeout(() => setSaveStatus(prev => (prev === 'saved' ? 'idle' : prev)), 2200)
+                return
+            }
+            // IDB failed – try localStorage as fallback and surface error
+            try {
+                localStorage.setItem(`neura-project-${type}`, JSON.stringify(project))
+                setSaveStatus('saved')
+                setSaveError(null)
+                setTimeout(() => setSaveStatus(prev => (prev === 'saved' ? 'idle' : prev)), 2200)
+            } catch (e: any) {
+                const msg = idbRes.error || e?.message || 'Storage full'
+                setSaveStatus('error')
+                setSaveError(msg)
+                console.warn('[Neura] Auto-save failed (IDB+localStorage)', msg)
+            }
+        }, 550)
+        return () => {
+            if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
         }
     }, [project, type])
 
@@ -580,6 +662,8 @@ export function useNeuraProject(
         setDataAccuracy,
         dataModelTrained,
         setDataModelTrained,
+        saveStatus,
+        saveError,
     }
 }
 

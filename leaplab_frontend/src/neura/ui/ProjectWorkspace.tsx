@@ -485,10 +485,27 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
                             </div>
                         </>
                     )}
-                    {/* Auto-saved */}
-                    <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.25 rounded-xl bg-emerald-50 text-xs font-semibold text-emerald-600">
-                        <span className="text-sm">💾</span>
-                        <span>Auto-saved</span>
+                    {/* Auto-saved – now reflects real IDB persistence (fixes false "Auto Saved" when localStorage quota exceeded) */}
+                    <div
+                        title={mode.saveStatus === 'error' ? (mode.saveError || 'Save failed – storage full. Try fewer/larger images or export via File > Save.') : mode.saveStatus === 'saving' ? 'Saving to browser storage…' : 'All changes are stored in this browser (IndexedDB) and survive refresh'}
+                        className={`hidden sm:flex items-center gap-1.5 px-3 py-1.25 rounded-xl text-xs font-semibold border ${
+                            mode.saveStatus === 'error'
+                                ? 'bg-red-50 text-red-700 border-red-200 cursor-pointer'
+                                : mode.saveStatus === 'saving'
+                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                    : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                        }`}
+                        onClick={() => {
+                            if (mode.saveStatus === 'error') {
+                                // Force a re-save attempt by touching project timestamp
+                                mode.setProjectName(mode.project?.name || 'My Image Classifier')
+                            }
+                        }}
+                    >
+                        <span className="text-sm">{mode.saveStatus === 'saving' ? '⏳' : mode.saveStatus === 'error' ? '⚠️' : '💾'}</span>
+                        <span>
+                            {mode.saveStatus === 'saving' ? 'Saving…' : mode.saveStatus === 'error' ? 'Save failed – tap to retry' : mode.saveStatus === 'saved' ? 'Auto-saved ✓' : 'Auto-saved'}
+                        </span>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
