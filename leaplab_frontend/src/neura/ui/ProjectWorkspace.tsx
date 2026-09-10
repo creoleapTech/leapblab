@@ -318,20 +318,35 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
 
             {/* Class list */}
             <div className="flex-1 overflow-y-auto neura-scrollbar px-2.5">
-                {mode.project?.classes.map((classData, index) => (
-                    <ClassCard
-                        key={classData.id}
-                        classData={classData}
-                        isSelected={classData.id === mode.selectedClassId}
-                        onSelect={() => {
-                            mode.setSelectedClassId(classData.id)
-                            if (isMobile) setSidebarOpen(false)
-                        }}
-                        onRemove={() => mode.removeClass(classData.id)}
-                        onRename={(name) => mode.renameClass(classData.id, name)}
-                        index={index}
-                    />
-                ))}
+                {(() => {
+                    // When viewing an already annotated image, highlight the class matching the annotation's label
+                    const boxes = (mode.currentAnnotation?.boxes as any[]) || []
+                    let annotationLabel: string | null = null
+                    if (boxes.length > 0) {
+                        const counts: Record<string, number> = {}
+                        boxes.forEach((b: any) => { const l = (b.label || '').trim().toLowerCase(); if (l) counts[l] = (counts[l] || 0) + 1 })
+                        const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1])
+                        annotationLabel = sorted[0]?.[0] || null
+                    }
+                    return mode.project?.classes.map((classData, index) => {
+                        const isAnnotationMatch = annotationLabel ? classData.name.trim().toLowerCase() === annotationLabel : false
+                        const isSelected = annotationLabel ? isAnnotationMatch : classData.id === mode.selectedClassId
+                        return (
+                            <ClassCard
+                                key={classData.id}
+                                classData={classData}
+                                isSelected={isSelected}
+                                onSelect={() => {
+                                    mode.setSelectedClassId(classData.id)
+                                    if (isMobile) setSidebarOpen(false)
+                                }}
+                                onRemove={() => mode.removeClass(classData.id)}
+                                onRename={(name) => mode.renameClass(classData.id, name)}
+                                index={index}
+                            />
+                        )
+                    })
+                })()}
 
                 {mode.project && mode.project.classes.length === 0 && !showAddClass && (
                     <div className="flex flex-col items-center text-center py-10 px-4">

@@ -45,7 +45,16 @@ export default function AnnotatePanel({ mode }: AnnotatePanelProps) {
     const totalBoxes = mode.currentAnnotation?.boxes.length || 0
     const progress = Math.min((totalBoxes / 10) * 100, 100)
     const selectedClass = mode.getSelectedClass()
-    const defaultLabel = selectedClass?.name || 'Object'
+    // Fix: when viewing an already annotated image, defaultLabel (and thus new boxes) must match the existing annotation, not just the folder
+    const existingAnnotationLabel = React.useMemo(() => {
+        const boxes = mode.currentAnnotation?.boxes || []
+        if (boxes.length === 0) return null
+        const counts: Record<string, number> = {}
+        boxes.forEach(b => { const l = b.label?.trim(); if (l) counts[l] = (counts[l] || 0) + 1 })
+        const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1])
+        return sorted[0]?.[0] || null
+    }, [mode.currentAnnotation?.boxes])
+    const defaultLabel = existingAnnotationLabel || selectedClass?.name || 'Object'
     const classSamples = selectedClass?.samples || []
     const totalImages = classSamples.length
 
@@ -727,9 +736,9 @@ export default function AnnotatePanel({ mode }: AnnotatePanelProps) {
                                         <button onClick={() => setCurrentImageIndex(Math.min(totalImages - 1, currentImageIndex + 1))} disabled={currentImageIndex >= totalImages - 1} className={`py-1 px-2 rounded text-sm font-bold bg-gray-100 border-none ${currentImageIndex >= totalImages - 1 ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-200'}`}>▶</button>
                                     </div>
                                 )}
-                                <button onClick={handleUndo} disabled={undoStack.length === 0} className={`flex items-center gap-1.5 text-[#4a4455] font-bold text-xs bg-transparent border-none ${undoStack.length === 0 ? 'cursor-not-allowed opacity-30' : 'cursor-pointer opacity-100 hover:text-[#630ed4]'}`} title="Undo (Ctrl+Z)" aria-label="Undo">↩️ Undo</button>
-                                <button onClick={handleRedo} disabled={redoStack.length === 0} className={`flex items-center gap-1.5 text-[#4a4455] font-bold text-xs bg-transparent border-none ${redoStack.length === 0 ? 'cursor-not-allowed opacity-30' : 'cursor-pointer opacity-100 hover:text-[#630ed4]'}`} title="Redo (Ctrl+Y / Ctrl+Shift+Z)" aria-label="Redo">↪️ Redo</button>
-                                <button onClick={handleClear} disabled={totalBoxes === 0} className={`flex items-center gap-1.5 font-bold text-xs bg-transparent border-none ${totalBoxes === 0 ? 'cursor-not-allowed opacity-30 text-[#4a4455]' : 'cursor-pointer text-red-600 hover:text-red-700'}`} title="Clear all boxes" aria-label="Clear">🗑️ Clear</button>
+                                <button onClick={handleUndo} disabled={undoStack.length === 0} className={`flex items-center gap-1.5 font-bold text-xs bg-transparent border-none py-1.5 px-2.5 rounded-lg transition-colors ${undoStack.length === 0 ? 'cursor-not-allowed opacity-30 text-[#4a4455]' : 'cursor-pointer text-[#4a4455] hover:text-[#630ed4] hover:bg-[#f5f3ff]'}`} title="Undo (Ctrl+Z)" aria-label="Undo">↩️ Undo</button>
+                                <button onClick={handleRedo} disabled={redoStack.length === 0} className={`flex items-center gap-1.5 font-bold text-xs bg-transparent border-none py-1.5 px-2.5 rounded-lg transition-colors ${redoStack.length === 0 ? 'cursor-not-allowed opacity-30 text-[#4a4455]' : 'cursor-pointer text-[#4a4455] hover:text-[#630ed4] hover:bg-[#f5f3ff]'}`} title="Redo (Ctrl+Y / Ctrl+Shift+Z)" aria-label="Redo">↪️ Redo</button>
+                                <button onClick={handleClear} disabled={totalBoxes === 0} className={`flex items-center gap-1.5 font-bold text-xs bg-transparent border-none py-1.5 px-2.5 rounded-lg transition-colors ${totalBoxes === 0 ? 'cursor-not-allowed opacity-30 text-[#4a4455]' : 'cursor-pointer text-red-600 hover:text-red-700 hover:bg-red-50'}`} title="Clear all boxes" aria-label="Clear">🗑️ Clear</button>
                             </div>
                             <div className="flex items-center gap-3.5">
                                 <div className="flex items-center gap-2">
