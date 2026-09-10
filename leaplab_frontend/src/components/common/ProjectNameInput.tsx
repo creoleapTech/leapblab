@@ -20,7 +20,7 @@ export default function ProjectNameInput({
 }: ProjectNameInputProps) {
   return (
     <div
-      className={`bg-white/10 border border-white/15 py-1 px-2.5 rounded-lg flex items-center gap-1.5 h-8.5 box-border shrink min-w-0 ${className}`}
+      className={`bg-white/10 border border-white/15 py-1 px-2.5 rounded-lg flex items-center gap-1.5 h-8.5 box-border min-w-0 flex-1 w-full max-w-[520px] ${className}`}
       style={style}
     >
       <span className="text-xs opacity-60 leading-none select-none shrink-0">
@@ -30,7 +30,8 @@ export default function ProjectNameInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="My Project"
-        className="bg-transparent border-0 text-white w-20 sm:w-24 outline-none text-xs font-semibold font-sans placeholder-white/40 truncate shrink min-w-0"
+        title={value || 'My Project'}
+        className="bg-transparent border-0 text-white flex-1 min-w-0 w-full outline-none text-xs font-semibold font-sans placeholder-white/40 truncate"
       />
       <button
         type="button"

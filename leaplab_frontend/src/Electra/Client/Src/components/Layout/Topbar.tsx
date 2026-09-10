@@ -124,8 +124,8 @@ export const IgniteTopbar: React.FC<IgniteTopbarProps> = ({
       <div
         className="flex items-center justify-between h-[68px] pl-0.5 pr-[18px] z-[100] select-none min-w-0 border-b gap-4 bg-gradient-to-br from-[#0a0a1f] via-[#0a015a] to-[#080a25] border-sky-400/10 shadow-[0_4px_20px_rgba(8,10,37,0.5),inset_0_-1px_0_rgba(255,255,255,0.06)]"
       >
-        {/* Left section */}
-        <div className="flex items-center gap-3.5 flex-auto min-w-0 h-full">
+        {/* Left section – fixed, never squeezes center title */}
+        <div className="flex items-center gap-3.5 shrink-0 min-w-0 h-full">
           <button
             type="button"
             title="Back to Home"
@@ -264,20 +264,21 @@ export const IgniteTopbar: React.FC<IgniteTopbarProps> = ({
           </div>
         </div>
 
-        {/* Center section */}
-        <div className="flex items-center justify-center gap-4 px-4 flex-1 min-w-0">
-          <div className="hidden md:flex items-center gap-4">{centerContent}</div>
+        {/* Center section – flex-1 with generous max-width so title never collapses to "D…" */}
+        <div className="flex items-center justify-center gap-2 sm:gap-4 px-2 sm:px-4 flex-1 min-w-[180px] max-w-[560px] w-full">
+          <div className="hidden md:flex items-center gap-4 shrink-0">{centerContent}</div>
 
           <ProjectNameInput
             value={title}
             onChange={onTitleChange}
             onSave={onSave}
             isSaving={isSaving}
+            className="flex-1 min-w-0 w-full"
           />
         </div>
 
-        {/* Right section */}
-        <div className="flex items-center justify-end gap-3 flex-auto min-w-0">
+        {/* Right section – fixed, never squeezes center */}
+        <div className="flex items-center justify-end gap-3 shrink-0 min-w-0">
           {/* Quick actions - Desktop only */}
           <div className={`hidden sm:flex items-center gap-3 pr-4 mr-2 border-r h-8 shrink-0 ${isElectra ? 'border-zinc-800' : 'border-blue-200/20'
             }`}>
