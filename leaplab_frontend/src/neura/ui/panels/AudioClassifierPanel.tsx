@@ -78,7 +78,7 @@ export default function AudioClassifierPanel({ mode }: AudioClassifierPanelProps
                 if (!next[cls.id]) {
                     const col = Math.floor(idx / 4)
                     const row = idx % 4
-                    next[cls.id] = { x: 48 + col * 380, y: 80 + row * 340 }
+                    next[cls.id] = { x: 48 + col * 400, y: 80 + row * 460 }
                 }
             })
             Object.keys(next).forEach(id => { if (!mode.project!.classes.some(c => c.id === id)) delete next[id] })

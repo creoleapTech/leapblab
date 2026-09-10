@@ -7,6 +7,9 @@ export type Rect = Pos & { w: number; h: number }
 const GAP = 32 // minimum gap between nodes
 const CLASS_W = 344
 const CLASS_H = 320 // approx with 8 images expanded may be taller; we use conservative 360
+// Grid spacing for initial placement – must accommodate expanded height (420) + GAP
+const GRID_COL_GAP = 400 // 344 + 32 + 24 buffer
+const GRID_ROW_GAP = 460 // 420 + 32 + 8 buffer (prevents name-tab clipping when opened from LeapLab)
 const DATASET_W = 720
 const DATASET_H = 360
 const BRAIN_W = 400
@@ -256,4 +259,38 @@ export function nudgeToNonColliding(
   // Nowhere free nearby — stay clamped (no far teleport, no flicker)
   if (sameAs(clamped, candidate)) return candidate
   return clamped
+}
+
+export function getInitialClassPosition(index: number): Pos {
+  const col = Math.floor(index / 4)
+  const row = index % 4
+  return { x: 48 + col * GRID_COL_GAP, y: 80 + row * GRID_ROW_GAP }
+}
+
+// Recomputes all class positions in a non-overlapping grid (used when opening from LeapLab / My Projects)
+export function layoutInitialClasses(ids: string[], existing: Record<string, Pos>): Record<string, Pos> {
+  const next: Record<string, Pos> = { ...existing }
+  // Keep existing valid positions, place new ids in first free grid slot that doesn't collide
+  ids.forEach((id, idx) => {
+    if (next[id]) return
+    let candidate = getInitialClassPosition(idx)
+    // Ensure candidate doesn't collide with already placed classes (nudge if needed)
+    let attempts = 0
+    while (attempts < 20) {
+      const rect = getClassRect(id, candidate, false)
+      const collides = Object.entries(next).some(([otherId, pos]) => {
+        if (otherId === id) return false
+        return overlap(rect, getClassRect(otherId, pos, false))
+      })
+      if (!collides) break
+      // Shift down then right
+      candidate = { x: candidate.x, y: candidate.y + GRID_ROW_GAP }
+      if (candidate.y + CLASS_H > CANVAS_H - 40) {
+        candidate = { x: candidate.x + GRID_COL_GAP, y: 80 }
+      }
+      attempts++
+    }
+    next[id] = candidate
+  })
+  return next
 }

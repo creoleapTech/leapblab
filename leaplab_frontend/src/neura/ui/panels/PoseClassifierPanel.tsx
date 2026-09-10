@@ -5,7 +5,7 @@ import { PoseClassifier } from '../../ml/classifiers/PoseClassifier'
 import type { Keypoint } from '../../ml/classifiers/PoseClassifier'
 import { RELATEDNESS_THRESHOLD } from '../../ml/KNNClassifier'
 import { MAX_SAMPLES_PER_CLASS } from '../../types/neura.types'
-import { nudgeToNonColliding } from '../layoutCollision'
+import { nudgeToNonColliding, layoutNonColliding, layoutInitialClasses, getInitialClassPosition } from '../layoutCollision'
 import AccuracyChart from '../components/AccuracyChart'
 import NotRelatedModal from '../components/NotRelatedModal'
 import { openSingleImage } from '../components/neuraImageViewer'
@@ -128,7 +128,7 @@ export default function PoseClassifierPanel({ mode }: PoseClassifierPanelProps) 
                 if (!next[cls.id]) {
                     const col = Math.floor(idx / 4)
                     const row = idx % 4
-                    next[cls.id] = { x: 48 + col * 380, y: 80 + row * 340 }
+                    next[cls.id] = { x: 48 + col * 400, y: 80 + row * 460 }
                 }
             })
             Object.keys(next).forEach(id => { if (!mode.project!.classes.some(c => c.id === id)) delete next[id] })

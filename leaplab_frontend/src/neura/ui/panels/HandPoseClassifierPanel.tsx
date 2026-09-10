@@ -4,7 +4,7 @@ import { useCamera } from '../../hooks/useCamera'
 import { HandPoseClassifier } from '../../ml/classifiers/HandPoseClassifier'
 import { RELATEDNESS_THRESHOLD } from '../../ml/KNNClassifier'
 import { MAX_SAMPLES_PER_CLASS } from '../../types/neura.types'
-import { nudgeToNonColliding } from '../layoutCollision'
+import { nudgeToNonColliding, layoutNonColliding, layoutInitialClasses, getInitialClassPosition } from '../layoutCollision'
 import AccuracyChart from '../components/AccuracyChart'
 import NotRelatedModal from '../components/NotRelatedModal'
 import { openSingleImage } from '../components/neuraImageViewer'
@@ -88,13 +88,32 @@ export default function HandPoseClassifierPanel({ mode }: HandPoseClassifierPane
                 if (!next[cls.id]) {
                     const col = Math.floor(idx / 4)
                     const row = idx % 4
-                    next[cls.id] = { x: 48 + col * 380, y: 80 + row * 340 }
+                    next[cls.id] = { x: 48 + col * 400, y: 80 + row * 460 }
                 }
             })
             Object.keys(next).forEach(id => { if (!mode.project!.classes.some(c => c.id === id)) delete next[id] })
             return next
         })
     }, [mode.project?.classes.map(c => c.id).join(',')])
+
+    // When project is opened from LeapLab/My Projects, ensure no overlap (name-tab clipping)
+    useEffect(() => {
+        if (!mode.project?.id) return
+        setExpandedClasses({})
+        setZoom(1)
+        setPan({ x: 32, y: 24 })
+        setTimeout(() => {
+            setClassPositions(prev => {
+                const ids = mode.project!.classes.map(c => c.id)
+                const laid = layoutInitialClasses(ids, prev)
+                const { brainPos: nb, visionPos: nv } = layoutNonColliding(laid, brainPos, visionPos, { expandedClasses: {} })
+                setBrainPos(nb)
+                setVisionPos(nv)
+                return laid
+            })
+        }, 0)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [mode.project?.id])
 
     useEffect(() => {
         if (!mode.project) return
