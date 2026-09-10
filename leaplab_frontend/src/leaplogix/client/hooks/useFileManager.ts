@@ -238,6 +238,79 @@ export function useFileManager({ addLog, sprites, backdrop, setSprites, setSelec
     input.click()
   }, [projectFiles, addLog])
 
+  const handleAddPythonFiles = useCallback(() => {
+    handleCreateNewFile()
+  }, [handleCreateNewFile])
+
+  const handleAddImageFiles = useCallback(() => {
+    const input = document.createElement("input")
+    input.type = "file"
+    input.accept = "image/*"
+    input.multiple = true
+    input.onchange = async (e) => {
+      const files = (e.target as HTMLInputElement).files
+      if (!files || files.length === 0) return
+      for (const file of Array.from(files)) {
+        const reader = new FileReader()
+        reader.onload = (event) => {
+          const content = String(event.target?.result || "")
+          const fileName = getUniqueFileName(file.name, projectFiles)
+          setProjectFiles((prev) => ({ ...prev, [fileName]: content }))
+          setActiveFile(fileName)
+          addLog(`Added image file: ${fileName}`, "success")
+        }
+        reader.readAsDataURL(file)
+      }
+    }
+    input.click()
+  }, [projectFiles, addLog])
+
+  const handleAddTextFiles = useCallback(() => {
+    const input = document.createElement("input")
+    input.type = "file"
+    input.accept = ".txt,.md,.json"
+    input.multiple = true
+    input.onchange = async (e) => {
+      const files = (e.target as HTMLInputElement).files
+      if (!files || files.length === 0) return
+      for (const file of Array.from(files)) {
+        const reader = new FileReader()
+        reader.onload = (event) => {
+          const content = String(event.target?.result || "")
+          const fileName = getUniqueFileName(file.name, projectFiles)
+          setProjectFiles((prev) => ({ ...prev, [fileName]: content }))
+          setActiveFile(fileName)
+          addLog(`Added text file: ${fileName}`, "success")
+        }
+        reader.readAsText(file)
+      }
+    }
+    input.click()
+  }, [projectFiles, addLog])
+
+  const handleAddCsvFiles = useCallback(() => {
+    const input = document.createElement("input")
+    input.type = "file"
+    input.accept = ".csv"
+    input.multiple = true
+    input.onchange = async (e) => {
+      const files = (e.target as HTMLInputElement).files
+      if (!files || files.length === 0) return
+      for (const file of Array.from(files)) {
+        const reader = new FileReader()
+        reader.onload = (event) => {
+          const content = String(event.target?.result || "")
+          const fileName = getUniqueFileName(file.name, projectFiles)
+          setProjectFiles((prev) => ({ ...prev, [fileName]: content }))
+          setActiveFile(fileName)
+          addLog(`Added CSV file: ${fileName}`, "success")
+        }
+        reader.readAsText(file)
+      }
+    }
+    input.click()
+  }, [projectFiles, addLog])
+
   return {
     projectName,
     setProjectName,
@@ -255,6 +328,10 @@ export function useFileManager({ addLog, sprites, backdrop, setSprites, setSelec
     handleCreateNewTextFile,
     handleRenameFile,
     handleOpenPythonFile,
+    handleAddPythonFiles,
+    handleAddImageFiles,
+    handleAddTextFiles,
+    handleAddCsvFiles,
   }
 }
 

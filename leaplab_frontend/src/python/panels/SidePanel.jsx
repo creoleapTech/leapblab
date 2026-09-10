@@ -37,6 +37,7 @@ function FilesPanel({
     handleDeleteFile,
     onOpenPipPanel,
     onOpenExtensionsPanel,
+    onOpenSpritesPanel,
     onAddNewFile,
     onAddNewTextFile,
     onRenameFile,
@@ -176,7 +177,14 @@ function FilesPanel({
                 </span>
             </div>
             <div className="p-3 pt-2 pb-3 bg-gray-50 shrink-0">
-                <div className="flex items-center gap-2 py-1.5 px-2 rounded bg-white border border-gray-200">
+                <div
+                    onClick={() => onOpenSpritesPanel?.()}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenSpritesPanel?.(); } }}
+                    className="flex items-center gap-2 py-1.5 px-2 rounded bg-white border border-gray-200 cursor-pointer hover:border-violet-400 hover:bg-violet-50 transition-colors select-none"
+                    title="Open Sprite Library"
+                >
                     <Package size={14} className="text-violet-600" />
                     <span className="text-xs text-gray-800">Sprite</span>
                 </div>
@@ -206,6 +214,7 @@ function SpritesPanel({
     backdrop,
     handleSetBackdrop,
     onOpenAssetLibrary,
+    onBackToFiles,
 }) {
     const isCostumeMode = assetMode === "costume";
     const filteredSprites = SPRITE_LIBRARY.filter((sp) =>
@@ -215,6 +224,9 @@ function SpritesPanel({
     return (
         <>
             <div className="py-2.5 px-3 border-b border-gray-200">
+                {onBackToFiles && (
+                    <PanelBackButton onClick={onBackToFiles} />
+                )}
                 <div className="flex justify-between items-center mb-2">
                     <span className="text-xs font-bold text-gray-800">
                         {isCostumeMode ? "Costume Library" : "Sprite Library"}
@@ -524,6 +536,7 @@ export default function SidePanel({
                     onRenameFile={onRenameFile}
                     onOpenPipPanel={() => setSidePanel?.("pip")}
                     onOpenExtensionsPanel={() => setSidePanel?.("extensions")}
+                    onOpenSpritesPanel={() => setSidePanel?.("sprites")}
                 />
             )}
 
@@ -538,6 +551,7 @@ export default function SidePanel({
                     backdrop={backdrop}
                     handleSetBackdrop={handleSetBackdrop}
                     onOpenAssetLibrary={onOpenAssetLibrary}
+                    onBackToFiles={() => setSidePanel?.("files")}
                 />
             )}
 

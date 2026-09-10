@@ -66,6 +66,7 @@ function LogixAppInner({ onBack, onSwitchToNotebook, onSwitchToBlocks, onSwitchT
         handleNewProject, handleSaveProject, handleDownloadProject, handleOpenProject, handleShareProject,
         handleDeleteFile, handleCreateNewFile, handleCreateNewTextFile,
         handleRenameFile, handleOpenPythonFile,
+        handleAddPythonFiles, handleAddImageFiles, handleAddTextFiles, handleAddCsvFiles,
     } = useFileManager({
         addLog, sprites, backdrop, setSprites, setSelectedSpriteId, setBackdropImg, resetStage,
         workflowMode, setWorkflowMode
@@ -385,6 +386,7 @@ function LogixAppInner({ onBack, onSwitchToNotebook, onSwitchToBlocks, onSwitchT
         handleNewProject, handleSaveProject, handleDownloadProject, handleOpenProject, handleShareProject,
         handleDeleteFile, handleCreateNewFile, handleCreateNewTextFile,
         handleRenameFile, handleOpenPythonFile,
+        handleAddPythonFiles, handleAddImageFiles, handleAddTextFiles, handleAddCsvFiles,
         sprites, setSprites, selectedSpriteId, setSelectedSpriteId,
         backdrop, setBackdropImg, stageSize, stageRef,
         deleteSprite, updateSprite, updateSpriteProperty, resetStage,

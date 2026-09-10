@@ -4,7 +4,7 @@
  * Unauthorized copying, distribution, or modification is strictly prohibited.
  */
 import React, { useState, useRef, useEffect } from "react";
-import { Home, Play, Square, Undo, Redo, Save, Download, Settings, Upload, Plus, File, FileCode2, FileText, Share, ChevronDown, FolderOpen, Menu as MenuIcon, Code, Monitor, Rocket } from "lucide-react";
+import { Home, Play, Square, Undo, Redo, Save, Download, Settings, Upload, Plus, File, FileCode2, FileText, Share, ChevronDown, FolderOpen, Menu as MenuIcon, Code, Monitor, Rocket, ArrowLeft } from "lucide-react";
 import Logo, { CreoleapLogo } from "../../../components/Logo";
 import { useLogix } from "../context/LogixContext";
 import LeapLabAuthButton from "../../../auth/LeapLabAuthButton";
@@ -268,6 +268,20 @@ export default function TopBar() {
                         )}
                     </div>
                 </header>
+                {/* Back button below topbar – right corner */}
+                <div className="fixed top-[76px] right-3 sm:right-6 z-[998] flex">
+                    <button
+                        onClick={() => {
+                            sessionStorage.setItem('landingActiveTab', 'modules');
+                            sessionStorage.removeItem('myProjectsSelectedMode');
+                            ctx.onBack(false);
+                        }}
+                        className="flex items-center gap-1.5 px-3.5 py-2 bg-white border border-gray-200 rounded-xl shadow-lg text-xs font-bold text-gray-700 hover:bg-gray-50 hover:border-gray-300 hover:shadow-xl transition-all cursor-pointer"
+                        title="Back to Home"
+                    >
+                        <ArrowLeft size={14} strokeWidth={2.2} /> Back
+                    </button>
+                </div>
                 <MobileDrawer
                     isOpen={mobileMenuOpen}
                     onClose={() => setMobileMenuOpen(false)}
