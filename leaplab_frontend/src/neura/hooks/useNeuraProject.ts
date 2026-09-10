@@ -220,16 +220,20 @@ export function useNeuraProject(
     }, [])
 
     const addSample = useCallback((classId: string, sampleData: Omit<Sample, 'id' | 'timestamp'>): boolean => {
-        const cls = project.classes.find(c => c.id === classId)
-        if (cls && cls.samples.length >= MAX_SAMPLES_PER_CLASS) return false
-        const sample: Sample = { ...sampleData, id: generateId(), timestamp: Date.now() }
-        setProject(prev => ({
-            ...prev,
-            classes: prev.classes.map(c => c.id === classId ? { ...c, samples: [...c.samples, sample] } : c),
-            updatedAt: Date.now()
-        }))
-        return true
-    }, [project.classes])
+        let didAdd = false
+        setProject(prev => {
+            const cls = prev.classes.find(c => c.id === classId)
+            if (!cls || cls.samples.length >= MAX_SAMPLES_PER_CLASS) return prev
+            const sample: Sample = { ...sampleData, id: generateId(), timestamp: Date.now() }
+            didAdd = true
+            return {
+                ...prev,
+                classes: prev.classes.map(c => (c.id === classId ? { ...c, samples: [...c.samples, sample] } : c)),
+                updatedAt: Date.now(),
+            }
+        })
+        return didAdd
+    }, [])
 
     const removeSample = useCallback((classId: string, sampleId: string) => {
         setProject(prev => ({

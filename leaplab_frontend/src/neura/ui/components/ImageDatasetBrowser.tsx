@@ -78,6 +78,10 @@ export default function ImageDatasetBrowser({ mode, onImagesAdded }: ImageDatase
                     })
 
                     if (added) addedCount++
+                    else {
+                        setError(`"${selectedClass.name}" is full (20 max) – stopped at ${addedCount} images`)
+                        break
+                    }
                 } catch (fetchErr) {
                     console.warn(`[Dataset] Could not fetch ${url}:`, fetchErr)
                     // Generate a placeholder image instead
@@ -87,6 +91,10 @@ export default function ImageDatasetBrowser({ mode, onImagesAdded }: ImageDatase
                         data: placeholderUrl
                     })
                     if (added) addedCount++
+                    else {
+                        setError(`"${selectedClass.name}" is full (20 max) – stopped at ${addedCount} images`)
+                        break
+                    }
                 }
 
                 setDownloadProgress(Math.floor(((i + 1) / imagesToFetch.length) * 100))

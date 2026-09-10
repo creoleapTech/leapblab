@@ -47,6 +47,16 @@ export default function ImageClassifierPanel({ mode }: ImageClassifierPanelProps
     const [editingClassId, setEditingClassId] = useState<string | null>(null)
     const [editName, setEditName] = useState('')
     const [expandedClasses, setExpandedClasses] = useState<Record<string, boolean>>({})
+    const [copyMenuFor, setCopyMenuFor] = useState<string | null>(null)
+
+    // Close copy menu on outside click
+    useEffect(() => {
+        if (!copyMenuFor) return
+        const onDocClick = () => setCopyMenuFor(null)
+        // Delay to avoid immediate close from the same click that opened it
+        const t = setTimeout(() => window.addEventListener('mousedown', onDocClick), 0)
+        return () => { clearTimeout(t); window.removeEventListener('mousedown', onDocClick) }
+    }, [copyMenuFor])
 
     // Free canvas state — default 100% for readability
     const [zoom, setZoom] = useState(1)
@@ -250,7 +260,8 @@ export default function ImageClassifierPanel({ mode }: ImageClassifierPanelProps
             const cur = mode.project?.classes.find(c => c.id === classId)
             if (cur && cur.samples.length >= MAX_SAMPLES_PER_CLASS) { showSaved(`Limit reached for ${cls.name}`); break }
             const dataUrl = await new Promise<string>(resolve => { const r = new FileReader(); r.onload = () => resolve(r.result as string); r.readAsDataURL(file) })
-            mode.addSample(classId, { type: 'image', data: dataUrl })
+            const ok = mode.addSample(classId, { type: 'image', data: dataUrl })
+            if (!ok) { showSaved(`Limit reached for ${cls.name} (20 max)`); break }
             const img = new Image(); img.src = dataUrl
             await new Promise<void>(resolve => { img.onload = () => resolve(); img.onerror = () => resolve(); setTimeout(() => resolve(), 3000) })
             if (img.complete && img.naturalWidth > 0) {
@@ -262,37 +273,112 @@ export default function ImageClassifierPanel({ mode }: ImageClassifierPanelProps
         }
         if (added > 0) showSaved(`Added ${added} image${added > 1 ? 's' : ''} to ${cls.name}`)
     }
-    const handleUploadClick = (classId: string) => { pendingUploadClassRef.current = classId; fileInputRef.current?.click() }
+    const handleUploadClick = (classId: string) => {
+        mode.setSelectedClassId(classId)
+        pendingUploadClassRef.current = classId
+        if (fileInputRef.current) {
+            try { (fileInputRef.current as any).dataset.targetClassId = classId } catch {}
+        }
+        fileInputRef.current?.click()
+        // Clear pending if dialog is canceled (no change event) – fallback after 1.5s
+        setTimeout(() => {
+            if (pendingUploadClassRef.current === classId && fileInputRef.current && !fileInputRef.current.files?.length) {
+                // keep pending for paste, but ensure selectedClassId is correct
+            }
+        }, 1500)
+    }
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files; if (!files || files.length === 0) return
-        const targetId = pendingUploadClassRef.current || mode.selectedClassId || mode.project?.classes[0]?.id
+        const files = e.target.files
+        const attrTarget = (e.currentTarget as any)?.dataset?.targetClassId as string | undefined
+        const targetId = attrTarget || pendingUploadClassRef.current || mode.selectedClassId || mode.project?.classes[0]?.id
+        if (!files || files.length === 0) {
+            // Dialog canceled – keep pending for potential paste but clear dataset
+            if (fileInputRef.current) try { delete (fileInputRef.current as any).dataset.targetClassId } catch {}
+            return
+        }
         if (!targetId) { showSaved('Create a folder first'); return }
         await processFilesForClass(files, targetId)
-        if (fileInputRef.current) fileInputRef.current.value = ''; pendingUploadClassRef.current = null
+        if (fileInputRef.current) {
+            fileInputRef.current.value = ''
+            try { delete (fileInputRef.current as any).dataset.targetClassId } catch {}
+        }
+        pendingUploadClassRef.current = null
     }
-    // Pasted images from clipboard (Ctrl+V) — no download needed
+    const handleCopySample = useCallback(async (sampleId: string, fromClassId: string, toClassId?: string) => {
+        const targetId = toClassId || mode.selectedClassId || mode.project?.classes[0]?.id
+        if (!targetId) { showSaved('Select a target folder first'); return }
+        if (targetId === fromClassId) { showSaved('Already in this folder'); return }
+        const fromClass = mode.project?.classes.find(c => c.id === fromClassId)
+        const sample = fromClass?.samples.find(s => s.id === sampleId)
+        if (!sample) { showSaved('Image not found'); return }
+        const targetClass = mode.project?.classes.find(c => c.id === targetId)
+        if (targetClass && targetClass.samples.length >= MAX_SAMPLES_PER_CLASS) { showSaved(`"${targetClass.name}" is full (20 max)`); return }
+        const ok = mode.addSample(targetId, { type: sample.type as any, data: sample.data })
+        if (!ok) { showSaved('Copy failed – folder full'); return }
+        // Also copy to classifier if image
+        try {
+            const targetName = targetClass?.name || ''
+            if (sample.type === 'image' && sample.data) {
+                const img = new Image(); img.src = sample.data
+                await new Promise<void>(r => { img.onload = () => r(); img.onerror = () => r(); setTimeout(() => r(), 2000) })
+                if (img.complete && img.naturalWidth > 0) {
+                    if (augmentMode) await classifierRef.current.addSampleAugmented(img, targetName)
+                    else await classifierRef.current.addSample(img, targetName)
+                }
+            }
+        } catch {}
+        showSaved(`Copied to ${targetClass?.name || 'folder'} ✓`)
+    }, [mode, augmentMode])
+
+    // Pasted images from clipboard (Ctrl+V) — handles file, image/*, text/html with <img>, and dataUrl
     useEffect(() => {
+        const extractImagesFromClipboard = async (e: ClipboardEvent): Promise<File[]> => {
+            const out: File[] = []
+            const items = e.clipboardData?.items
+            if (items) {
+                for (let i = 0; i < items.length; i++) {
+                    const it = items[i]
+                    if (it.kind === 'file' && it.type.startsWith('image/')) {
+                        const f = it.getAsFile(); if (f) out.push(f)
+                    } else if (it.type === 'text/html') {
+                        const html = await new Promise<string>(res => it.getAsString(s => res(s || '')))
+                        const match = html.match(/<img[^>]+src=["']([^"']+)["']/i)
+                        if (match && match[1]) {
+                            try {
+                                const src = match[1]
+                                if (src.startsWith('data:image')) {
+                                    const res = await fetch(src); const blob = await res.blob(); out.push(new File([blob], 'pasted.png', { type: blob.type || 'image/png' }))
+                                } else if (src.startsWith('http')) {
+                                    const res = await fetch(src, { mode: 'cors' }).catch(() => null)
+                                    if (res && res.ok) { const blob = await res.blob(); out.push(new File([blob], 'pasted.png', { type: blob.type })) }
+                                }
+                            } catch {}
+                        }
+                    } else if (it.type === 'text/plain') {
+                        const text = await new Promise<string>(res => it.getAsString(s => res(s || '')))
+                        const t = text.trim()
+                        if (t.startsWith('data:image') && t.length > 100) {
+                            try { const res = await fetch(t); const blob = await res.blob(); out.push(new File([blob], 'pasted.png', { type: blob.type })) } catch {}
+                        }
+                    }
+                }
+            }
+            if (out.length === 0 && e.clipboardData?.files?.length) {
+                for (let i = 0; i < e.clipboardData.files.length; i++) {
+                    const f = e.clipboardData.files[i]
+                    if (f.type.startsWith('image/')) out.push(f)
+                }
+            }
+            return out
+        }
         const handlePaste = async (e: ClipboardEvent) => {
             const active = document.activeElement as HTMLElement | null
             if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return
-            const items = e.clipboardData?.items
-            if (!items) return
-            const imageFiles: File[] = []
-            for (let i = 0; i < items.length; i++) {
-                const it = items[i]
-                if (it.kind === 'file' && it.type.startsWith('image/')) {
-                    const f = it.getAsFile(); if (f) imageFiles.push(f)
-                }
-            }
-            if (imageFiles.length === 0 && e.clipboardData?.files?.length) {
-                for (let i = 0; i < e.clipboardData.files.length; i++) {
-                    const f = e.clipboardData.files[i]
-                    if (f.type.startsWith('image/')) imageFiles.push(f)
-                }
-            }
+            const imageFiles = await extractImagesFromClipboard(e)
             if (imageFiles.length === 0) return
             e.preventDefault()
-            const targetId = pendingUploadClassRef.current || mode.selectedClassId || mode.project?.classes[0]?.id
+            // Always paste to the currently selected folder (most intuitive, fixes cross-class inconsistency)
+            const targetId = mode.selectedClassId || mode.project?.classes[0]?.id
             if (!targetId) { showSaved('Create a folder first, then paste (Ctrl+V)'); return }
             await processFilesForClass(imageFiles, targetId)
         }
@@ -719,10 +805,22 @@ export default function ImageClassifierPanel({ mode }: ImageClassifierPanelProps
                                             <>
                                                 <div className={`grid grid-cols-4 gap-2 ${expandedClasses[cls.id] ? 'max-h-[360px] overflow-auto neura-scrollbar pr-1' : ''}`}>
                                                     {(expandedClasses[cls.id] ? cls.samples : cls.samples.slice(0, 8)).map((s, idx) => (
-                                                        <div key={s.id} onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); openImageViewer(cls.samples.map(x => ({ src: x.data, label: `${cls.name} — image ${cls.samples.indexOf(x) + 1}` })), cls.samples.indexOf(s)) }} title="Click to view (80% screen)" className="relative aspect-square rounded-lg overflow-hidden bg-slate-50 border border-slate-200 group/thumb cursor-zoom-in">
-                                                            <img src={s.data} alt="" className="w-full h-full object-cover pointer-events-none" draggable={false} />
+                                                        <div key={s.id} onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); openImageViewer(cls.samples.map(x => ({ src: x.data, label: `${cls.name} — image ${cls.samples.indexOf(x) + 1}` })), cls.samples.indexOf(s)) }} title="Click to view (80% screen) • Hover for copy/delete" className={`relative aspect-square rounded-lg border border-slate-200 group/thumb cursor-zoom-in ${copyMenuFor === `${cls.id}-${s.id}` ? 'overflow-visible z-20' : 'overflow-hidden bg-slate-50'}`}>
+                                                            <img src={s.data} alt="" className="w-full h-full object-cover pointer-events-none rounded-lg" draggable={false} />
                                                             <span className="absolute bottom-1 right-1 w-5 h-5 rounded-md bg-black/55 text-white flex items-center justify-center text-[10px] opacity-0 group-hover/thumb:opacity-100 transition-opacity pointer-events-none">⛶</span>
-                                                            <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); handleRemoveSample(cls.id, s.id) }} className="absolute top-1 right-1 w-5 h-5 rounded-md bg-white border border-slate-200 text-slate-600 flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity shadow-sm">×</button>
+                                                            <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); setCopyMenuFor(copyMenuFor === `${cls.id}-${s.id}` ? null : `${cls.id}-${s.id}`) }} title="Copy to another folder" className="absolute top-1 left-1 w-5 h-5 rounded-md bg-white border border-slate-200 text-slate-600 flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity shadow-sm text-[11px] hover:bg-violet-50 hover:border-violet-200 hover:text-violet-700">⎘</button>
+                                                            <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); handleRemoveSample(cls.id, s.id) }} title="Delete image" className="absolute top-1 right-1 w-5 h-5 rounded-md bg-white border border-slate-200 text-slate-600 flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity shadow-sm hover:bg-red-50 hover:text-red-600 hover:border-red-200">×</button>
+                                                            {copyMenuFor === `${cls.id}-${s.id}` && (
+                                                                <div onPointerDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()} className="absolute top-7 left-1 z-30 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 min-w-[150px] max-h-[180px] overflow-auto neura-scrollbar">
+                                                                    <p className="px-2.5 pb-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Copy to…</p>
+                                                                    {mode.project?.classes.filter(c => c.id !== cls.id).map(c => (
+                                                                        <button key={c.id} onClick={e => { e.stopPropagation(); handleCopySample(s.id, cls.id, c.id); setCopyMenuFor(null) }} className="w-full text-left px-2.5 py-1.5 text-xs hover:bg-violet-50 flex items-center gap-2 transition-colors">
+                                                                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: c.color }} /> <span className="truncate font-medium text-slate-700">{c.name}</span> <span className="ml-auto text-[10px] text-slate-400">{c.samples.length}/20</span>
+                                                                        </button>
+                                                                    ))}
+                                                                    {mode.project?.classes.filter(c => c.id !== cls.id).length === 0 && <span className="text-xs text-slate-400 px-2.5 py-1.5">No other folder – create one first</span>}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     ))}
                                                 </div>
