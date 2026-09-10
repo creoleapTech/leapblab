@@ -174,7 +174,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
         </div>
       )}
 
-      <div className="font-sans bg-[#F8FAFC] bg-[radial-gradient(rgba(99,102,241,0.05)_1.5px,transparent_1.5px)] bg-[size:30px_30px] text-[#0F172A] h-[100dvh] flex flex-col relative overflow-hidden">
+      <div className="font-sans bg-[#F8FAFC] bg-[radial-gradient(rgba(99,102,241,0.05)_1.5px,transparent_1.5px)] bg-[size:30px_30px] text-[#0F172A] min-h-screen flex flex-col relative">
 
         <div className="absolute z-0 blur-[40px] opacity-40 animate-float-slow w-[300px] h-[300px] bg-[#BEF264] top-[10%] left-[-5%]"></div>
         <div className="absolute z-0 blur-[40px] opacity-40 animate-float-slow w-[400px] h-[400px] bg-[linear-gradient(135deg,#4e42c0_0%,#1a24af_100%)] top-[40%] right-[-10%] [animation-delay:-2s]"></div>
@@ -312,7 +312,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
           <div className="h-[2px] w-full bg-[linear-gradient(90deg,rgba(249,115,22,0.5),rgba(20,184,166,0.5),rgba(59,130,246,0.5),rgba(168,85,247,0.5),rgba(34,197,94,0.5),rgba(236,72,153,0.5))] opacity-60"></div>
         </div>
 
-        <div className="relative z-10 flex flex-col flex-1 min-h-0 overflow-y-auto neura-scrollbar">
+        <div className="relative z-10 flex flex-col flex-1">
 
           {activeTab === 'my-projects' && (
             <MyProjectsDashboard onOpenProject={(mode) => onSelect(mode)} />
@@ -373,7 +373,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
                       <div className="mb-5 flex h-28 items-center justify-center">
                         <img src="assets/ignite_icon.png" alt="Ignite" className="h-24 w-24 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110" />
                       </div>
-                      <h3 className="text-[20px] font-extrabold tracking-tight text-orange-600 uppercase">IGNITE</h3>
+                      <h3 className="text-[20px] font-extrabold tracking-tight text-orange-700 uppercase">IGNITE</h3>
                       <p className="mt-1 max-w-[170px] text-[14px] font-medium leading-5 text-slate-600">Learn coding<br/>with fun visual blocks</p>
                     </div>
                     <div className="absolute bottom-0 left-0 h-1 w-0 bg-orange-500 transition-all duration-300 group-hover:w-full"></div>
