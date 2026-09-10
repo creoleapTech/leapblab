@@ -1,4 +1,26 @@
 @import "tailwindcss";
+@custom-variant dark (&:is(.dark *));
+
+/* ── Logix Theme vars – light is default, dark overrides via html.dark ── */
+html.dark {
+  --color-background: #0f172a;
+  --color-on-background: #e2e8f0;
+  --color-surface: #1e293b;
+  --color-on-surface: #e2e8f0;
+  --color-on-surface-variant: #94a3b8;
+  --color-surface-dim: #1e293b;
+  --color-surface-bright: #334155;
+  --color-surface-container-lowest: #0f172a;
+  --color-surface-container-low: #1e293b;
+  --color-surface-container: #334155;
+  --color-surface-container-high: #475569;
+  --color-surface-container-highest: #64748b;
+  --color-surface-variant: #334155;
+  --color-outline: #475569;
+  --color-outline-variant: #334155;
+  --color-inverse-surface: #e2e8f0;
+  --color-inverse-on-surface: #0f172a;
+}
 
 /* ── Google Fonts ─────────────────────────────────────── */
 @import url('https://fonts.googleapis.com/css2?family=Libertinus+Math&display=swap');

@@ -14,6 +14,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { StageProvider, useStage } from "../../context/StageContext";
 import { LogixProvider } from "./context/LogixContext";
+import { ThemeProvider } from "./context/ThemeContext";
 
 // ─── Hooks ─────────────────────────────────────────────────────────────────
 import { useTerminal } from "./hooks/useTerminal";
