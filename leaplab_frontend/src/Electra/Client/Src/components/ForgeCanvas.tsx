@@ -608,7 +608,7 @@ const ForgeCanvasInner: React.FC<ForgeCanvasProps> = ({
       className={`forge-canvas-container w-full h-full relative ${uiTheme === 'light'
           ? 'bg-[radial-gradient(circle_at_1px_1px,rgba(0,0,0,0.04)_1px,transparent_0)]'
           : 'bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.03)_1px,transparent_0)]'
-        }`}
+        } ${isSpaceHeld ? 'is-space-panning' : ''} ${panDragEnabled ? 'is-panning' : ''}`}
       style={{
         background: 'var(--lp-dark-bg)',
         backgroundSize: '24px 24px',
@@ -737,6 +737,30 @@ const ForgeCanvasInner: React.FC<ForgeCanvasProps> = ({
       )}
 
       <style>{`
+        /* ── Premium custom hand cursor – uses provided pointing-hand asset ──
+           File: /cursors/electra-hand.svg (32×32, white #f0f8ff + left blue shadow #b8d4e8 + 3 palm lines)
+           Hotspot at fingertip (16,1) for precise pointing; premium dual-shadow for visibility on dark/light */
+        .forge-canvas-container, .forge-canvas-container .react-flow__pane, .forge-canvas-container .react-flow__viewport {
+          cursor: url("/cursors/electra-hand.svg") 14 2, grab !important;
+        }
+        .forge-canvas-container:active, .forge-canvas-container .react-flow__pane:active, .forge-canvas-container .react-flow__viewport:active,
+        .forge-canvas-container.is-panning, .forge-canvas-container.is-space-panning {
+          cursor: url("/cursors/electra-hand.svg") 14 2, grabbing !important;
+          filter: brightness(0.96) saturate(1.05);
+        }
+        /* Premium hover – subtle saturation lift */
+        .forge-canvas-container:hover {
+          filter: saturate(1.03);
+        }
+        /* Fallback for browsers that block external SVG cursors (e.g. Firefox size limit) */
+        @supports not (cursor: url("/cursors/electra-hand.svg") 14 2, grab) {
+          .forge-canvas-container, .forge-canvas-container .react-flow__pane {
+            cursor: grab !important;
+          }
+          .forge-canvas-container:active, .forge-canvas-container .react-flow__pane:active {
+            cursor: grabbing !important;
+          }
+        }
         .react-flow__edges { z-index: 1000 !important; }
         .react-flow__connectionline { z-index: 1001 !important; pointer-events: none; }
         .react-flow__edge { pointer-events: all; }
