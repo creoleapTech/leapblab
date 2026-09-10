@@ -77,11 +77,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
       if (highlightCards) {
         stateClasses = 'shadow-[0_0_0_2px_rgba(99,102,241,0.35),0_8px_20px_rgba(99,102,241,0.08)]';
       } else {
-        stateClasses = 'shadow-[0_1px_2px_rgba(0,0,0,0.06),0_4px_8px_rgba(0,0,0,0.04),0_12px_24px_rgba(0,0,0,0.02),inset_0_0_0_1px_rgba(255,255,255,0.7)]';
+        stateClasses = 'shadow-sm';
       }
     }
 
-    return `group rounded-xl p-[clamp(14px,1.4vw,22px)] cursor-pointer [transition:transform_.4s_cubic-bezier(0.34,1.56,0.64,1),box-shadow_.5s_ease,opacity_.3s_ease] relative overflow-hidden h-auto min-h-[clamp(180px,15vw,260px)] flex flex-col justify-between border border-[rgba(0,0,0,0.03)] border-t-[rgba(255,255,255,0.82)] border-l-[rgba(255,255,255,0.4)] max-[560px]:min-h-auto max-[560px]:flex-row max-[560px]:items-center max-[560px]:gap-3 max-[560px]:p-3 max-[480px]:p-3 max-[480px]:gap-3 max-[480px]:rounded-[10px] hover:translate-y-[-8px] hover:scale-[1.02] hover:z-[5] ${themeClasses} ${stateClasses}`;
+    return `group relative flex flex-1 flex-col rounded-[20px] border border-slate-100/80 p-5 cursor-pointer overflow-hidden shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:border-slate-200/80 ${themeClasses} ${stateClasses}`;
   };
 
   /* ── Cleanup scan on unmount ── */
@@ -324,11 +324,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
               <div className="grid grid-cols-[1.1fr_0.9fr] items-center w-full max-w-[1600px] mx-auto py-4 px-10 gap-10 flex-none min-h-[clamp(240px,38vh,520px)] max-[1024px]:grid-cols-1 max-[1024px]:text-center max-[1024px]:gap-6 max-[1024px]:p-6 max-[1024px]:min-h-0 max-[1024px]:flex-none max-[640px]:py-[30px] max-[640px]:px-4 max-[640px]:gap-[30px] max-[480px]:py-5 max-[480px]:px-3 max-[480px]:gap-5">
                 <div className="max-[1024px]:flex max-[1024px]:flex-col max-[1024px]:items-center">
                   <div className="inline-block text-[10px] font-extrabold text-black uppercase tracking-[0.25em] mb-2 px-3 py-1 bg-[#BEF264] border-2 border-black shadow-[2px_2px_0px_#000] -rotate-1 max-[480px]:text-[10px] max-[480px]:px-2.5 max-[480px]:py-1 max-[480px]:mb-2 animate-hero-reveal">Curiosity - Creativity - Critical Thinking</div>
-                  <h1 className="text-[clamp(2rem,3.2vw,4rem)] font-black leading-[1.1] tracking-[-0.04em] mb-2.5 text-[#0F172A] max-[640px]:text-[2.5rem] max-[480px]:text-[2rem] animate-hero-reveal [animation-delay:0.1s]">
-                    Learn to <span className="text-transparent [-webkit-text-stroke:2px_#6366F1] [-webkit-text-fill-color:transparent] tracking-[-0.02em]">code</span> <br />
-                    the <span className="italic text-transparent bg-[linear-gradient(135deg,#6366F1_0%,#7C3AED_50%,#8B5CF6_100%)] [-webkit-background-clip:text] [-webkit-text-fill-color:transparent] bg-clip-text tracking-[0.02em] px-1">bold</span> way
+                  <h1 className="headline text-[clamp(2.1rem,3.4vw,4.2rem)] font-[900] leading-[1.05] tracking-[-0.05em] mb-2.5 text-[#0a0a18] font-['Poppins','Inter',sans-serif] max-[640px]:text-[2.6rem] max-[480px]:text-[2.1rem] animate-hero-reveal [animation-delay:0.1s] [text-shadow:0_1px_0_rgba(0,0,0,0.02)]">
+                    <span className="font-[900] tracking-[-0.05em]">Learn to</span> <span className="code bg-gradient-to-r from-[#3B5BFF] to-[#7A3FF2] bg-clip-text text-transparent tracking-[-0.03em] font-[900]">code</span> <br />
+                    <span className="font-[900] tracking-[-0.05em]">the</span> <span className="bold italic font-[900] bg-gradient-to-r from-[#8B3FF2] to-[#E63FA0] bg-clip-text text-transparent tracking-[-0.02em] px-1">bold</span> <span className="relative inline-block font-[900] tracking-[-0.05em]">way<span className="absolute -top-2 -right-6 flex items-center gap-1"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="drop-shadow-sm"><path d="M7 4 L12 9 L7 14" stroke="#E63FA0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/><path d="M11 4 L16 9 L11 14" stroke="#E63FA0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7"/></svg><span className="flex flex-col gap-1 ml-0.5"><span className="block h-1 w-1 rounded-full bg-[#E63FA0]"></span><span className="block h-1 w-1 rounded-full bg-[#8B3FF2] opacity-60"></span></span></span></span>
                   </h1>
-                  <p className="text-[clamp(0.9rem,1.5vw,1.1rem)] text-[#0f172a] leading-[1.4] max-w-[600px] mb-3.5 relative z-10 opacity-85 max-[1024px]:mx-auto max-[1024px]:max-w-[90%] max-[640px]:text-md max-[640px]:max-w-full max-[640px]:p-0 max-[480px]:text-[0.9rem] max-[480px]:leading-[1.4] max-[480px]:mb-4 animate-hero-reveal [animation-delay:0.2s]">
+                  <p className="text-[clamp(0.9rem,1.5vw,1.1rem)] text-slate-600 font-normal leading-[1.6] max-w-[600px] mb-3.5 relative z-10 max-[1024px]:mx-auto max-[1024px]:max-w-[90%] max-[640px]:text-md max-[640px]:max-w-full max-[640px]:p-0 max-[480px]:text-[0.9rem] max-[480px]:leading-[1.4] max-[480px]:mb-4 animate-hero-reveal [animation-delay:0.2s]">
                     Eight unique tracks from junior picture-blocks all the way to AI,
                     robotics, and machine vision. Pick your adventure.
                   </p>
@@ -363,104 +363,104 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
                 </div>
               </div>
 
-              {/* 8 TRACK CARDS */}
-              <div className="cards-wrap w-full mx-auto py-[clamp(8px,1vw,16px)] px-[clamp(20px,2.5vw,48px)] pb-[clamp(6px,0.8vw,12px)] shrink-0 flex items-center justify-center max-[560px]:p-3 max-[560px]:px-4 max-[480px]:p-4 max-[480px]:px-3">
-                <div className={`grid grid-cols-8 gap-[clamp(10px,1.2vw,20px)] w-full max-w-[1800px] max-[1100px]:grid-cols-4 max-[900px]:grid-cols-2 max-[560px]:grid-cols-1 max-[480px]:gap-2.5 ${highlightCards ? 'highlight-active' : ''} ${scanIndex >= 0 ? 'is-scanning' : ''}`}>
+              {/* 8 TRACK CARDS — premium light pastel, responsive */}
+              <div className="cards-wrap w-full mx-auto py-4 px-6 pb-3 shrink-0 flex items-center justify-center">
+                <div className={`grid w-full max-w-[1600px] grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-8 ${highlightCards ? 'highlight-active' : ''} ${scanIndex >= 0 ? 'is-scanning' : ''}`}>
 
-                  {/* 1 IGNITE */}
-                  <div className={getCardClasses(0, 'bg-[linear-gradient(155deg,#ffffff_0%,#fff0e5_60%,#fce5d4_100%)] border-b-4 border-b-[#F97316] hover:shadow-[0_20px_40px_rgba(249,115,22,0.15),0_0_0_1px_rgba(249,115,22,0.1)]')} onClick={() => handleCardClick(() => onSelect('junior'))}>
-                    <div className="flex items-center justify-center mb-3 h-[clamp(56px,6.5vw,96px)] max-[560px]:mb-0 max-[560px]:h-[50px] max-[560px]:w-[50px] max-[560px]:flex-[0_0_50px]">
-                      <img src="assets/ignite_icon.png" alt="Ignite Robot" className="h-full w-auto object-contain [filter:drop-shadow(0_4px_8px_rgba(0,0,0,0.1))] [transition:transform_0.4s_cubic-bezier(0.34,1.56,0.64,1),filter_0.4s_ease] max-[560px]:w-full group-hover:scale-[1.08] group-hover:-translate-y-1 group-hover:[filter:drop-shadow(0_8px_12px_rgba(0,0,0,0.15))]" />
+                  {/* 1 IGNITE — orange/amber */}
+                  <div className={getCardClasses(0, 'bg-gradient-to-br from-orange-100 via-amber-50 to-orange-100')} onClick={() => handleCardClick(() => onSelect('junior'))}>
+                    <div className="flex flex-1 flex-col">
+                      <div className="mb-5 flex h-28 items-center justify-center">
+                        <img src="assets/ignite_icon.png" alt="Ignite" className="h-24 w-24 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110" />
+                      </div>
+                      <h3 className="text-[20px] font-extrabold tracking-tight text-orange-600 uppercase">IGNITE</h3>
+                      <p className="mt-1 max-w-[170px] text-[14px] font-medium leading-5 text-slate-600">Learn coding<br/>with fun visual blocks</p>
                     </div>
-                    <div>
-                      <img src="assets/splash_logo_b.png" alt="Leaplab" className="h-[clamp(10px,1vw,14px)] w-auto object-contain mb-1 opacity-75 block" />
-                      <div className="text-[clamp(13px,1.1vw,17px)] font-extrabold tracking-[0.01em] uppercase text-[#281746] mb-1 leading-[1.1] max-[480px]:text-[14px]">Ignite</div>
-                      <div className="text-[clamp(10px,0.85vw,13px)] text-[#020046b1] leading-[1.3] font-medium line-clamp-2 overflow-hidden max-[480px]:text-[11px]">leap & block coding</div>
-                    </div>
+                    <div className="absolute bottom-0 left-0 h-1 w-0 bg-orange-500 transition-all duration-300 group-hover:w-full"></div>
                   </div>
 
-                  {/* 2 EMBED */}
-                  <div className={getCardClasses(1, 'bg-[linear-gradient(155deg,#ffffff_0%,#e5f2f5_60%,#d5f2f7_100%)] border-b-4 border-b-[#59aaa4ff] hover:shadow-[0_20px_40px_rgba(15,118,109,0.15),0_0_0_1px_rgba(15,118,110,0.1)]')} onClick={() => handleCardClick(() => onSelect('intermediate'))}>
-                    <div className="flex items-center justify-center mb-3 h-[clamp(56px,6.5vw,96px)] max-[560px]:mb-0 max-[560px]:h-[50px] max-[560px]:w-[50px] max-[560px]:flex-[0_0_50px]">
-                      <img src="assets/arduino_icon.png" alt="Circuit Icon" className="h-full w-auto object-contain [filter:drop-shadow(0_4px_8px_rgba(0,0,0,0.1))] [transition:transform_0.4s_cubic-bezier(0.34,1.56,0.64,1),filter_0.4s_ease] max-[560px]:w-full group-hover:scale-[1.08] group-hover:-translate-y-1 group-hover:[filter:drop-shadow(0_8px_12px_rgba(0,0,0,0.15))]" />
+                  {/* 2 EMBED — cyan/blue */}
+                  <div className={getCardClasses(1, 'bg-gradient-to-br from-cyan-100 via-sky-50 to-blue-100')} onClick={() => handleCardClick(() => onSelect('intermediate'))}>
+                    <div className="flex flex-1 flex-col">
+                      <div className="mb-5 flex h-28 items-center justify-center">
+                        <img src="assets/arduino_icon.png" alt="Embed" className="h-24 w-24 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110" />
+                      </div>
+                      <h3 className="text-[20px] font-extrabold tracking-tight text-cyan-600 uppercase">EMBED</h3>
+                      <p className="mt-1 max-w-[170px] text-[14px] font-medium leading-5 text-slate-600">Build with<br/>Arduino, sensors & IoT</p>
                     </div>
-                    <div>
-                      <img src="assets/splash_logo_b.png" alt="Leaplab" className="h-[clamp(10px,1vw,14px)] w-auto object-contain mb-1 opacity-75 block" />
-                      <div className="text-[clamp(13px,1.1vw,17px)] font-extrabold tracking-[0.01em] uppercase text-[#281746] mb-1 leading-[1.1] max-[480px]:text-[14px]">Embed</div>
-                      <div className="text-[clamp(10px,0.85vw,13px)] text-[#020046b1] leading-[1.3] font-medium line-clamp-2 overflow-hidden max-[480px]:text-[11px]">Block Coding, Arduino & Embedded Systems</div>
-                    </div>
+                    <div className="absolute bottom-0 left-0 h-1 w-0 bg-cyan-500 transition-all duration-300 group-hover:w-full"></div>
                   </div>
 
-                  {/* 3 Logix */}
-                  <div className={getCardClasses(2, 'bg-[linear-gradient(155deg,#ffffff_0%,#ebf0fd_60%,#ccdafa_100%)] border-b-4 border-b-[#3B82F6] hover:shadow-[0_20px_40px_rgba(59,130,246,0.15),0_0_0_1px_rgba(59,130,246,0.1)]')} onClick={() => handleCardClick(() => onSelect('python'))}>
-                    <div className="flex items-center justify-center mb-3 h-[clamp(56px,6.5vw,96px)] max-[560px]:mb-0 max-[560px]:h-[50px] max-[560px]:w-[50px] max-[560px]:flex-[0_0_50px]">
-                      <img src="assets/python_icon.png" alt="Logix Icon" className="h-full w-auto object-contain [filter:drop-shadow(0_4px_8px_rgba(0,0,0,0.1))] [transition:transform_0.4s_cubic-bezier(0.34,1.56,0.64,1),filter_0.4s_ease] max-[560px]:w-full group-hover:scale-[1.08] group-hover:-translate-y-1 group-hover:[filter:drop-shadow(0_8px_12px_rgba(0,0,0,0.15))]" />
+                  {/* 3 LOGIX — blue/indigo */}
+                  <div className={getCardClasses(2, 'bg-gradient-to-br from-blue-100 via-indigo-50 to-blue-100')} onClick={() => handleCardClick(() => onSelect('python'))}>
+                    <div className="flex flex-1 flex-col">
+                      <div className="mb-5 flex h-28 items-center justify-center">
+                        <img src="assets/python_icon.png" alt="Logix" className="h-24 w-24 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110" />
+                      </div>
+                      <h3 className="text-[20px] font-extrabold tracking-tight text-blue-600 uppercase">LOGIX</h3>
+                      <p className="mt-1 max-w-[170px] text-[14px] font-medium leading-5 text-slate-600">Learn Python &<br/>programming logic</p>
                     </div>
-                    <div>
-                      <img src="assets/splash_logo_b.png" alt="Leaplab" className="h-[clamp(10px,1vw,14px)] w-auto object-contain mb-1 opacity-75 block" />
-                      <div className="text-[clamp(13px,1.1vw,17px)] font-extrabold tracking-[0.01em] uppercase text-[#281746] mb-1 leading-[1.1] max-[480px]:text-[14px]">Logix</div>
-                      <div className="text-[clamp(10px,0.85vw,13px)] text-[#020046b1] leading-[1.3] font-medium line-clamp-2 overflow-hidden max-[480px]:text-[11px]">Python Programming</div>
-                    </div>
+                    <div className="absolute bottom-0 left-0 h-1 w-0 bg-blue-500 transition-all duration-300 group-hover:w-full"></div>
                   </div>
 
-                  {/* 4 NEURA */}
-                  <div className={getCardClasses(3, 'bg-[linear-gradient(155deg,#ffffff_0%,#f0ecfd_60%,#ddd0fb_100%)] border-b-4 border-b-[#7C3AED] hover:shadow-[0_20px_40px_rgba(124,58,237,0.15),0_0_0_1px_rgba(124,58,237,0.1)]')} onClick={() => handleCardClick(() => onSelect('neura'))}>
-                    <div className="flex items-center justify-center mb-3 h-[clamp(56px,6.5vw,96px)] max-[560px]:mb-0 max-[560px]:h-[50px] max-[560px]:w-[50px] max-[560px]:flex-[0_0_50px]">
-                      <img src="assets/ml_brain_icon.png" alt="Neura Icon" className="h-full w-auto object-contain [filter:drop-shadow(0_4px_8px_rgba(0,0,0,0.1))] [transition:transform_0.4s_cubic-bezier(0.34,1.56,0.64,1),filter_0.4s_ease] max-[560px]:w-full group-hover:scale-[1.08] group-hover:-translate-y-1 group-hover:[filter:drop-shadow(0_8px_12px_rgba(0,0,0,0.15))]" />
+                  {/* 4 NEURA — violet/purple */}
+                  <div className={getCardClasses(3, 'bg-gradient-to-br from-violet-100 via-purple-50 to-violet-100')} onClick={() => handleCardClick(() => onSelect('neura'))}>
+                    <div className="flex flex-1 flex-col">
+                      <div className="mb-5 flex h-28 items-center justify-center">
+                        <img src="assets/ml_brain_icon.png" alt="Neura" className="h-24 w-24 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110" />
+                      </div>
+                      <h3 className="text-[20px] font-extrabold tracking-tight text-violet-600 uppercase">NEURA</h3>
+                      <p className="mt-1 max-w-[170px] text-[14px] font-medium leading-5 text-slate-600">Explore AI, logic<br/>& intelligent systems</p>
                     </div>
-                    <div>
-                      <img src="assets/splash_logo_b.png" alt="Leaplab" className="h-[clamp(10px,1vw,14px)] w-auto object-contain mb-1 opacity-75 block" />
-                      <div className="text-[clamp(13px,1.1vw,17px)] font-extrabold tracking-[0.01em] uppercase text-[#281746] mb-1 leading-[1.1] max-[480px]:text-[14px]">Neura</div>
-                      <div className="text-[clamp(10px,0.85vw,13px)] text-[#020046b1] leading-[1.3] font-medium line-clamp-2 overflow-hidden max-[480px]:text-[11px]">AI Logic & Advanced Block Programming</div>
-                    </div>
+                    <div className="absolute bottom-0 left-0 h-1 w-0 bg-violet-500 transition-all duration-300 group-hover:w-full"></div>
                   </div>
 
-                  {/* 5 ELECTRA */}
-                  <div className={getCardClasses(4, 'bg-[linear-gradient(155deg,#ffffff_0%,#eaf8ed_60%,#d6f7df_100%)] border-b-4 border-b-[#22C55E] hover:shadow-[0_20px_40px_rgba(34,197,94,0.15),0_0_0_1px_rgba(34,197,94,0.1)]')} onClick={() => handleCardClick(() => onSelect('electra'))}>
-                    <div className="flex items-center justify-center mb-3 h-[clamp(56px,6.5vw,96px)] max-[560px]:mb-0 max-[560px]:h-[50px] max-[560px]:w-[50px] max-[560px]:flex-[0_0_50px]">
-                      <img src="assets/creocad_icon.png" alt="Forge Icon" className="h-full w-auto object-contain [filter:drop-shadow(0_4px_8px_rgba(0,0,0,0.1))] [transition:transform_0.4s_cubic-bezier(0.34,1.56,0.64,1),filter_0.4s_ease] max-[560px]:w-full group-hover:scale-[1.08] group-hover:-translate-y-1 group-hover:[filter:drop-shadow(0_8px_12px_rgba(0,0,0,0.15))]" />
+                  {/* 5 ELECTRA — green/emerald */}
+                  <div className={getCardClasses(4, 'bg-gradient-to-br from-green-100 via-emerald-50 to-green-100')} onClick={() => handleCardClick(() => onSelect('electra'))}>
+                    <div className="flex flex-1 flex-col">
+                      <div className="mb-5 flex h-28 items-center justify-center">
+                        <img src="assets/creocad_icon.png" alt="Electra" className="h-24 w-24 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110" />
+                      </div>
+                      <h3 className="text-[20px] font-extrabold tracking-tight text-green-600 uppercase">ELECTRA</h3>
+                      <p className="mt-1 max-w-[170px] text-[14px] font-medium leading-5 text-slate-600">Design circuits &<br/>simulate electronics</p>
                     </div>
-                    <div>
-                      <img src="assets/splash_logo_b.png" alt="Leaplab" className="h-[clamp(10px,1vw,14px)] w-auto object-contain mb-1 opacity-75 block" />
-                      <div className="text-[clamp(13px,1.1vw,17px)] font-extrabold tracking-[0.01em] uppercase text-[#281746] mb-1 leading-[1.1] max-[480px]:text-[14px]">Electra</div>
-                      <div className="text-[clamp(10px,0.85vw,13px)] text-[#020046b1] leading-[1.3] font-medium line-clamp-2 overflow-hidden max-[480px]:text-[11px]">Circuit Design & Simulation</div>
-                    </div>
+                    <div className="absolute bottom-0 left-0 h-1 w-0 bg-green-500 transition-all duration-300 group-hover:w-full"></div>
                   </div>
 
-                  {/* 6 VISION3D */}
-                  <div className={getCardClasses(5, 'bg-[linear-gradient(155deg,#ffffff_0%,#e5f6f8_60%,#d2f6fa_100%)] border-b-4 border-b-[#06B6D4] hover:shadow-[0_20px_40px_rgba(6,182,212,0.15),0_0_0_1px_rgba(6,182,212,0.1)]')} onClick={() => handleCardClick(() => onSelect('vision3d'))}>
-                    <div className="flex items-center justify-center mb-3 h-[clamp(56px,6.5vw,96px)] max-[560px]:mb-0 max-[560px]:h-[50px] max-[560px]:w-[50px] max-[560px]:flex-[0_0_50px]">
-                      <img src="assets/vision3d_icon.png" alt="Vision3D Icon" className="h-full w-auto object-contain [filter:drop-shadow(0_4px_8px_rgba(0,0,0,0.1))] [transition:transform_0.4s_cubic-bezier(0.34,1.56,0.64,1),filter_0.4s_ease] max-[560px]:w-full group-hover:scale-[1.08] group-hover:-translate-y-1 group-hover:[filter:drop-shadow(0_8px_12px_rgba(0,0,0,0.15))]" />
+                  {/* 6 VISION3D — sky/cyan */}
+                  <div className={getCardClasses(5, 'bg-gradient-to-br from-sky-100 via-cyan-50 to-sky-100')} onClick={() => handleCardClick(() => onSelect('vision3d'))}>
+                    <div className="flex flex-1 flex-col">
+                      <div className="mb-5 flex h-28 items-center justify-center">
+                        <img src="assets/vision3d_icon.png" alt="Vision3D" className="h-24 w-24 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110" />
+                      </div>
+                      <h3 className="text-[20px] font-extrabold tracking-tight text-sky-600 uppercase">VISION3D</h3>
+                      <p className="mt-1 max-w-[170px] text-[14px] font-medium leading-5 text-slate-600">Create 3D models<br/>& digital designs</p>
                     </div>
-                    <div>
-                      <img src="assets/splash_logo_b.png" alt="Leaplab" className="h-[clamp(10px,1vw,14px)] w-auto object-contain mb-1 opacity-75 block" />
-                      <div className="text-[clamp(13px,1.1vw,17px)] font-extrabold tracking-[0.01em] uppercase text-[#281746] mb-1 leading-[1.1] max-[480px]:text-[14px]">Vision3D</div>
-                      <div className="text-[clamp(10px,0.85vw,13px)] text-[#020046b1] leading-[1.3] font-medium line-clamp-2 overflow-hidden max-[480px]:text-[11px]">3D Design & Modeling</div>
-                    </div>
+                    <div className="absolute bottom-0 left-0 h-1 w-0 bg-sky-500 transition-all duration-300 group-hover:w-full"></div>
                   </div>
 
-                  {/* 7 CREOVA */}
-                  <div className={getCardClasses(6, 'bg-[linear-gradient(155deg,#ffffff_0%,#fbedf4_60%,#fae1ee_100%)] border-b-4 border-b-[#EC4899] hover:shadow-[0_20px_40px_rgba(236,72,153,0.15),0_0_0_1px_rgba(236,72,153,0.1)]')} onClick={() => handleCardClick(() => onSelect('creova'))}>
-                    <div className="flex items-center justify-center mb-3 h-[clamp(56px,6.5vw,96px)] max-[560px]:mb-0 max-[560px]:h-[50px] max-[560px]:w-[50px] max-[560px]:flex-[0_0_50px]">
-                      <img src="assets/app_game_dev_icon.png" alt="Creova Icon" className="h-full w-auto object-contain [filter:drop-shadow(0_4px_8px_rgba(0,0,0,0.1))] [transition:transform_0.4s_cubic-bezier(0.34,1.56,0.64,1),filter_0.4s_ease] max-[560px]:w-full group-hover:scale-[1.08] group-hover:-translate-y-1 group-hover:[filter:drop-shadow(0_8px_12px_rgba(0,0,0,0.15))]" />
+                  {/* 7 CREOVA — pink/rose */}
+                  <div className={getCardClasses(6, 'bg-gradient-to-br from-pink-100 via-rose-50 to-pink-100')} onClick={() => handleCardClick(() => onSelect('creova'))}>
+                    <div className="flex flex-1 flex-col">
+                      <div className="mb-5 flex h-28 items-center justify-center">
+                        <img src="assets/app_game_dev_icon.png" alt="Creova" className="h-24 w-24 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110" />
+                      </div>
+                      <h3 className="text-[20px] font-extrabold tracking-tight text-pink-600 uppercase">CREOVA</h3>
+                      <p className="mt-1 max-w-[170px] text-[14px] font-medium leading-5 text-slate-600">Build apps, games<br/>& interactive projects</p>
                     </div>
-                    <div>
-                      <img src="assets/splash_logo_b.png" alt="Leaplab" className="h-[clamp(10px,1vw,14px)] w-auto object-contain mb-1 opacity-75 block" />
-                      <div className="text-[clamp(13px,1.1vw,17px)] font-extrabold tracking-[0.01em] uppercase text-[#281746] mb-1 leading-[1.1] max-[480px]:text-[14px]">Creova</div>
-                      <div className="text-[clamp(10px,0.85vw,13px)] text-[#020046b1] leading-[1.3] font-medium line-clamp-2 overflow-hidden max-[480px]:text-[11px]">App & Game Development</div>
-                    </div>
+                    <div className="absolute bottom-0 left-0 h-1 w-0 bg-pink-500 transition-all duration-300 group-hover:w-full"></div>
                   </div>
 
-                  {/* 8 PULSE */}
-                  <div className={getCardClasses(7, 'bg-[linear-gradient(155deg,#ffffff_0%,#eafcf1_60%,#c7fade_100%)] border-b-4 border-b-[#10B981] hover:shadow-[0_20px_40px_rgba(16,185,129,0.15),0_0_0_1px_rgba(16,185,129,0.1)]')} onClick={() => handleCardClick(() => onSelect('pulse'))}>
-                    <div className="flex items-center justify-center mb-3 h-[clamp(56px,6.5vw,96px)] max-[560px]:mb-0 max-[560px]:h-[50px] max-[560px]:w-[50px] max-[560px]:flex-[0_0_50px]">
-                      <img src="assets/quiz_icon.png" alt="Quiz Icon" className="h-full w-auto object-contain [filter:drop-shadow(0_4px_8px_rgba(0,0,0,0.1))] [transition:transform_0.4s_cubic-bezier(0.34,1.56,0.64,1),filter_0.4s_ease] max-[560px]:w-full group-hover:scale-[1.08] group-hover:-translate-y-1 group-hover:[filter:drop-shadow(0_8px_12px_rgba(0,0,0,0.15))]" />
+                  {/* 8 PULSE — emerald/green */}
+                  <div className={getCardClasses(7, 'bg-gradient-to-br from-emerald-100 via-green-50 to-emerald-100')} onClick={() => handleCardClick(() => onSelect('pulse'))}>
+                    <div className="flex flex-1 flex-col">
+                      <div className="mb-5 flex h-28 items-center justify-center">
+                        <img src="assets/quiz_icon.png" alt="Pulse" className="h-24 w-24 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110" />
+                      </div>
+                      <h3 className="text-[20px] font-extrabold tracking-tight text-emerald-600 uppercase">PULSE</h3>
+                      <p className="mt-1 max-w-[170px] text-[14px] font-medium leading-5 text-slate-600">Create quizzes &<br/>assess learning</p>
                     </div>
-                    <div>
-                      <img src="assets/splash_logo_b.png" alt="Leaplab" className="h-[clamp(10px,1vw,14px)] w-auto object-contain mb-1 opacity-75 block" />
-                      <div className="text-[clamp(13px,1.1vw,17px)] font-extrabold tracking-[0.01em] uppercase text-[#281746] mb-1 leading-[1.1] max-[480px]:text-[14px]">Pulse</div>
-                      <div className="text-[clamp(10px,0.85vw,13px)] text-[#020046b1] leading-[1.3] font-medium line-clamp-2 overflow-hidden max-[480px]:text-[11px]">Assessment & Quiz Creation</div>
-                    </div>
+                    <div className="absolute bottom-0 left-0 h-1 w-0 bg-emerald-500 transition-all duration-300 group-hover:w-full"></div>
                   </div>
 
                 </div>
