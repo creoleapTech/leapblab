@@ -119,10 +119,13 @@ function getNodeSize(draggedId: string, expandedClasses?: Record<string, boolean
   return { w: CLASS_W, h: (expandedClasses?.[draggedId] ? 420 : CLASS_H) }
 }
 
+const HEADER_H = 72 // top bar + workflow tabs – must stay clear
+const HEADER_RECT: Rect = { x: 0, y: 0, w: CANVAS_W, h: HEADER_H }
+
 function clampToBounds(pos: Pos, w: number, h: number): Pos {
   return {
     x: Math.min(Math.max(pos.x, 0), Math.max(0, CANVAS_W - w)),
-    y: Math.min(Math.max(pos.y, 0), Math.max(0, CANVAS_H - h)),
+    y: Math.min(Math.max(pos.y, HEADER_H), Math.max(HEADER_H, CANVAS_H - h)),
   }
 }
 
@@ -135,6 +138,8 @@ function buildOthers(
 ): Rect[] {
   const { isSingleDataset, datasetPos, expandedClasses } = opts
   const others: Rect[] = []
+  // Header / tabs are fixed overlay – never allow nodes to be kept over them
+  others.push(HEADER_RECT)
   if (isSingleDataset) {
     if (draggedId !== 'dataset' && datasetPos) others.push(getDatasetRect(datasetPos))
   } else {
