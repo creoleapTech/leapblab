@@ -415,6 +415,48 @@ function formatPioError(result: CLIResult): string {
   return body.length > 4000 ? body.slice(-4000) : body;
 }
 
+/**
+ * Detect infrastructure failures that should NOT block transpilation.
+ * These are PlatformIO/toolchain issues, not user code errors.
+ * When detected, server should warn and proceed to transpile anyway.
+ */
+function isInfraTranspileError(msg: string): boolean {
+  const infraKeywords = [
+    'MissingPackageManifestError',
+    'package.json',
+    'platform.json',
+    'library.json',
+    'manifest files in the package',
+    'Could not find one of',
+    'MissingPackage',
+    'PlatformNotInstalled',
+    'UnknownPackage',
+    'ToolPackageManager',
+    'esptool',
+    'ModuleNotFoundError',
+    'No module named',
+    '[TIMEOUT]',
+    'Process killed',
+    'platform not available',
+    'ESP32 platform not available',
+    'Failed to install platform',
+    'ConnectionError',
+    'HTTPSConnectionPool',
+    'Max retries exceeded',
+    'Network is unreachable',
+    'Temporary failure in name resolution',
+    'pio: command not found',
+    'not found: pio',
+    'ENOENT',
+    'spawn pio',
+    'Failed to spawn',
+    'not recognized as an internal',
+    'not recognized as the name of a cmdlet',
+  ];
+  const lower = msg.toLowerCase();
+  return infraKeywords.some(k => lower.includes(k.toLowerCase()));
+}
+
 async function getCliVersion(): Promise<string> {
   if (cachedPioVersion) return cachedPioVersion;
   try {
@@ -1181,7 +1223,7 @@ app.post('/transpile', async (req: Request, res: Response) => {
   if (!code) return res.status(400).json({ success: false, errors: 'No code provided' });
 
   if (isInitialized && process.env.VALIDATE_TRANSPILE !== 'false') {
-    const sketchId = `transpile_${Date.now()}`;
+    const sketchId = `transpile_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const sketchDir = path.join(os.tmpdir(), 'electra', sketchId);
     try {
       fs.mkdirSync(sketchDir, { recursive: true });
@@ -1195,13 +1237,23 @@ app.post('/transpile', async (req: Request, res: Response) => {
         libDirs: FORGE_LIB_LIBRARIES ? [FORGE_LIB_LIBRARIES] : [],
         libDeps: !isEsp32Board(board) ? ['SoftwareSerial', 'Servo'] : [],
       });
-      const { code: exitCode, stderr } = await runCLI(['run', '-d', sketchDir]);
+      const { code: exitCode, stdout, stderr } = await runCLI(['run', '-d', sketchDir], 60_000);
       if (exitCode !== 0) {
-        return res.json({ success: false, errors: formatPioError({ stdout: '', stderr, code: exitCode }) });
+        const errMsg = formatPioError({ stdout, stderr, code: exitCode });
+        if (isInfraTranspileError(errMsg)) {
+          console.warn(`[TRANSPILE] Validation infra error ignored, proceeding to transpile: ${errMsg.slice(-600)}`);
+        } else {
+          return res.json({ success: false, errors: errMsg });
+        }
       }
   } catch (err: any) {
-    console.error('[SERVER] /transpile: EXCEPTION:', err.message);
-    return res.json({ success: false, errors: err.message });
+    const msg = err.message || String(err);
+    if (isInfraTranspileError(msg)) {
+      console.warn(`[TRANSPILE] Validation exception (infra) ignored, proceeding to transpile: ${msg}`);
+    } else {
+      console.error('[SERVER] /transpile: EXCEPTION:', msg);
+      return res.json({ success: false, errors: msg });
+    }
   } finally {
       try { if (fs.existsSync(sketchDir)) fs.rmSync(sketchDir, { recursive: true, force: true }); } catch {}
     }
@@ -1209,8 +1261,10 @@ app.post('/transpile', async (req: Request, res: Response) => {
 
   try {
     const jsCode = transpileArduinoToJS(code);
+    console.log(`[TRANSPILE] Transpiled ${code.length} bytes → ${jsCode.length} bytes JS (board=${board})`);
     return res.json({ success: true, jsCode });
   } catch (err: any) {
+    console.error('[TRANSPILE] Transpiler error:', err.message);
     return res.json({ success: false, errors: err.message });
   }
 });

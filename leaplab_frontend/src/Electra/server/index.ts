@@ -60,6 +60,46 @@ let isInitialized = false;
 const runCLI = (args: string[], timeoutMs = 120_000) => runPio(args, { timeoutMs });
 
 /**
+ * Detect infrastructure failures that should NOT block transpilation.
+ */
+function isInfraTranspileError(msg: string): boolean {
+  const infraKeywords = [
+    'MissingPackageManifestError',
+    'package.json',
+    'platform.json',
+    'library.json',
+    'manifest files in the package',
+    'Could not find one of',
+    'MissingPackage',
+    'PlatformNotInstalled',
+    'UnknownPackage',
+    'ToolPackageManager',
+    'esptool',
+    'ModuleNotFoundError',
+    'No module named',
+    '[TIMEOUT]',
+    'Process killed',
+    'platform not available',
+    'ESP32 platform not available',
+    'Failed to install platform',
+    'ConnectionError',
+    'HTTPSConnectionPool',
+    'Max retries exceeded',
+    'Network is unreachable',
+    'Temporary failure in name resolution',
+    'pio: command not found',
+    'not found: pio',
+    'ENOENT',
+    'spawn pio',
+    'Failed to spawn',
+    'not recognized as an internal',
+    'not recognized as the name of a cmdlet',
+  ];
+  const lower = msg.toLowerCase();
+  return infraKeywords.some(k => lower.includes(k.toLowerCase()));
+}
+
+/**
  * Ensure necessary platforms are installed. `pio platform install` is
  * idempotent; `pio run` also auto-installs platforms from platformio.ini.
  */
@@ -173,8 +213,9 @@ app.post('/transpile', async (req, res) => {
   }
 
   // Step 1: Validate the sketch by compiling with pio (catches syntax errors)
-  if (isInitialized) {
-    const sketchId = `transpile_${Date.now()}`;
+  // If validation fails due to infra (package.json manifest etc), warn and proceed to transpile.
+  if (isInitialized && process.env.VALIDATE_TRANSPILE !== 'false') {
+    const sketchId = `transpile_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const projectDir = path.join(os.tmpdir(), 'electra', sketchId);
     try {
       let target: { board: string; platform: string };
@@ -189,14 +230,23 @@ app.post('/transpile', async (req, res) => {
         libDirs: FORGE_LIB_LIBRARIES ? [FORGE_LIB_LIBRARIES] : [],
         libDeps: !isEsp32Fqbn(board) ? ['SoftwareSerial', 'Servo'] : [],
       });
-      const result = await runCLI(['run', '-d', projectDir]);
+      const result = await runCLI(['run', '-d', projectDir], 60_000);
       if (result.code !== 0) {
-        throw new Error((result.stderr || result.stdout || `Exit code ${result.code}`).slice(-4000));
+        const errMsg = (result.stderr || result.stdout || `Exit code ${result.code}`).slice(-4000);
+        if (isInfraTranspileError(errMsg)) {
+          console.warn(`[TRANSPILE] Validation infra error ignored, proceeding: ${errMsg.slice(-600)}`);
+        } else {
+          throw new Error(errMsg);
+        }
       }
     } catch (err: any) {
-      // If compilation fails, return the error — don't transpile invalid code
-      try { fs.rmSync(projectDir, { recursive: true, force: true }); } catch (_) { }
-      return res.json({ success: false, errors: [err.message] });
+      const msg = err.message || String(err);
+      if (isInfraTranspileError(msg)) {
+        console.warn(`[TRANSPILE] Validation exception (infra) ignored: ${msg.slice(0, 600)}`);
+      } else {
+        try { fs.rmSync(projectDir, { recursive: true, force: true }); } catch (_) { }
+        return res.json({ success: false, errors: [msg] });
+      }
     } finally {
       try { if (fs.existsSync(projectDir)) fs.rmSync(projectDir, { recursive: true, force: true }); } catch (_) { }
     }
@@ -205,7 +255,7 @@ app.post('/transpile', async (req, res) => {
   // Step 2: Transpile C++ → JavaScript
   try {
     const jsCode = transpileArduinoToJS(code);
-    console.log(`[TRANSPILE] Transpiled ${code.length} bytes → ${jsCode.length} bytes JS`);
+    console.log(`[TRANSPILE] Transpiled ${code.length} bytes → ${jsCode.length} bytes JS (board=${board})`);
     return res.json({ success: true, jsCode });
   } catch (err: any) {
     console.error('[TRANSPILE] Error:', err.message);

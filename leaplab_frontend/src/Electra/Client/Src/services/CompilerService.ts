@@ -83,10 +83,55 @@ export interface TranspileResult {
 }
 
 /**
+ * Detect infrastructure failures that should trigger client-side fallback.
+ * User code errors (syntax, missing declarations) should NOT fallback,
+ * so the user sees the compiler's diagnostic.
+ */
+function isInfraTranspileError(msg: string): boolean {
+  const infraKeywords = [
+    'MissingPackageManifestError',
+    'package.json',
+    'platform.json',
+    'library.json',
+    'manifest files',
+    'Could not find one of',
+    'MissingPackage',
+    'PlatformNotInstalled',
+    'UnknownPackage',
+    'ToolPackageManager',
+    'esptool',
+    'ModuleNotFoundError',
+    'No module named',
+    '[TIMEOUT]',
+    'Process killed',
+    'platform not available',
+    'ESP32 platform not available',
+    'Failed to install platform',
+    'ConnectionError',
+    'Max retries exceeded',
+    'Network is unreachable',
+    'Temporary failure',
+    'pio: command not found',
+    'not found: pio',
+    'Server error',
+    'Server is still initializing',
+    'ENOENT',
+    'spawn pio',
+    'Failed to spawn',
+    'not recognized as an internal',
+    'not recognized as the name of a cmdlet',
+  ];
+  const lower = msg.toLowerCase();
+  return infraKeywords.some(k => lower.includes(k.toLowerCase()));
+}
+
+/**
  * Transpile an Arduino sketch to JavaScript for browser-side simulation.
  * In Electron mode: uses the cloud server's /transpile endpoint.
  * In Web mode: also uses the cloud server's /transpile endpoint.
- * Falls back to client-side transpilation if server is unreachable.
+ * Falls back to client-side transpilation if server is unreachable or
+ * returns an infrastructure error (package manifest, platform missing, etc.).
+ * Pure syntax/user-code errors are returned to the caller for display.
  */
 export const transpileCode = async (code: string, board = 'esp32:esp32:esp32c3'): Promise<TranspileResult> => {
   try {
@@ -103,8 +148,8 @@ export const transpileCode = async (code: string, board = 'esp32:esp32:esp32c3')
     clearTimeout(timeout);
 
     if (!res.ok) {
-      // Server error — fall back to client-side transpilation
-      console.warn('[Transpiler] Server returned error, falling back to client-side');
+      // HTTP error (500, 503 cold start, etc.) — infra fallback
+      console.warn(`[Transpiler] Server returned HTTP ${res.status}, falling back to client-side`);
       return clientSideTranspile(code);
     }
     const data = await res.json();
@@ -112,10 +157,17 @@ export const transpileCode = async (code: string, board = 'esp32:esp32:esp32c3')
       console.log(`[Transpiler] Server transpilation successful (${data.jsCode.length} bytes)`);
       return { success: true, jsCode: data.jsCode };
     }
-    console.warn('[Transpiler] Server returned no jsCode, falling back to client-side');
+    const errorMsg: string = Array.isArray(data.errors)
+      ? data.errors.join('\n')
+      : (data.errors || (data as any).error || 'Transpilation failed');
+    if (isInfraTranspileError(errorMsg)) {
+      console.warn(`[Transpiler] Server infra error (fallback to client): ${errorMsg.slice(0, 600)}`);
+      return clientSideTranspile(code);
+    }
+    console.warn('[Transpiler] Server returned user-code error, not falling back:', errorMsg.slice(0, 600));
     return {
       success: false,
-      error: Array.isArray(data.errors) ? data.errors.join('\n') : (data.errors || 'Transpilation failed'),
+      error: errorMsg,
     };
   } catch (err: any) {
     // Network error or timeout — fall back to client-side transpilation
