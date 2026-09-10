@@ -255,7 +255,26 @@ export default function UploadWorkspace() {
                                     </div>
                                     {!ctx.protectedUploadFiles.has(file) && (
                                         <button
-                                            onClick={(e) => { e.stopPropagation(); ctx.setUploadProjectFiles(prev => { const n = { ...prev }; delete n[file]; return n; }); ctx.setUploadActiveFile("main.py"); ctx.addUploadMessage(`Deleted ${file}`, "warning"); }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                const doDelete = () => {
+                                                    ctx.setUploadProjectFiles(prev => { const n = { ...prev }; delete n[file]; return n; });
+                                                    ctx.setUploadActiveFile("main.py");
+                                                    ctx.addUploadMessage(`Deleted ${file}`, "warning");
+                                                };
+                                                if (ctx.openConfirm) {
+                                                    ctx.openConfirm({
+                                                        title: "Delete file?",
+                                                        message: `Delete ${file}?`,
+                                                        variant: "danger",
+                                                        confirmText: "Delete",
+                                                        cancelText: "Cancel",
+                                                        onConfirm: doDelete,
+                                                    });
+                                                } else if (window.confirm(`Delete ${file}?`)) {
+                                                    doDelete();
+                                                }
+                                            }}
                                             className="border-none bg-transparent text-gray-400 cursor-pointer p-0.5 hover:text-red-500 transition-colors"
                                             title="Delete file"
                                         >

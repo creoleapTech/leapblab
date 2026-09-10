@@ -36,6 +36,7 @@ import StageWorkspace from "./components/StageWorkspace";
 import UploadWorkspace from "./components/UploadWorkspace";
 import SpriteLibraryModal from "./components/SpriteLibraryModal";
 import PromptModal from "./components/PromptModal";
+import ConfirmModal from "./components/ConfirmModal";
 import BoardSelectionModal from "../../leapignite/client/components/BoardSelectionModal";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -60,6 +61,57 @@ function LogixAppInner({ onBack, onSwitchToNotebook, onSwitchToBlocks, onSwitchT
     const [installedExtensions, setInstalledExtensions] = useState([]);
     const [editorCursor, setEditorCursor] = useState({ line: 1, col: 1 });
 
+    const [modalState, setModalState] = useState({
+        isOpen: false, title: "", message: "", defaultValue: "", onSubmit: null,
+    });
+    const [modalInput, setModalInput] = useState("");
+    const [confirmState, setConfirmState] = useState({
+        isOpen: false, title: "", message: "", variant: "default", confirmText: "", cancelText: "", onConfirm: null, onCancel: null, isAlert: false,
+    });
+    const [replInput, setReplInput] = useState("");
+    const replInputRef = useRef(null);
+
+    // ── Confirm / Alert dialog (replaces window.confirm / alert) ──────────
+    const openConfirm = useCallback((opts) => {
+        setConfirmState({
+            isOpen: true,
+            title: opts.title || "Confirm action",
+            message: opts.message || "",
+            variant: opts.variant || "default",
+            confirmText: opts.confirmText || "Confirm",
+            cancelText: opts.cancelText || "Cancel",
+            onConfirm: opts.onConfirm || null,
+            onCancel: opts.onCancel || null,
+            isAlert: false,
+        });
+    }, []);
+    const openAlert = useCallback((opts) => {
+        const message = typeof opts === "string" ? opts : (opts.message || "");
+        const title = typeof opts === "string" ? "Notice" : (opts.title || "Notice");
+        const variant = (typeof opts === "object" && opts.variant) || "default";
+        setConfirmState({
+            isOpen: true,
+            title,
+            message,
+            variant,
+            confirmText: (typeof opts === "object" && opts.confirmText) || "OK",
+            cancelText: "",
+            onConfirm: (typeof opts === "object" && opts.onConfirm) || null,
+            onCancel: null,
+            isAlert: true,
+        });
+    }, []);
+    const handleConfirmConfirm = useCallback(() => {
+        const cb = confirmState.onConfirm;
+        setConfirmState((s) => ({ ...s, isOpen: false }));
+        cb?.();
+    }, [confirmState]);
+    const handleConfirmCancel = useCallback(() => {
+        const cb = confirmState.onCancel;
+        setConfirmState((s) => ({ ...s, isOpen: false }));
+        cb?.();
+    }, [confirmState]);
+
     // ── File Manager ────────────────────────────────────────────────────────
     const {
         projectName, setProjectName, activeFile, setActiveFile,
@@ -70,7 +122,7 @@ function LogixAppInner({ onBack, onSwitchToNotebook, onSwitchToBlocks, onSwitchT
         handleAddPythonFiles, handleAddImageFiles, handleAddTextFiles, handleAddCsvFiles,
     } = useFileManager({
         addLog, sprites, backdrop, setSprites, setSelectedSpriteId, setBackdropImg, resetStage,
-        workflowMode, setWorkflowMode
+        workflowMode, setWorkflowMode, openConfirm, openAlert,
     });
 
     // ── Python Execution ────────────────────────────────────────────────────
@@ -91,13 +143,6 @@ function LogixAppInner({ onBack, onSwitchToNotebook, onSwitchToBlocks, onSwitchT
 
     // ── Sprite Manager ──────────────────────────────────────────────────────
     const sprite = useSpriteManager({ sprites, setSprites, setSelectedSpriteId, addLog });
-
-    const [modalState, setModalState] = useState({
-        isOpen: false, title: "", message: "", defaultValue: "", onSubmit: null,
-    });
-    const [modalInput, setModalInput] = useState("");
-    const [replInput, setReplInput] = useState("");
-    const replInputRef = useRef(null);
 
     const isPythonBannerText = useCallback((text) => {
         const t = text.trim();
@@ -402,6 +447,7 @@ function LogixAppInner({ onBack, onSwitchToNotebook, onSwitchToBlocks, onSwitchT
         BACKDROP_LIBRARY, EXTENSIONS,
         openTextPrompt, modalState, modalInput, setModalInput,
         handleModalCancel, handleModalSubmit,
+        openConfirm, openAlert, confirmState, handleConfirmConfirm, handleConfirmCancel,
         onBack, onSwitchToNotebook, onSwitchToBlocks, onSwitchToCostumes,
     };
 
@@ -419,6 +465,7 @@ function LogixAppInner({ onBack, onSwitchToNotebook, onSwitchToBlocks, onSwitchT
                 )}
 
                 <PromptModal />
+                <ConfirmModal />
                 <SpriteLibraryModal />
 
                 <BoardSelectionModal

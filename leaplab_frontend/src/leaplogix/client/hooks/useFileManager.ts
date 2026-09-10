@@ -25,20 +25,36 @@ interface UseFileManagerProps {
   resetStage: () => void
   workflowMode?: string
   setWorkflowMode?: (mode: string) => void
+  openConfirm?: (opts: { title?: string; message?: string; variant?: string; confirmText?: string; cancelText?: string; onConfirm?: () => void; onCancel?: () => void }) => void
+  openAlert?: (opts: string | { title?: string; message?: string; variant?: string; confirmText?: string }) => void
 }
 
-export function useFileManager({ addLog, sprites, backdrop, setSprites, setSelectedSpriteId, setBackdropImg, resetStage, workflowMode, setWorkflowMode }: UseFileManagerProps) {
+export function useFileManager({ addLog, sprites, backdrop, setSprites, setSelectedSpriteId, setBackdropImg, resetStage, workflowMode, setWorkflowMode, openConfirm, openAlert }: UseFileManagerProps) {
   const [projectName, setProjectName] = useState("My Project")
   const [activeFile, setActiveFile] = useState(DEFAULT_ACTIVE_FILE)
   const [projectFiles, setProjectFiles] = useState<Record<string, string>>(DEFAULT_FILES)
 
   const handleNewProject = useCallback(() => {
+    const doReset = () => {
+      setProjectName("My Project")
+      setProjectFiles(DEFAULT_FILES)
+      setActiveFile(DEFAULT_ACTIVE_FILE)
+      resetStage()
+    }
+    if (openConfirm) {
+      openConfirm({
+        title: "New project",
+        message: "Create a new project? All unsaved work will be lost.",
+        variant: "warning",
+        confirmText: "Create",
+        cancelText: "Cancel",
+        onConfirm: doReset,
+      })
+      return
+    }
     if (!window.confirm("Create a new project? All unsaved work will be lost.")) return
-    setProjectName("My Project")
-    setProjectFiles(DEFAULT_FILES)
-    setActiveFile(DEFAULT_ACTIVE_FILE)
-    resetStage()
-  }, [resetStage])
+    doReset()
+  }, [resetStage, openConfirm])
 
   const buildPayload = useCallback(() => ({
     mode: "python",
@@ -58,9 +74,11 @@ export function useFileManager({ addLog, sprites, backdrop, setSprites, setSelec
       showToast("Project saved successfully!", "success")
     } catch (err) {
       console.error('[useFileManager] Failed to save project:', err)
-      alert((err as { message?: string })?.message || 'Failed to save project. Please make sure you are signed in.')
+      const msg = (err as { message?: string })?.message || 'Failed to save project. Please make sure you are signed in.'
+      if (openAlert) openAlert({ title: "Save failed", message: msg, variant: "danger" })
+      else alert(msg)
     }
-  }, [projectName, buildPayload])
+  }, [projectName, buildPayload, openAlert])
 
   const handleDownloadProject = useCallback(() => {
     const payload = buildPayload()
@@ -71,7 +89,8 @@ export function useFileManager({ addLog, sprites, backdrop, setSprites, setSelec
     try {
       const validation = fileService.validateProject(data, "python")
       if (!validation.isValid) {
-        alert(validation.error)
+        if (openAlert) openAlert({ title: "Invalid project", message: validation.error, variant: "warning" })
+        else alert(validation.error)
         return
       }
 
@@ -93,9 +112,11 @@ export function useFileManager({ addLog, sprites, backdrop, setSprites, setSelec
       }
       if (data.backdrop) setBackdropImg(data.backdrop)
     } catch (err) {
-      alert('Failed to load project: ' + (err as Error).message)
+      const msg = 'Failed to load project: ' + (err as Error).message
+      if (openAlert) openAlert({ title: "Load failed", message: msg, variant: "danger" })
+      else alert(msg)
     }
-  }, [setSprites, setSelectedSpriteId, setBackdropImg, resetStage, setWorkflowMode])
+  }, [setSprites, setSelectedSpriteId, setBackdropImg, resetStage, setWorkflowMode, openAlert])
 
   const handleOpenProject = useCallback(() => {
     const input = document.createElement("input")
@@ -109,11 +130,13 @@ export function useFileManager({ addLog, sprites, backdrop, setSprites, setSelec
         const data = await fileService.loadProject(file)
         loadProjectData(data)
       } catch (err) {
-        alert('Failed to load project: ' + (err as Error).message)
+        const msg = 'Failed to load project: ' + (err as Error).message
+        if (openAlert) openAlert({ title: "Load failed", message: msg, variant: "danger" })
+        else alert(msg)
       }
     }
     input.click()
-  }, [loadProjectData])
+  }, [loadProjectData, openAlert])
 
   useEffect(() => {
     const { pendingProject, clearPendingProject } = useCloudProjectStore.getState()
@@ -127,12 +150,14 @@ export function useFileManager({ addLog, sprites, backdrop, setSprites, setSelec
           clearPendingProject()
         } catch (err) {
           console.error('[useFileManager] Failed to load project from cloud:', err)
-          alert('Failed to load project: ' + (err as Error).message)
+          const msg = 'Failed to load project: ' + (err as Error).message
+          if (openAlert) openAlert({ title: "Load failed", message: msg, variant: "danger" })
+          else alert(msg)
         }
       })()
 
     return () => { cancelled = true }
-  }, [loadProjectData])
+  }, [loadProjectData, openAlert])
 
   const handleShareProject = useCallback(() => {
     const payload = {
@@ -146,14 +171,28 @@ export function useFileManager({ addLog, sprites, backdrop, setSprites, setSelec
 
   const handleDeleteFile = useCallback((file: string) => {
     if (Object.keys(projectFiles).length <= 1) return
+    const doDelete = () => {
+      setProjectFiles(prev => {
+        const next = { ...prev }
+        delete next[file]
+        return next
+      })
+      if (activeFile === file) setActiveFile(Object.keys(projectFiles).find(f => f !== file)!)
+    }
+    if (openConfirm) {
+      openConfirm({
+        title: "Delete file?",
+        message: `Delete ${file}?`,
+        variant: "danger",
+        confirmText: "Delete",
+        cancelText: "Cancel",
+        onConfirm: doDelete,
+      })
+      return
+    }
     if (!window.confirm(`Delete ${file}?`)) return
-    setProjectFiles(prev => {
-      const next = { ...prev }
-      delete next[file]
-      return next
-    })
-    if (activeFile === file) setActiveFile(Object.keys(projectFiles).find(f => f !== file)!)
-  }, [projectFiles, activeFile])
+    doDelete()
+  }, [projectFiles, activeFile, openConfirm])
 
   const handleCreateNewFile = useCallback(() => {
     let baseName = "new_file"
@@ -192,9 +231,12 @@ export function useFileManager({ addLog, sprites, backdrop, setSprites, setSelec
   const handleRenameFile = useCallback((oldName: string, newName: string) => {
     if (!newName || newName === oldName) return
     if (projectFiles[newName]) {
-      alert(`A file named "${newName}" already exists.`)
+      const msg = `A file named "${newName}" already exists.`
+      if (openAlert) openAlert({ title: "Rename failed", message: msg, variant: "warning" })
+      else alert(msg)
       return
     }
+    // duplicate check fixed
     setProjectFiles((prev) => {
       const entries = Object.entries(prev)
       const next: Record<string, string> = {}
@@ -211,7 +253,7 @@ export function useFileManager({ addLog, sprites, backdrop, setSprites, setSelec
       setActiveFile(newName)
     }
     addLog(`Renamed ${oldName} to ${newName}`, "success")
-  }, [projectFiles, activeFile, addLog])
+  }, [projectFiles, activeFile, addLog, openAlert])
 
   const handleOpenPythonFile = useCallback(() => {
     const input = document.createElement("input")
