@@ -61,6 +61,15 @@ export default function ImageClassifierPanel({ mode }: ImageClassifierPanelProps
     // Free canvas state — default 100% for readability
     const [zoom, setZoom] = useState(1)
     const [pan, setPan] = useState({ x: 32, y: 24 })
+
+    // Helper: context-aware wheel – dataset panel scroll vs canvas zoom
+    const isWheelOverDatasetPanel = useCallback((target: EventTarget | null) => {
+        const el = target as HTMLElement | null
+        if (!el) return false
+        const datasetEl = el.closest('[data-dataset-panel]') as HTMLElement | null
+        if (!datasetEl) return false
+        return datasetEl.scrollHeight > datasetEl.clientHeight
+    }, [])
     const [isPanning, setIsPanning] = useState(false)
     const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null)
     const pinchRef = useRef<{ startDist: number; startZoom: number; startPan: { x: number; y: number }; center: { x: number; y: number } } | null>(null)
@@ -585,6 +594,11 @@ export default function ImageClassifierPanel({ mode }: ImageClassifierPanelProps
     }
     const handleViewportMouseUp = () => { setIsPanning(false); panStartRef.current = null; if (draggingId) setDraggingId(null) }
     const handleWheel = (e: React.WheelEvent) => {
+        // Context-aware: if wheel is over dataset panel, let it scroll; don't zoom canvas
+        if (isWheelOverDatasetPanel(e.target)) {
+            e.stopPropagation()
+            return
+        }
         // Pinch on trackpad fires ctrlKey+wheel; we hijack it for canvas zoom
         // and prevent the browser's page-zoom. Regular wheel (no ctrl) also zooms canvas.
         e.preventDefault()
@@ -673,10 +687,19 @@ export default function ImageClassifierPanel({ mode }: ImageClassifierPanelProps
     }, [isPanning, draggingId, zoom, pan])
 
     // Prevent trackpad pinch from zooming the browser page — always zoom canvas instead
+    // But allow dataset panel to scroll when cursor is inside it
     useEffect(() => {
         const el = viewportRef.current
         if (!el) return
         const onWheelNative = (e: WheelEvent) => {
+            const target = e.target as HTMLElement | null
+            if (target?.closest('[data-dataset-panel]')) {
+                const datasetEl = target.closest('[data-dataset-panel]') as HTMLElement
+                if (datasetEl && datasetEl.scrollHeight > datasetEl.clientHeight) {
+                    // Let dataset panel handle wheel (scroll), don't prevent
+                    return
+                }
+            }
             // ctrlKey is true for trackpad pinch on macOS/Chrome
             if (e.ctrlKey || Math.abs(e.deltaY) > 0) {
                 e.preventDefault()
@@ -824,7 +847,7 @@ export default function ImageClassifierPanel({ mode }: ImageClassifierPanelProps
                                     >
                                         {cls.samples.length > 0 ? (
                                             <>
-                                                <div className={`grid grid-cols-4 gap-2 ${expandedClasses[cls.id] ? 'max-h-[360px] overflow-auto neura-scrollbar pr-1' : ''}`}>
+                                                <div data-dataset-panel className={`grid grid-cols-4 gap-2 ${expandedClasses[cls.id] ? 'max-h-[360px] overflow-auto neura-scrollbar pr-1' : ''}`}>
                                                     {(expandedClasses[cls.id] ? cls.samples : cls.samples.slice(0, 8)).map((s, idx) => (
                                                         <div key={s.id} onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); openImageViewer(cls.samples.map(x => ({ src: x.data, label: `${cls.name} — image ${cls.samples.indexOf(x) + 1}` })), cls.samples.indexOf(s)) }} title="Click to view (80% screen) • Hover for copy/delete" className={`relative aspect-square rounded-lg border border-slate-200 group/thumb cursor-zoom-in ${copyMenuFor === `${cls.id}-${s.id}` ? 'overflow-visible z-20' : 'overflow-hidden bg-slate-50'}`}>
                                                             <img src={s.data} alt="" className="w-full h-full object-cover pointer-events-none rounded-lg" draggable={false} />

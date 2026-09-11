@@ -55,6 +55,13 @@ export default function HandPoseClassifierPanel({ mode }: HandPoseClassifierPane
 
     const [zoom, setZoom] = useState(1)
     const [pan, setPan] = useState({ x: 32, y: 24 })
+    const isWheelOverDatasetPanel = useCallback((target: EventTarget | null) => {
+        const el = target as HTMLElement | null
+        if (!el) return false
+        const datasetEl = el.closest('[data-dataset-panel]') as HTMLElement | null
+        if (!datasetEl) return false
+        return datasetEl.scrollHeight > datasetEl.clientHeight
+    }, [])
     const [isPanning, setIsPanning] = useState(false)
     const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null)
     const pinchRef = useRef<{ startDist: number; startZoom: number; startPan: { x: number; y: number }; center: { x: number; y: number } } | null>(null)

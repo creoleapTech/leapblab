@@ -3,7 +3,7 @@
  * All rights reserved. Proprietary and confidential.
  * Unauthorized copying, distribution, or modification is strictly prohibited.
  */
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Play, Square, Trash2, Package, CornerDownLeft, Search, Copy, Check, X } from "lucide-react";
 import PipPanel from "../panels/PipPanel";
 
@@ -58,6 +58,34 @@ export default function TerminalPanel({
     const [contextMenu, setContextMenu] = useState(null);
     const searchInputRef = useRef(null);
     const terminalScrollRef = useRef(null);
+    const isDraggingRef = useRef(false);
+    const startYRef = useRef(0);
+    const startHeightRef = useRef(0);
+
+    const handleTerminalResizeStart = useCallback((e) => {
+        e.preventDefault();
+        isDraggingRef.current = true;
+        startYRef.current = e.clientY;
+        startHeightRef.current = terminalHeight;
+        document.body.style.cursor = 'row-resize';
+        document.body.style.userSelect = 'none';
+        const handleMove = (ev) => {
+            if (!isDraggingRef.current) return;
+            const delta = startYRef.current - ev.clientY;
+            const maxAllowed = Math.min(520, window.innerHeight - 200);
+            const newHeight = Math.min(Math.max(startHeightRef.current + delta, 120), maxAllowed);
+            setTerminalHeight(newHeight);
+        };
+        const handleUp = () => {
+            isDraggingRef.current = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            document.removeEventListener('mousemove', handleMove);
+            document.removeEventListener('mouseup', handleUp);
+        };
+        document.addEventListener('mousemove', handleMove);
+        document.addEventListener('mouseup', handleUp);
+    }, [terminalHeight]);
 
     const filteredOutput = searchQuery
         ? terminalOutput.filter((log) => log.text.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -125,8 +153,16 @@ export default function TerminalPanel({
     ];
 
     return (
-        <div className="flex flex-col border-t border-slate-200 bg-white shrink-0" style={{ height: terminalHeight }}>
-            <div className="flex bg-slate-100 border-b border-slate-200 h-8 items-center">
+        <div className="flex flex-col border-t border-violet-100/60 bg-gradient-to-b from-white to-slate-50/40 shrink-0 shadow-[0_-2px_12px_rgba(139,92,246,0.04)]" style={{ height: terminalHeight }}>
+            {/* Horizontal resizer — between editor & terminal — premium */}
+            <div
+                onMouseDown={handleTerminalResizeStart}
+                className="h-1.5 cursor-row-resize shrink-0 flex items-center justify-center bg-gradient-to-r from-slate-50 via-white to-violet-50/20 hover:from-violet-50 hover:via-indigo-50 hover:to-violet-50 border-b border-violet-100/50 transition-colors group"
+                title="Drag up or down to resize terminal"
+            >
+                <div className="w-8 h-1 rounded-full bg-gradient-to-r from-gray-300 via-gray-400 to-gray-300 group-hover:from-violet-400 group-hover:via-indigo-500 group-hover:to-violet-400 transition-colors shadow-sm" />
+            </div>
+            <div className="flex bg-gradient-to-r from-slate-50 via-white to-violet-50/20 border-b border-violet-100/50 h-8 items-center">
                 {tabs.map(({ id, label, icon }) => (
                     <button
                         key={id}
@@ -236,7 +272,7 @@ export default function TerminalPanel({
                     <div ref={terminalScrollRef} className="flex-1 overflow-y-auto py-2 px-3.5 font-mono text-xs leading-relaxed">
                         {terminalOutput.length === 0 ? (
                             <div className="text-emerald-500 italic">
-                                <div>// LeapBlocks Python Terminal</div>
+                                <div>// LeapLab Python Terminal</div>
                                 <div>// Click Run or Run All to execute</div>
                                 <div>// Open the REPL tab for interactive commands</div>
                             </div>
@@ -321,7 +357,7 @@ export default function TerminalPanel({
                             </div>
                         ) : (
                             <>
-                                <div className="text-slate-500">Python 3 — LeapBlocks Interactive Shell</div>
+                                <div className="text-slate-500">Python 3 — LeapLab Interactive Shell</div>
                                 <div className="text-slate-500 mb-2">Type Python code and press Enter. Use up/down arrows for history.</div>
                             </>
                         )}

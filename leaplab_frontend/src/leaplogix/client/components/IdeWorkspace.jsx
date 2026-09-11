@@ -16,30 +16,34 @@ export default function IdeWorkspace() {
     const ctx = useLogix();
 
     return (
-        <div className="flex-1 flex overflow-hidden min-h-0 bg-slate-900">
-            {/* Left Sidebar */}
-            <SidePanel
-                sidePanel={ctx.sidePanel} setSidePanel={ctx.setSidePanel}
-                projectFiles={ctx.projectFiles} activeFile={ctx.activeFile} setActiveFile={ctx.setActiveFile}
-                handleAddPythonFiles={() => { }} handleAddImageFiles={() => { }} handleAddTextFiles={() => { }} handleAddCsvFiles={() => { }}
-                handleDeleteFile={ctx.handleDeleteFile}
-                onAddNewFile={ctx.handleCreateNewFile} onAddNewTextFile={ctx.handleCreateNewTextFile} onRenameFile={ctx.handleRenameFile}
-                spriteFilter={ctx.spriteFilter} setSpriteFilter={ctx.setSpriteFilter}
-                addSpriteFromLibrary={ctx.addSpriteFromLibrary}
-                SPRITE_LIBRARY={ctx.getSpriteLibrary()} BACKDROP_LIBRARY={BACKDROP_LIBRARY}
-                backdrop={ctx.backdrop} handleSetBackdrop={(bd) => { ctx.setBackdropImg(bd.img || null); ctx.addLog('Backdrop: ' + bd.name, 'success'); }}
-                EXTENSIONS={ctx.EXTENSIONS} installedExtensions={ctx.installedExtensions}
-                installExtension={(ext) => {
-                    if (ctx.installedExtensions.find(e => e.id === ext.id)) { ctx.addLog(ext.name + ' already installed', 'info'); return; }
-                    ctx.setInstalledExtensions(prev => [...prev, ext]);
-                    ctx.setProjectFiles(prev => ({ ...prev, [ctx.activeFile]: (prev[ctx.activeFile] || '') + "\n" + ext.code + "\n" }));
-                    ctx.addLog('Extension added: ' + ext.name, 'success');
-                }}
-                packages={ctx.packages} pipFilter={ctx.pipFilter} setPipFilter={ctx.setPipFilter} handleInstall={ctx.handleInstall}
-            />
+        <div className="flex-1 flex overflow-hidden min-h-0 bg-gradient-to-br from-slate-900 via-[#0a0a1f] to-[#1e1b4b]">
+            {/* Left Sidebar — fixed wrapper, SidePanel fills it — premium light */}
+            <div className="w-60 shrink-0 flex flex-col overflow-hidden border-r border-violet-200/30 bg-gradient-to-b from-white via-[#fdfcff] to-[#f5f3ff] shadow-[2px_0_12px_rgba(0,0,0,0.08)]">
+                <SidePanel
+                    className="w-full h-full bg-white flex flex-col overflow-hidden"
+                    hideModules={true}
+                    sidePanel={ctx.sidePanel} setSidePanel={ctx.setSidePanel}
+                    projectFiles={ctx.projectFiles} activeFile={ctx.activeFile} setActiveFile={ctx.setActiveFile}
+                    handleAddPythonFiles={ctx.handleAddPythonFiles} handleAddImageFiles={ctx.handleAddImageFiles} handleAddTextFiles={ctx.handleAddTextFiles} handleAddCsvFiles={ctx.handleAddCsvFiles}
+                    handleDeleteFile={ctx.handleDeleteFile}
+                    onAddNewFile={ctx.handleCreateNewFile} onAddNewTextFile={ctx.handleCreateNewTextFile} onRenameFile={ctx.handleRenameFile}
+                    spriteFilter={ctx.spriteFilter} setSpriteFilter={ctx.setSpriteFilter}
+                    addSpriteFromLibrary={ctx.addSpriteFromLibrary}
+                    SPRITE_LIBRARY={ctx.getSpriteLibrary()} BACKDROP_LIBRARY={BACKDROP_LIBRARY}
+                    backdrop={ctx.backdrop} handleSetBackdrop={(bd) => { ctx.setBackdropImg(bd.img || null); ctx.addLog('Backdrop: ' + bd.name, 'success'); }}
+                    EXTENSIONS={ctx.EXTENSIONS} installedExtensions={ctx.installedExtensions}
+                    installExtension={(ext) => {
+                        if (ctx.installedExtensions.find(e => e.id === ext.id)) { ctx.addLog(ext.name + ' already installed', 'info'); return; }
+                        ctx.setInstalledExtensions(prev => [...prev, ext]);
+                        ctx.setProjectFiles(prev => ({ ...prev, [ctx.activeFile]: (prev[ctx.activeFile] || '') + "\n" + ext.code + "\n" }));
+                        ctx.addLog('Extension added: ' + ext.name, 'success');
+                    }}
+                    packages={ctx.packages} pipFilter={ctx.pipFilter} setPipFilter={ctx.setPipFilter} handleInstall={ctx.handleInstall}
+                />
+            </div>
 
-            {/* Center: Code Editor */}
-            <div className="flex-1 flex flex-col overflow-hidden border-r border-slate-800">
+            {/* Center: Code Editor — premium */}
+            <div className="flex-1 flex flex-col overflow-hidden border-r border-violet-900/20 bg-gradient-to-b from-white via-slate-50/30 to-violet-50/20 shadow-inner">
                 {Object.keys(ctx.projectFiles).length === 0 ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-4 font-mono">
                         <FileCode2 size={48} strokeWidth={1.2} className="opacity-40" />
@@ -64,8 +68,8 @@ export default function IdeWorkspace() {
                 )}
             </div>
 
-            {/* Right: Terminal / REPL */}
-            <div className="w-96 flex flex-col overflow-hidden shrink-0">
+            {/* Right: Terminal / REPL — premium dark */}
+            <div className="w-96 flex flex-col overflow-hidden shrink-0 bg-gradient-to-b from-slate-900 via-[#0f0a1f] to-[#1a1033] border-l border-violet-900/20 shadow-[-4px_0_16px_rgba(0,0,0,0.12)]">
                 <style>{`.ide-terminal-full > div:first-child { height: 100% !important; flex: 1 !important; }`}</style>
                 <div className="ide-terminal-full flex-1 flex flex-col overflow-hidden">
                     <TerminalPanel

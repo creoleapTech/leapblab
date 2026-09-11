@@ -583,7 +583,7 @@ export default function AnnotatePanel({ mode }: AnnotatePanelProps) {
             {/* Thumbnail strip */}
             {totalImages > 0 && (
                 <div className="px-5 shrink-0 mb-2">
-                    <div className="flex items-center gap-2 overflow-x-auto py-1.5 neura-scrollbar">
+                    <div data-dataset-panel className="flex items-center gap-2 overflow-x-auto py-1.5 neura-scrollbar">
                         {classSamples.map((sample, idx) => {
                             let hasBoxes = false
                             let thumbnail = ''
