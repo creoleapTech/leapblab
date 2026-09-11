@@ -14,7 +14,7 @@ import * as os from 'os';
 import { getPioPathIfAvailable, ensurePlatformIO, getBundledPioEnv, getBundledLibrariesSeedPath } from './ensurePlatformIO';
 import { runPio, platformEnsure, pkgInstallLibrary, pkgUninstallLibrary, PioResult, PioRunOptions } from './pio';
 import { fqbnToPioTarget, isEsp32Fqbn, PioBoardTarget } from './boardMap';
-import { createPioProject, getPioBuildDir, listPioBuildFiles, parseMissingHeaderFromError, HEADER_TO_LIBRARY, isBuiltinHeader } from './project';
+import { createPioProject, getPioBuildDir, listPioBuildFiles, parseMissingHeaderFromError, lookupLibraryForHeader, isBuiltinHeader } from './project';
 import { searchRegistry, RegistryLibrary } from './registry';
 import { flashHexViaStk500 } from './stk500';
 import { parseIntelHex } from '../../webflash/intelHex';
@@ -199,8 +199,20 @@ export class ArduinoUploader {
         const target = fqbnToPioTarget(fqbn);
         const libsFolder = this.getLibrariesPath();
 
+        // ESP32 preprocessing, centralised here so simulation AND USB upload
+        // share it (upload() calls this directly with raw user code).
+        // - Servo.h is AVR-only → ESP32Servo.h (same Servo class API).
+        // - LEDC v2 API (ledcSetup/ledcAttachPin) → v3 (core ≥ 3.x).
+        // Both rewrites are no-ops when their patterns are absent; AVR targets
+        // are untouched.
+        let buildCode = code;
+        if (isEsp32Fqbn(fqbn)) {
+            buildCode = buildCode.replace(/#include\s*[<"]Servo\.h[>"]/g, '#include <ESP32Servo.h>');
+            buildCode = migrateESP32LedcAPI(buildCode);
+        }
+
         // First attempt: createPioProject now auto-resolves #includes → lib_deps
-        createPioProject(projectDir, code, {
+        createPioProject(projectDir, buildCode, {
             board: target.board,
             platform: target.platform,
             libDirs: fs.existsSync(libsFolder) ? [libsFolder] : [],
@@ -240,7 +252,7 @@ export class ArduinoUploader {
             throw new Error(this.formatPioError(result));
         }
         if (missingHeader) {
-            const mappedLib = HEADER_TO_LIBRARY[missingHeader];
+            const mappedLib = lookupLibraryForHeader(missingHeader, isEsp32Fqbn(fqbn));
             if (!mappedLib) {
                 throw new Error(this.formatPioError(result));
             }
@@ -260,7 +272,7 @@ export class ArduinoUploader {
             const retryLibDeps = [...(!isEsp32Fqbn(fqbn) ? ['SoftwareSerial', 'Servo'] : []), mappedLib];
             // Ensure we don't duplicate if already present
             const uniqueDeps = [...new Set(retryLibDeps)];
-            createPioProject(projectDir, code, {
+            createPioProject(projectDir, buildCode, {
                 board: target.board,
                 platform: target.platform,
                 libDirs: fs.existsSync(libsFolder) ? [libsFolder] : [],

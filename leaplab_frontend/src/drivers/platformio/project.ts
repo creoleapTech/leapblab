@@ -65,7 +65,45 @@ export const HEADER_TO_LIBRARY: Record<string, string> = {
     'Keypad.h': 'Keypad',
     'OneWire.h': 'OneWire',
     'DallasTemperature.h': 'DallasTemperature',
+    // Verified installable via `pio pkg install` (owner-qualified where the
+    // bare name is ambiguous or missing from the registry).
+    'NewPing.h': 'teckel12/NewPing',
+    'Adafruit_FT6206.h': 'adafruit/Adafruit FT6206 Library',
+    'TFT_eSPI.h': 'bodmer/TFT_eSPI',
+    'XPT2046_Touchscreen.h': 'paulstoffregen/XPT2046_Touchscreen',
+    'U8g2lib.h': 'olikraus/U8g2',
+    'AccelStepper.h': 'waspinator/AccelStepper',
+    'MPU6050.h': 'electroniccats/MPU6050',
+    'Encoder.h': 'paulstoffregen/Encoder',
 };
+
+/**
+ * Headers that must only resolve to a registry library on AVR targets.
+ * - `SD.h` ships with the ESP32 Arduino core: adding a lib_dep there would
+ *   shadow the framework copy with an AVR-only library and break ESP32 builds.
+ * - `LiquidCrystal.h` (fmalpartida) / `SevSeg.h`: ESP32 support is unverified;
+ *   keep ESP32 behaviour unchanged (clean compiler error) while fixing AVR.
+ */
+export const AVR_ONLY_HEADER_TO_LIBRARY: Record<string, string> = {
+    'SD.h': 'arduino-libraries/SD',
+    'LiquidCrystal.h': 'fmalpartida/LiquidCrystal',
+    'SevSeg.h': 'deanisme/SevSeg',
+};
+
+/** Headers that must only resolve on ESP32 targets (ESP-specific libs). */
+export const ESP32_ONLY_HEADER_TO_LIBRARY: Record<string, string> = {
+    'DHTesp.h': 'beegee-tokyo/DHT sensor library for ESPx',
+};
+
+/**
+ * Target-aware header → library lookup. Centralises the AVR-only / ESP32-only
+ * guards so the initial resolve AND the missing-header retry agree.
+ */
+export function lookupLibraryForHeader(header: string, isESP32: boolean): string | undefined {
+    const base = header.split('/').pop()!.trim();
+    return HEADER_TO_LIBRARY[base]
+        ?? (isESP32 ? ESP32_ONLY_HEADER_TO_LIBRARY[base] : AVR_ONLY_HEADER_TO_LIBRARY[base]);
+}
 
 /**
  * Headers that ship with the Arduino-AVR / ESP32 Arduino cores and must NEVER
@@ -79,7 +117,10 @@ export const BUILTIN_HEADERS: ReadonlySet<string> = new Set([
     'Arduino.h', 'WProgram.h', 'pins_arduino.h', 'binary.h',
     'Client.h', 'Server.h', 'Udp.h', 'Stream.h', 'Printable.h', 'Print.h',
     'WString.h', 'HardwareSerial.h', 'IPAddress.h', 'String.h',
-    'SPI.h', 'Wire.h', 'EEPROM.h', 'SD.h', 'SoftwareSerial.h', 'Servo.h',
+    'SPI.h', 'Wire.h', 'EEPROM.h', 'SoftwareSerial.h', 'Servo.h',
+    // NOTE: `SD.h` is deliberately NOT here — it ships with the ESP32 core
+    // but NOT with the AVR framework (verified by build test), so AVR builds
+    // resolve it via AVR_ONLY_HEADER_TO_LIBRARY instead.
     // ESP32 Arduino core — networking / BT / BLE / HTTP / FS / system
     'BluetoothSerial.h',
     'WiFi.h', 'WiFiClient.h', 'WiFiClientSecure.h', 'WiFiUdp.h', 'WiFiAP.h',
@@ -263,7 +304,7 @@ export function resolveLibDepsFromCode(code: string, opts: PioProjectOptions): s
         // BluetoothSerial→mbed / WiFi→external-WiFi breakage on AVR).
         if (isBuiltinHeader(header)) continue;
         if (headerExistsInLibDirs(header, libDirs)) continue;
-        const mapped = HEADER_TO_LIBRARY[header];
+        const mapped = lookupLibraryForHeader(header, isESP32);
         // Unknown headers: do NOT guess `header minus .h` — that is what turned
         // BluetoothSerial.h into the mbed-only "BluetoothSerial" registry lib.
         // Only auto-add headers we have an explicit mapping for; anything else

@@ -18,7 +18,7 @@ import {
   pkgUninstallLibrary,
 } from '../../drivers/platformio/pio.js';
 import { fqbnToPioTarget, isEsp32Fqbn } from '../../drivers/platformio/boardMap.js';
-import { createPioProject, getPioBuildDir, listPioBuildFiles, parseMissingHeaderFromError, HEADER_TO_LIBRARY, isBuiltinHeader } from '../../drivers/platformio/project.js';
+import { createPioProject, getPioBuildDir, listPioBuildFiles, parseMissingHeaderFromError, lookupLibraryForHeader, isBuiltinHeader } from '../../drivers/platformio/project.js';
 import { searchRegistry } from '../../drivers/platformio/registry.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -146,7 +146,13 @@ app.post('/compile', async (req, res) => {
       } catch (e) { }
     }
 
-    createPioProject(projectDir, code, {
+    // ESP32 has no Servo.h (AVR-only API) — the compatible fork is ESP32Servo,
+    // which keeps the same Servo class API. Mirrors server/server.ts.
+    const processedCode = isEsp32Fqbn(board)
+      ? code.replace(/#include\s*[<"]Servo\.h[>"]/g, '#include <ESP32Servo.h>')
+      : code;
+
+    createPioProject(projectDir, processedCode, {
       board: target.board,
       platform: target.platform,
       libDirs: FORGE_LIB_LIBRARIES ? [FORGE_LIB_LIBRARIES] : [],
@@ -160,7 +166,7 @@ app.post('/compile', async (req, res) => {
       if (missing && isBuiltinHeader(missing)) {
         console.error(`[SERVER] Missing core header ${missing} — not installing a registry lib`);
       } else if (missing) {
-        const libName = HEADER_TO_LIBRARY[missing];
+        const libName = lookupLibraryForHeader(missing, isEsp32Fqbn(board));
         if (libName) {
         console.warn(`[SERVER] Missing header ${missing} → trying library "${libName}"`);
         try {
@@ -168,7 +174,7 @@ app.post('/compile', async (req, res) => {
         } catch (e) { console.warn(`[SERVER] auto-install "${libName}" failed (will retry via lib_deps anyway)`); }
         const baseDeps: string[] = !isEsp32Fqbn(board) ? ['SoftwareSerial', 'Servo'] : [];
         const retryDeps = [...new Set([...baseDeps, libName])];
-        createPioProject(projectDir, code, {
+        createPioProject(projectDir, processedCode, {
           board: target.board,
           platform: target.platform,
           libDirs: FORGE_LIB_LIBRARIES ? [FORGE_LIB_LIBRARIES] : [],
@@ -224,7 +230,12 @@ app.post('/transpile', async (req, res) => {
       } catch (e: any) {
         return res.json({ success: false, errors: [e.message] });
       }
-      createPioProject(projectDir, code, {
+      // ESP32 has no Servo.h — validate the migrated sketch (transpile output
+      // still uses the original code; the transpiler strips #includes anyway).
+      const validationCode = isEsp32Fqbn(board)
+        ? code.replace(/#include\s*[<"]Servo\.h[>"]/g, '#include <ESP32Servo.h>')
+        : code;
+      createPioProject(projectDir, validationCode, {
         board: target.board,
         platform: target.platform,
         libDirs: FORGE_LIB_LIBRARIES ? [FORGE_LIB_LIBRARIES] : [],

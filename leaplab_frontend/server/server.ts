@@ -206,14 +206,51 @@ const HEADER_TO_LIB: Record<string, string> = {
   'Keypad.h': 'Keypad',
   'OneWire.h': 'OneWire',
   'DallasTemperature.h': 'DallasTemperature',
+  // Verified installable via `pio pkg install` (owner-qualified where the
+  // bare name is ambiguous or missing from the registry).
+  'NewPing.h': 'teckel12/NewPing',
+  'Adafruit_FT6206.h': 'adafruit/Adafruit FT6206 Library',
+  'TFT_eSPI.h': 'bodmer/TFT_eSPI',
+  'XPT2046_Touchscreen.h': 'paulstoffregen/XPT2046_Touchscreen',
+  'U8g2lib.h': 'olikraus/U8g2',
+  'AccelStepper.h': 'waspinator/AccelStepper',
+  'MPU6050.h': 'electroniccats/MPU6050',
+  'Encoder.h': 'paulstoffregen/Encoder',
 };
+
+// Headers that must only resolve to a registry library on AVR targets.
+// - `SD.h` ships with the ESP32 Arduino core: adding a lib_dep there would
+//   shadow the framework copy with an AVR-only library and break ESP32 builds.
+// - `LiquidCrystal.h` (fmalpartida) / `SevSeg.h`: ESP32 support is unverified;
+//   keep ESP32 behaviour unchanged (clean compiler error) while fixing AVR.
+const AVR_ONLY_HEADER_TO_LIB: Record<string, string> = {
+  'SD.h': 'arduino-libraries/SD',
+  'LiquidCrystal.h': 'fmalpartida/LiquidCrystal',
+  'SevSeg.h': 'deanisme/SevSeg',
+};
+
+// Headers that must only resolve on ESP32 targets (ESP-specific libs).
+const ESP32_ONLY_HEADER_TO_LIB: Record<string, string> = {
+  'DHTesp.h': 'beegee-tokyo/DHT sensor library for ESPx',
+};
+
+// Target-aware header → library lookup. Used by both the initial resolve AND
+// the missing-header retry so the two paths always agree.
+function lookupLibraryForHeaderLocal(header: string, isESP32: boolean): string | undefined {
+  const base = header.split('/').pop()!.trim();
+  return HEADER_TO_LIB[base]
+    ?? (isESP32 ? ESP32_ONLY_HEADER_TO_LIB[base] : AVR_ONLY_HEADER_TO_LIB[base]);
+}
 
 // Framework headers that must NEVER become lib_deps. See project.ts for rationale.
 const BUILTIN_HEADERS_LOCAL: ReadonlySet<string> = new Set([
   'Arduino.h', 'WProgram.h', 'pins_arduino.h', 'binary.h',
   'Client.h', 'Server.h', 'Udp.h', 'Stream.h', 'Printable.h', 'Print.h',
   'WString.h', 'HardwareSerial.h', 'IPAddress.h', 'String.h',
-  'SPI.h', 'Wire.h', 'EEPROM.h', 'SD.h', 'SoftwareSerial.h', 'Servo.h',
+  'SPI.h', 'Wire.h', 'EEPROM.h', 'SoftwareSerial.h', 'Servo.h',
+  // NOTE: `SD.h` is deliberately NOT here — it ships with the ESP32 core
+  // but NOT with the AVR framework (verified by build test), so AVR builds
+  // resolve it via AVR_ONLY_HEADER_TO_LIB instead.
   'BluetoothSerial.h',
   'WiFi.h', 'WiFiClient.h', 'WiFiClientSecure.h', 'WiFiUdp.h', 'WiFiAP.h',
   'WiFiGeneric.h', 'WiFiMulti.h', 'WiFiScan.h', 'WiFiServer.h', 'WiFiSTA.h', 'ETH.h',
@@ -339,10 +376,11 @@ function resolveLibDepsLocal(code: string, opts: { libDirs?: string[]; libDeps?:
   const lower = new Set(base.map(b => b.toLowerCase()));
   const headers = extractIncludesLocal(code, opts.isESP32 === undefined ? undefined : { isESP32: opts.isESP32 });
   const libDirs = opts.libDirs || [];
+  const isESP32 = opts.isESP32 === true;
   for (const h of headers) {
     if (isBuiltinHeaderLocal(h)) continue;
     if (headerExistsLocal(h, libDirs)) continue;
-    const mapped = HEADER_TO_LIB[h];
+    const mapped = lookupLibraryForHeaderLocal(h, isESP32);
     // Unknown headers: never guess `header minus .h` (that is what turned the
     // ESP32-core BluetoothSerial.h into the mbed-only registry lib).
     if (!mapped) continue;
@@ -984,7 +1022,7 @@ app.post('/compile', async (req: Request, res: Response) => {
           console.error(`[COMPILE:${reqId}] ❌ Missing core header ${missing} — not installing a registry lib (it ships with the platform)`);
         }
         if (missing && !isBuiltinHeaderLocal(missing)) {
-          const libName = HEADER_TO_LIB[missing];
+          const libName = lookupLibraryForHeaderLocal(missing, isESP32);
           // No explicit mapping → do NOT guess (prevents BluetoothSerial→mbed etc).
           if (!libName) {
             console.error(`[COMPILE:${reqId}] ❌ Missing header ${missing} has no known library mapping — not retrying`);
@@ -1150,13 +1188,44 @@ app.post('/compile/esp32', async (req: Request, res: Response) => {
 
       console.log(`[COMPILE-ESP32:${reqId}] 🔨 Running PlatformIO ESP32 build in ${projectDir}...`);
       const pioStartTime = Date.now();
-      const { stdout, stderr, code: exitCode } = await runCLI(['run', '-d', projectDir, '-j', '2'], 1_800_000);
+      const first = await runCLI(['run', '-d', projectDir, '-j', '2'], 1_800_000);
+      let espStdout = first.stdout, espStderr = first.stderr, espExit = first.code;
+      // Missing-header retry (same policy as /compile): a resolvable library
+      // must never hard-fail an ESP32 build. Success path is untouched.
+      if (espExit !== 0) {
+        const combined = (espStderr || '') + '\n' + (espStdout || '');
+        const missing = parseMissingHeaderLocal(combined);
+        if (missing && isBuiltinHeaderLocal(missing)) {
+          console.error(`[COMPILE-ESP32:${reqId}] ❌ Missing core header ${missing} — not installing a registry lib`);
+        } else if (missing) {
+          const libName = lookupLibraryForHeaderLocal(missing, true);
+          if (!libName) {
+            console.error(`[COMPILE-ESP32:${reqId}] ❌ Missing header ${missing} has no known library mapping — not retrying`);
+          } else {
+            console.warn(`[COMPILE-ESP32:${reqId}] Missing header ${missing} → trying library "${libName}"`);
+            try {
+              if (FORGE_LIB_LIBRARIES) {
+                await runCLI(['pkg', 'install', '--library', libName, '--storage-dir', FORGE_LIB_LIBRARIES], 120_000);
+              } else {
+                await runCLI(['pkg', 'install', '--library', libName], 120_000);
+              }
+            } catch {}
+            createPioProject(projectDir, processedCode, target, {
+              libDirs: FORGE_LIB_LIBRARIES ? [FORGE_LIB_LIBRARIES] : [],
+              libDeps: [libName],
+            });
+            console.log(`[COMPILE-ESP32:${reqId}] Retrying build with "${libName}"...`);
+            const retry = await runCLI(['run', '-d', projectDir, '-j', '2'], 1_800_000);
+            espStdout = retry.stdout; espStderr = retry.stderr; espExit = retry.code;
+          }
+        }
+      }
       const pioDuration = ((Date.now() - pioStartTime) / 1000).toFixed(2);
 
-      if (exitCode !== 0) {
-        console.error(`[COMPILE-ESP32:${reqId}] ❌ ESP32 compile FAILED (exit ${exitCode}) in ${pioDuration}s`);
-        console.error(`[COMPILE-ESP32:${reqId}] stderr:`, (stderr || '').slice(-3000));
-        return res.json({ success: false, errors: formatPioError({ stdout, stderr, code: exitCode }) });
+      if (espExit !== 0) {
+        console.error(`[COMPILE-ESP32:${reqId}] ❌ ESP32 compile FAILED (exit ${espExit}) in ${pioDuration}s`);
+        console.error(`[COMPILE-ESP32:${reqId}] stderr:`, (espStderr || '').slice(-3000));
+        return res.json({ success: false, errors: formatPioError({ stdout: espStdout, stderr: espStderr, code: espExit }) });
       }
 
       console.log(`[COMPILE-ESP32:${reqId}] ✓ PlatformIO ESP32 build succeeded in ${pioDuration}s`);
