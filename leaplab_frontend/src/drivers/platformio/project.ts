@@ -51,8 +51,8 @@ export const HEADER_TO_LIBRARY: Record<string, string> = {
     'Adafruit_Sensor.h': 'Adafruit Unified Sensor',
     'DHT.h': 'DHT sensor library',
     'DHT_U.h': 'DHT sensor library',
-    'HX711.h': 'HX711 Arduino Library',
-    'LiquidCrystal_I2C.h': 'LiquidCrystal I2C',
+    'HX711.h': 'bogde/HX711',
+    'LiquidCrystal_I2C.h': 'marcoschwartz/LiquidCrystal_I2C',
     // Common community libs (not bundled but auto-resolved via lib_deps)
     'PubSubClient.h': 'PubSubClient',
     'ArduinoJson.h': 'ArduinoJson',

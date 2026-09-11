@@ -25,7 +25,7 @@ RUN mkdir -p /app/forge-lib/libraries && \
     pio pkg install --library "Adafruit SSD1306" --storage-dir /app/forge-lib/libraries && \
     pio pkg install --library "Adafruit GFX Library" --storage-dir /app/forge-lib/libraries && \
     pio pkg install --library "Adafruit BusIO" --storage-dir /app/forge-lib/libraries && \
-    pio pkg install --library "LiquidCrystal I2C" --storage-dir /app/forge-lib/libraries && \
+    pio pkg install --library "marcoschwartz/LiquidCrystal_I2C" --storage-dir /app/forge-lib/libraries && \
     pio pkg install --library "DHT sensor library" --storage-dir /app/forge-lib/libraries && \
     pio pkg install --library "Servo" --storage-dir /app/forge-lib/libraries && \
     pio pkg install --library "ESP32Servo" --storage-dir /app/forge-lib/libraries && \
