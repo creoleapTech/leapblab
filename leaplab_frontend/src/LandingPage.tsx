@@ -174,41 +174,51 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
         </div>
       )}
 
-      <div className="font-sans bg-[#F8FAFC] bg-[radial-gradient(rgba(99,102,241,0.05)_1.5px,transparent_1.5px)] bg-[size:30px_30px] text-[#0F172A] min-h-screen flex flex-col relative">
-
-        <div className="absolute z-0 blur-[40px] opacity-40 animate-float-slow w-[300px] h-[300px] bg-[#BEF264] top-[10%] left-[-5%]"></div>
-        <div className="absolute z-0 blur-[40px] opacity-40 animate-float-slow w-[400px] h-[400px] bg-[linear-gradient(135deg,#4e42c0_0%,#1a24af_100%)] top-[40%] right-[-10%] [animation-delay:-2s]"></div>
-        <div className="absolute z-0 blur-[40px] opacity-40 animate-float-slow w-[250px] h-[250px] bg-[#F472B6] bottom-[10%] left-[20%] [animation-delay:-5s]"></div>
-
-        <div className="fixed top-0 right-0 w-full max-w-[1200px] h-screen pointer-events-none z-0 overflow-hidden opacity-30 lg:w-[60%] lg:opacity-60">
-          <svg viewBox="0 0 820 920" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full opacity-50">
-            <circle cx="690" cy="72" r="54" fill="rgba(200,210,240,0.6)" stroke="rgba(90,110,180,0.2)" strokeWidth="1.5" />
-            <circle cx="690" cy="72" r="42" fill="rgba(210,220,245,0.5)" />
-            <circle cx="690" cy="72" r="26" fill="rgba(220,230,250,0.4)" />
-            <circle cx="584" cy="198" r="40" fill="rgba(195,205,235,0.55)" stroke="rgba(88,108,175,0.18)" strokeWidth="1.5" />
-            <circle cx="584" cy="198" r="30" fill="rgba(205,215,240,0.45)" />
-            <circle cx="770" cy="285" r="32" fill="rgba(195,205,235,0.5)" stroke="rgba(88,108,175,0.16)" strokeWidth="1.5" />
-            <circle cx="770" cy="285" r="22" fill="rgba(205,215,240,0.4)" />
-            <circle cx="494" cy="118" r="24" fill="rgba(195,205,235,0.45)" stroke="rgba(88,108,175,0.14)" strokeWidth="1" />
-            <circle cx="494" cy="118" r="16" fill="rgba(205,215,240,0.35)" />
-            <circle cx="724" cy="430" r="28" fill="rgba(195,205,235,0.45)" stroke="rgba(88,108,175,0.14)" strokeWidth="1" />
-            <circle cx="620" cy="378" r="18" fill="rgba(195,205,235,0.35)" />
-            <circle cx="534" cy="318" r="14" fill="rgba(195,205,235,0.3)" />
-            <circle cx="450" cy="262" r="9" fill="rgba(195,205,235,0.25)" />
-            <line x1="690" y1="72" x2="584" y2="198" stroke="rgba(100,120,200,0.2)" strokeWidth="1.2" />
-            <line x1="690" y1="72" x2="770" y2="285" stroke="rgba(100,120,200,0.18)" strokeWidth="1.2" />
-            <line x1="584" y1="198" x2="494" y2="118" stroke="rgba(100,120,200,0.16)" strokeWidth="1" />
-            <line x1="584" y1="198" x2="534" y2="318" stroke="rgba(100,120,200,0.14)" strokeWidth="1" />
-            <line x1="770" y1="285" x2="724" y2="430" stroke="rgba(100,120,200,0.12)" strokeWidth="1" />
-            <line x1="534" y1="318" x2="620" y2="378" stroke="rgba(100,120,200,0.12)" strokeWidth="1" />
-            <line x1="620" y1="378" x2="724" y2="430" stroke="rgba(100,120,200,0.1)" strokeWidth="1" />
-            <line x1="494" y1="118" x2="450" y2="262" stroke="rgba(100,120,200,0.1)" strokeWidth="1" />
-            <circle cx="666" cy="338" r="4" fill="rgba(100,120,200,0.25)" />
-            <circle cx="786" cy="158" r="5" fill="rgba(100,120,200,0.2)" />
-            <circle cx="506" cy="444" r="4" fill="rgba(100,120,200,0.18)" />
-            <circle cx="700" cy="518" r="5" fill="rgba(100,120,200,0.15)" />
-            <circle cx="440" cy="168" r="3" fill="rgba(100,120,200,0.16)" />
+      <div className="font-sans bg-[#f0f4ff] text-[#0F172A] min-h-screen flex flex-col relative">
+        {/* Image 1 – PREMIUM – dark gradients with light green/pink/blue – VISIBLE */}
+        <div className="absolute inset-0 -z-10 pointer-events-none overflow-hidden">
+          {/* Base premium tint – not white */}
+          <div className="absolute inset-0 bg-gradient-to-br from-[#e8f0ff] via-[#f2f5ff] to-[#fdf2f8]" />
+          <div className="absolute inset-0 opacity-[0.85]" style={{ background: `radial-gradient(ellipse 900px 600px at 0% 0%, rgba(167,243,208,0.38) 0%, transparent 60%), radial-gradient(ellipse 900px 520px at 50% 0%, rgba(191,219,254,0.45) 0%, transparent 65%), radial-gradient(ellipse 750px 420px at 92% 6%, rgba(221,214,254,0.38) 0%, transparent 62%)` }} />
+          {/* Exact uploaded image – enhanced */}
+          <img src="/assets/landing-bg.png" alt="" className="absolute inset-0 w-full h-full object-cover object-top" style={{ objectPosition: 'center top', filter: 'saturate(1.25) contrast(1.08)', opacity: 0.88 }} onError={(e) => { const t=e.currentTarget as HTMLImageElement; if(t.src.includes('.png')) t.src='/assets/landing-bg.svg'; else t.style.display='none'; }} />
+          {/* Dark premium blobs – clearly visible */}
+          <div className="absolute top-[5%] right-[7%] w-[620px] h-[460px] bg-gradient-to-br from-[#1e3a8a] via-[#2563eb] to-[#60a5fa] rounded-[42%_58%_68%_32%/42%_42%_58%_58%] opacity-[0.82] border border-white/20 shadow-[0_16px_48px_rgba(30,58,138,0.30)]" style={{ maxWidth: '52vw' }}>
+            <div className="absolute inset-[14%] bg-gradient-to-br from-[#dbeafe]/85 to-white/60 rounded-[inherit] blur-[14px]" />
+          </div>
+          <div className="absolute top-[4%] right-[10%] w-[520px] h-[380px] bg-gradient-to-br from-[#4c1d95] via-[#7c3aed] to-[#a78bfa] rounded-[58%_42%_32%_68%/58%_32%_68%_42%] opacity-[0.78] border border-white/15 shadow-[0_12px_36px_rgba(124,58,237,0.28)]" style={{ maxWidth: '44vw' }}>
+            <div className="absolute inset-[16%] bg-gradient-to-br from-[#ede9fe]/80 to-white/55 rounded-[inherit] blur-[12px]" />
+          </div>
+          <div className="absolute top-[11%] right-[25%] w-[150px] h-[88px] bg-gradient-to-br from-[#831843] via-[#be185d] to-[#f9a8d4] rounded-full opacity-[0.88] rotate-12 shadow-[0_10px_28px_rgba(190,24,93,0.32)] border border-white/20">
+            <div className="absolute inset-[18%] bg-gradient-to-br from-[#fce7f3]/75 to-white/55 rounded-full blur-[6px]" />
+          </div>
+          <div className="absolute top-[8%] right-[36%] w-[112px] h-[66px] bg-gradient-to-br from-[#064e3b] via-[#059669] to-[#6ee7b7] rounded-full opacity-[0.84] -rotate-12 border border-white/15 shadow-[0_8px_20px_rgba(5,150,105,0.28)]">
+            <div className="absolute inset-[20%] bg-gradient-to-br from-[#d1fae5]/70 to-white/45 rounded-full blur-[5px]" />
+          </div>
+          <div className="absolute bottom-[15%] right-[4.5%] w-[86px] h-[128px] bg-gradient-to-br from-[#1e40af] via-[#3b82f6] to-[#93c5fd] rounded-full opacity-[0.82] rotate-12 border border-white/20 shadow-[0_10px_24px_rgba(30,64,175,0.28)]" />
+          <div className="absolute bottom-[11%] right-[0.9%] w-[54px] h-[54px] bg-gradient-to-br from-[#be185d] to-[#f472b6] rounded-full opacity-[0.78] border border-white/20" />
+          {/* Bottom dark waves – premium */}
+          <svg className="absolute bottom-0 left-0 w-full h-[185px]" viewBox="0 0 1440 185" preserveAspectRatio="none" fill="none" aria-hidden>
+            <defs>
+              <linearGradient id="waveDarkBlue" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#1e3a8a" stopOpacity="0.92"/>
+                <stop offset="50%" stopColor="#2563eb" stopOpacity="0.88"/>
+                <stop offset="100%" stopColor="#60a5fa" stopOpacity="0.88"/>
+              </linearGradient>
+              <linearGradient id="waveDarkGreen" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#064e3b" stopOpacity="0.88"/>
+                <stop offset="100%" stopColor="#10b981" stopOpacity="0.82"/>
+              </linearGradient>
+              <linearGradient id="waveDarkPink" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#831843" stopOpacity="0.86"/>
+                <stop offset="100%" stopColor="#f9a8d4" stopOpacity="0.8"/>
+              </linearGradient>
+            </defs>
+            <path d="M -40 80 C 140 44 300 84 520 68 C 740 46 940 88 1160 60 C 1300 42 1380 66 1480 52 L 1480 185 L -40 185 Z" fill="url(#waveDarkBlue)"/>
+            <path d="M -40 108 C 160 72 300 114 520 92 C 740 70 940 118 1160 88 C 1300 70 1380 92 1480 80 L 1480 185 L -40 185 Z" fill="url(#waveDarkGreen)" opacity="0.92"/>
+            <path d="M -20 138 C 180 110 360 144 640 122 C 880 98 1100 144 1420 112 L 1420 185 L -20 185 Z" fill="url(#waveDarkPink)" opacity="0.88"/>
           </svg>
+          <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: `radial-gradient(rgba(99,102,241,1) 1.4px, transparent 1.4px)`, backgroundSize: '30px 30px' }} />
         </div>
 
         {/* TOPBAR */}
@@ -324,9 +334,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
               <div className="grid grid-cols-[1.1fr_0.9fr] items-center w-full max-w-[1600px] mx-auto py-4 px-10 gap-10 flex-none min-h-[clamp(240px,38vh,520px)] max-[1024px]:grid-cols-1 max-[1024px]:text-center max-[1024px]:gap-6 max-[1024px]:p-6 max-[1024px]:min-h-0 max-[1024px]:flex-none max-[640px]:py-[30px] max-[640px]:px-4 max-[640px]:gap-[30px] max-[480px]:py-5 max-[480px]:px-3 max-[480px]:gap-5">
                 <div className="max-[1024px]:flex max-[1024px]:flex-col max-[1024px]:items-center">
                   <div className="inline-block text-[10px] font-extrabold text-black uppercase tracking-[0.25em] mb-2 px-3 py-1 bg-[#BEF264] border-2 border-black shadow-[2px_2px_0px_#000] -rotate-1 max-[480px]:text-[10px] max-[480px]:px-2.5 max-[480px]:py-1 max-[480px]:mb-2 animate-hero-reveal">Curiosity - Creativity - Critical Thinking</div>
-                  <h1 className="headline text-[clamp(2.1rem,3.4vw,4.2rem)] font-[900] leading-[1.05] tracking-[-0.05em] mb-2.5 text-[#0a0a18] font-['Poppins','Inter',sans-serif] max-[640px]:text-[2.6rem] max-[480px]:text-[2.1rem] animate-hero-reveal [animation-delay:0.1s] [text-shadow:0_1px_0_rgba(0,0,0,0.02)]">
-                    <span className="font-[900] tracking-[-0.05em]">Learn to</span> <span className="code bg-gradient-to-r from-[#3B5BFF] to-[#7A3FF2] bg-clip-text text-transparent tracking-[-0.03em] font-[900]">code</span> <br />
-                    <span className="font-[900] tracking-[-0.05em]">the</span> <span className="bold italic font-[900] bg-gradient-to-r from-[#8B3FF2] to-[#E63FA0] bg-clip-text text-transparent tracking-[-0.02em] px-1">bold</span> <span className="relative inline-block font-[900] tracking-[-0.05em]">way<span className="absolute -top-2 -right-6 flex items-center gap-1"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="drop-shadow-sm"><path d="M7 4 L12 9 L7 14" stroke="#E63FA0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/><path d="M11 4 L16 9 L11 14" stroke="#E63FA0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" opacity="0.7"/></svg><span className="flex flex-col gap-1 ml-0.5"><span className="block h-1 w-1 rounded-full bg-[#E63FA0]"></span><span className="block h-1 w-1 rounded-full bg-[#8B3FF2] opacity-60"></span></span></span></span>
+                  <h1 className="headline text-[clamp(2.2rem,3.8vw,3.9rem)] font-black leading-[1.12] tracking-[-0.04em] mb-3 text-[#0a0a18] font-['Poppins','Inter',sans-serif] max-[640px]:text-[2.6rem] max-[480px]:text-[2.2rem] animate-hero-reveal [animation-delay:0.1s] overflow-visible pr-2 pb-1">
+                    <span className="font-black tracking-[-0.04em]">Learn to</span> <span className="bg-gradient-to-r from-[#3B5BFF] to-[#7A3FF2] bg-clip-text text-transparent font-black tracking-[-0.02em]">code</span><span className="bg-gradient-to-r from-[#7A3FF2] to-[#E63FA0] bg-clip-text text-transparent font-black tracking-[-0.04em] ml-[0.06em]">»:</span>
+                    <br />
+                    <span className="font-black tracking-[-0.04em]">the</span> <span className="font-black italic bg-gradient-to-r from-[#7A18FF] to-[#E63FA0] bg-clip-text text-transparent tracking-[-0.02em] pl-1 pr-4 mr-1 inline-block overflow-visible" style={{ paddingRight: '0.22em', marginRight: '0.08em' }}>bold</span> <span className="font-black tracking-[-0.04em]">way</span>
                   </h1>
                   <p className="text-[clamp(0.9rem,1.5vw,1.1rem)] text-slate-600 font-normal leading-[1.6] max-w-[600px] mb-3.5 relative z-10 max-[1024px]:mx-auto max-[1024px]:max-w-[90%] max-[640px]:text-md max-[640px]:max-w-full max-[640px]:p-0 max-[480px]:text-[0.9rem] max-[480px]:leading-[1.4] max-[480px]:mb-4 animate-hero-reveal [animation-delay:0.2s]">
                     Eight unique tracks from junior picture-blocks all the way to AI,
@@ -334,7 +345,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
                   </p>
                   <div className="flex gap-4 flex-wrap max-[1024px]:justify-center max-[1024px]:w-full max-[1024px]:gap-4 max-[640px]:gap-3 max-[640px]:flex-col animate-hero-reveal [animation-delay:0.3s]">
                     <button
-                      className="bg-[#100051] border-none text-white text-[0.95rem] font-semibold cursor-pointer font-inherit py-4 px-8 rounded-xl transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] shadow-[0_8px_12px_-3px_rgba(99,102,241,0.3)] hover:bg-[#4F46E5] hover:scale-[1.05] hover:rotate-2 hover:shadow-[0_16px_20px_-5px_rgba(99,102,241,0.4)] max-[640px]:w-full max-[640px]:py-3.5 max-[640px]:px-5 max-[640px]:text-md max-[480px]:py-3 max-[480px]:px-4 max-[480px]:text-[0.9rem]"
+                      className="bg-gradient-to-r from-[#4F46E5] via-[#6366F1] to-[#7A3FF2] border-none text-white text-[0.95rem] font-bold cursor-pointer font-inherit py-4 px-8 rounded-full transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] shadow-[0_8px_20px_rgba(79,70,229,0.28),0_4px_12px_rgba(99,102,241,0.18)] hover:from-[#4338CA] hover:via-[#4F46E5] hover:to-[#6366F1] hover:scale-[1.02] hover:shadow-[0_12px_28px_rgba(79,70,229,0.35)] active:scale-[0.98] max-[640px]:w-full max-[640px]:py-3.5 max-[640px]:px-6 max-[640px]:text-md max-[480px]:py-3.5 max-[480px]:px-5 max-[480px]:text-[0.9rem]"
                       onClick={() => {
                         if (highlightCards) {
                           stopCardScan();
@@ -346,7 +357,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
                     >
                       Choose your adventure
                     </button>
-                    <button className="bg-white border-2 border-black text-[#0F172A] text-[0.95rem] font-bold cursor-pointer font-inherit py-4 px-8 rounded-xl transition-all duration-200 shadow-[3px_3px_0px_#000] hover:bg-[#F8FAFC] hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[5px_5px_0px_#000] max-[640px]:w-full max-[640px]:py-3.5 max-[640px]:px-5 max-[640px]:text-md max-[480px]:py-3 max-[480px]:px-4 max-[480px]:text-[0.9rem]" onClick={() => (window as any).showComingSoon('Demo Video')}>Watch 2-min demo</button>
+                    <button className="bg-white border border-[#E0E7FF] text-[#1e1b4b] text-[0.95rem] font-bold cursor-pointer font-inherit py-3.5 px-7 pr-8 rounded-full inline-flex items-center gap-3 transition-all duration-200 shadow-[0_4px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)] hover:bg-[#f8faff] hover:border-[#C7D2FE] hover:shadow-[0_8px_20px_rgba(99,102,241,0.10)] hover:scale-[1.02] active:scale-[0.98] max-[640px]:w-full max-[640px]:justify-center max-[640px]:py-3.5 max-[640px]:px-6 max-[480px]:py-3.5 max-[480px]:px-5" onClick={() => (window as any).showComingSoon('Demo Video')}>
+                      <span className="w-8 h-8 rounded-full bg-gradient-to-br from-[#3B5BFF] via-[#4F46E5] to-[#7A3FF2] flex items-center justify-center text-white shadow-[0_2px_8px_rgba(79,70,229,0.30)] shrink-0">
+                        <svg width="13" height="13" viewBox="0 0 14 14" fill="white" className="ml-[1.5px]"><path d="M3.5 2.2 L11.5 7 L3.5 11.8 Z" /></svg>
+                      </span>
+                      Watch 2-min demo
+                    </button>
                   </div>
                 </div>
 
