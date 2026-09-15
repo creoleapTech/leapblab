@@ -106,10 +106,18 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
         if (!mode.project) return
         if (isSaving) return
         setIsSaving(true)
-        showToast('Saving project...', 'info', 30000)
+        if (isCurriculumCopy) {
+            showToast('Saving your copy of the curriculum…', 'info', 30000)
+        } else {
+            showToast('Saving project...', 'info', 30000)
+        }
         try {
             await fileService.saveProject(mode.project.name, 'neura', mode.project)
-            showToast('Project saved successfully!', 'success')
+            if (isCurriculumCopy) {
+                showToast(`Saved as your copy "${mode.project.name}" – original curriculum protected ✓`, 'success')
+            } else {
+                showToast('Project saved successfully!', 'success')
+            }
         } catch (e: any) {
             console.error('[Neura] Save failed', e)
             showToast(e?.message || 'Failed to save project.', 'error')
@@ -147,6 +155,7 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
     }, [mode.project])
 
     const hasUnsavedWork = mode.project && mode.project.classes.length > 0
+    const isCurriculumCopy = !!(mode.project as any)?.isCurriculumCopy || !!(mode.project?.projectData as any)?.isCurriculumCopy
 
     const handleNewProject = useCallback(() => {
         if (hasUnsavedWork) {
@@ -158,25 +167,41 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
         }
     }, [hasUnsavedWork, mode, type])
 
+    // LMS → Neura: reactively load pending cloud project (fixes stale Project A when opening Project B)
+    const pendingProject = useCloudProjectStore(s => s.pendingProject)
+    const clearPendingProject = useCloudProjectStore(s => s.clearPendingProject)
+    const loadProject = mode.loadProject
     useEffect(() => {
-        const { pendingProject, clearPendingProject } = useCloudProjectStore.getState()
         if (pendingProject && pendingProject.mode === 'neura') {
             const data = pendingProject.data
+            // If this workspace's type doesn't match the pending project's type, let NeuraApp switch view
+            const pendingType = data.type || 'image-classifier'
+            if (pendingType !== type) return
             clearPendingProject()
+            const isCurriculumCopy = !!(data as any).isCurriculumCopy || !!(data as any).projectData?.isCurriculumCopy
             const projectData: NeuraProject = {
                 id: data.id || Date.now().toString(36),
-                type: data.type || type || 'image-classifier',
+                type: pendingType,
                 name: data.projectName || data.name || 'Cloud Project',
                 classes: data.classes || [],
                 createdAt: data.createdAt || data.timestamp || Date.now(),
                 updatedAt: data.updatedAt || Date.now(),
                 modelTrained: data.modelTrained || false,
                 accuracy: data.accuracy,
-                projectData: data.projectData
+                projectData: {
+                    ...(data.projectData || {}),
+                    ...(isCurriculumCopy ? { isCurriculumCopy: true, originalCurriculumId: (data as any).originalCurriculumId, originalCurriculumName: (data as any).originalCurriculumName } : {}),
+                },
+            } as any
+            // Preserve top-level flag for easy checks
+            if (isCurriculumCopy) (projectData as any).isCurriculumCopy = true
+            loadProject(projectData)
+            if (isCurriculumCopy) {
+                setTimeout(() => showToast(`Curriculum "${data.projectName || data.name}" opened as your copy – edits will be saved as "${projectData.name}" (original protected)`, 'info', 4000), 400)
             }
-            mode.loadProject(projectData)
+            // Also ensure IDB cache for this type is overwritten immediately (loadProject will trigger persist)
         }
-    }, [mode, type])
+    }, [pendingProject, type, clearPendingProject, loadProject])
 
     const handleHomeClick = useCallback(() => {
         if (hasUnsavedWork) {
@@ -424,7 +449,7 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
                 onChange={handleFileImport}
             />
             <IgniteTopbar
-                title={mode.project?.name || 'Classifier'}
+                title={mode.project?.name ?? 'Classifier'}
                 onBack={handleHomeClick}
                 onSave={handleSave}
                 onDownload={handleDownload}
@@ -448,6 +473,13 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
                     </div>
                 }
             />
+            {isCurriculumCopy && (
+                <div className="mx-4 mt-3 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 flex items-center gap-2 text-amber-800 text-xs font-semibold shadow-sm">
+                    <span className="text-sm">🛡️</span>
+                    <span>Curriculum protected — you’re editing your copy “{mode.project?.name}”. Save will create your own project; the original LMS curriculum stays unchanged.</span>
+                    <button onClick={handleSaveAs} className="ml-auto px-2.5 py-1 rounded-full bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold">Save As</button>
+                </div>
+            )}
 
             <div className="flex-1 flex overflow-hidden relative">
                 {/* Desktop sidebar - hidden when hideSidebar is true */}
@@ -500,28 +532,32 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
                             </div>
                         </>
                     )}
-                    {/* Auto-saved – now reflects real IDB persistence (fixes false "Auto Saved" when localStorage quota exceeded) */}
+                    {/* Auto-saved – reflects real IDB persistence; idle only shows Auto-saved after a successful save (fixes false indication) */}
+                    {(mode.saveStatus === 'saving' || mode.saveStatus === 'error' || mode.saveStatus === 'saved' || mode.hasSaved) && (
                     <div
-                        title={mode.saveStatus === 'error' ? (mode.saveError || 'Save failed – storage full. Try fewer/larger images or export via File > Save.') : mode.saveStatus === 'saving' ? 'Saving to browser storage…' : 'All changes are stored in this browser (IndexedDB) and survive refresh'}
+                        title={mode.saveStatus === 'error' ? (mode.saveError || 'Save failed – storage full. Try fewer/larger images or export via File > Save.') : mode.saveStatus === 'saving' ? 'Saving to browser storage…' : mode.hasSaved ? 'All changes are stored in this browser (IndexedDB) and survive refresh' : 'Not yet saved'}
                         className={`hidden sm:flex items-center gap-1.5 px-3 py-1.25 rounded-xl text-xs font-semibold border ${
                             mode.saveStatus === 'error'
                                 ? 'bg-red-50 text-red-700 border-red-200 cursor-pointer'
                                 : mode.saveStatus === 'saving'
                                     ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                    : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                    : mode.hasSaved
+                                        ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                        : 'bg-slate-50 text-slate-500 border-slate-200'
                         }`}
                         onClick={() => {
                             if (mode.saveStatus === 'error') {
                                 // Force a re-save attempt by touching project timestamp
-                                mode.setProjectName(mode.project?.name || 'My Image Classifier')
+                                mode.setProjectName(mode.project?.name ?? 'My Image Classifier')
                             }
                         }}
                     >
-                        <span className="text-sm">{mode.saveStatus === 'saving' ? '⏳' : mode.saveStatus === 'error' ? '⚠️' : '💾'}</span>
+                        <span className="text-sm">{mode.saveStatus === 'saving' ? '⏳' : mode.saveStatus === 'error' ? '⚠️' : mode.hasSaved ? '💾' : '○'}</span>
                         <span>
-                            {mode.saveStatus === 'saving' ? 'Saving…' : mode.saveStatus === 'error' ? 'Save failed – tap to retry' : mode.saveStatus === 'saved' ? 'Auto-saved ✓' : 'Auto-saved'}
+                            {mode.saveStatus === 'saving' ? 'Saving…' : mode.saveStatus === 'error' ? 'Save failed – tap to retry' : mode.saveStatus === 'saved' ? 'Auto-saved ✓' : mode.hasSaved ? 'Auto-saved' : 'Not saved'}
                         </span>
                     </div>
+                    )}
                 </div>
                 <div className="flex items-center gap-2">
                     <button

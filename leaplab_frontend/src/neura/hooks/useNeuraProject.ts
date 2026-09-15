@@ -75,6 +75,7 @@ export interface UseNeuraProjectReturn {
     // Auto-save status for UI (fixes false "Auto-saved" when localStorage quota exceeded)
     saveStatus: 'idle' | 'saving' | 'saved' | 'error'
     saveError: string | null
+    hasSaved: boolean
 }
 
 export function useNeuraProject(
@@ -84,6 +85,26 @@ export function useNeuraProject(
     const [project, setProject] = useState<NeuraProject>(() => {
         const defaultName = getDefaultName(type)
         const requestedName = projectName || defaultName
+        // New-tab check: don't auto-restore previous LMS project in a fresh tab
+        try {
+            const sessionKey = `neura-tab-${type}`
+            const isNewTab = !sessionStorage.getItem(sessionKey)
+            if (isNewTab) {
+                // Check if there's an explicit LMS pending project for this type – if so, allow restore via pendingProject effect
+                // For now, just start empty; the pendingProject effect will overwrite if needed
+                // Don't read from localStorage for new tab to avoid stale restore
+                return {
+                    id: generateId(),
+                    type,
+                    name: requestedName,
+                    classes: [],
+                    createdAt: Date.now(),
+                    updatedAt: Date.now(),
+                    modelTrained: false,
+                    accuracy: undefined
+                }
+            }
+        } catch {}
         const saved = localStorage.getItem(`neura-project-${type}`)
         if (saved) {
             try {
@@ -117,6 +138,7 @@ export function useNeuraProject(
     const [mode, setMode] = useState<ClassifierMode>('collect')
     const [selectedClassId, setSelectedClassId] = useState<string | null>(null)
     const [accuracy, setAccuracy] = useState<number | null>(() => {
+        try { if (!sessionStorage.getItem(`neura-tab-${type}`)) return null } catch {}
         const saved = localStorage.getItem(`neura-project-${type}`)
         if (saved) {
             try { return (JSON.parse(saved) as NeuraProject).accuracy ?? null } catch { /* ignore */ }
@@ -124,6 +146,7 @@ export function useNeuraProject(
         return null
     })
     const [modelTrained, setModelTrainedState] = useState<boolean>(() => {
+        try { if (!sessionStorage.getItem(`neura-tab-${type}`)) return false } catch {}
         const saved = localStorage.getItem(`neura-project-${type}`)
         if (saved) {
             try { return (JSON.parse(saved) as NeuraProject).modelTrained || false } catch { /* ignore */ }
@@ -139,11 +162,17 @@ export function useNeuraProject(
     // Auto-save status – true persistence via IndexedDB (fixes localStorage quota false "Auto-saved")
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
     const [saveError, setSaveError] = useState<string | null>(null)
+    const [hasSaved, setHasSaved] = useState(false)
     const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
     const isHydratingRef = useRef(true)
+    const hasSuccessfullySavedRef = useRef(false)
+    // Keep a ref to latest project to avoid stale closure in hydration / beforeunload
+    const projectRef = useRef(project)
+    useEffect(() => { projectRef.current = project }, [project])
 
     // Data Mode separate training state
     const [dataAccuracy, setDataAccuracyState] = useState<number | null>(() => {
+        try { if (!sessionStorage.getItem(`neura-tab-${type}`)) return null } catch {}
         const saved = localStorage.getItem(`neura-project-${type}`)
         if (saved) {
             try { return (JSON.parse(saved) as NeuraProject).dataAccuracy ?? null } catch { /* ignore */ }
@@ -151,6 +180,7 @@ export function useNeuraProject(
         return null
     })
     const [dataModelTrained, setDataModelTrainedState] = useState<boolean>(() => {
+        try { if (!sessionStorage.getItem(`neura-tab-${type}`)) return false } catch {}
         const saved = localStorage.getItem(`neura-project-${type}`)
         if (saved) {
             try { return (JSON.parse(saved) as NeuraProject).dataModelTrained || false } catch { /* ignore */ }
@@ -175,6 +205,7 @@ export function useNeuraProject(
     // Annotation state
     const [annotations, setAnnotations] = useState<Annotation[]>(() => {
         try {
+            try { if (!sessionStorage.getItem(`neura-tab-${type}`)) return [] } catch {}
             const saved = localStorage.getItem(`neura-annotations-${type}`)
             return saved ? JSON.parse(saved) : []
         } catch {
@@ -284,6 +315,8 @@ export function useNeuraProject(
         deleteNeuraProject(type).catch(() => {})
         setSaveStatus('idle')
         setSaveError(null)
+        setHasSaved(false)
+        hasSuccessfullySavedRef.current = false
     }, [type])
 
     const getSelectedClass = useCallback(() => {
@@ -428,6 +461,8 @@ export function useNeuraProject(
         setSelectedClassId(null)
         setAnnotations([])
         setCurrentAnnotation(null)
+        // Imported project will be auto-saved via the persist effect; mark as saving
+        setSaveStatus('saving')
     }, [])
 
     // ── Annotation functions ──
@@ -502,10 +537,32 @@ export function useNeuraProject(
     }, [project, selectedClassId])
 
     // Hydrate from IndexedDB on mount (large image projects exceed localStorage quota)
+    // For new Chrome tab, don't auto-restore previous LMS project – show empty workspace
     useEffect(() => {
         let cancelled = false
         ;(async () => {
             try {
+                // New-tab detection via sessionStorage (per-tab, not shared like IDB/localStorage)
+                // If this is a fresh tab (no session flag), skip auto-restore of previous IDB project
+                // unless there's an explicit LMS pendingProject for this type.
+                try {
+                    const sessionKey = `neura-tab-${type}`
+                    const isNewTab = !sessionStorage.getItem(sessionKey)
+                    if (isNewTab) {
+                        sessionStorage.setItem(sessionKey, '1')
+                        // For new tab, skip auto-restore from IDB unless there's a pending LMS project
+                        try {
+                            const { useCloudProjectStore } = await import('../../store/cloudProjectStore')
+                            const pending = useCloudProjectStore.getState().pendingProject
+                            if (pending && pending.mode === 'neura' && (pending.data?.type === type || !pending.data?.type)) {
+                                isHydratingRef.current = false
+                                return
+                            }
+                        } catch {}
+                        isHydratingRef.current = false
+                        return
+                    }
+                } catch {}
                 // Migrate any existing localStorage project to IDB once
                 await migrateLocalStorageToIDB(type)
                 const idbProject = await loadNeuraProject(type)
@@ -513,17 +570,30 @@ export function useNeuraProject(
                     isHydratingRef.current = false
                     return
                 }
+                // Use latest project from ref to avoid stale closure if user added samples during hydration window
+                const latestProject = projectRef.current
                 // Validate that IDB project matches requested type/name (same logic as localStorage init)
                 const defaultName = getDefaultName(type)
-                const savedMatches = idbProject.type === type && idbProject.classes && (idbProject.name === project.name || idbProject.name === defaultName || !projectName || idbProject.name === projectName)
+                const savedMatches = idbProject.type === type && idbProject.classes && (idbProject.name === latestProject.name || idbProject.name === defaultName || !projectName || idbProject.name === projectName)
                 if (!savedMatches) {
                     isHydratingRef.current = false
                     return
                 }
-                // Only hydrate if IDB is newer or has more samples (prevents overwriting fresh empty project)
-                const localSampleCount = project.classes.reduce((s, c) => s + c.samples.length, 0)
+                // Only hydrate if IDB is newer or has more samples (prevents overwriting fresh empty project or newer local changes)
+                const localSampleCount = latestProject.classes.reduce((s, c) => s + c.samples.length, 0)
                 const idbSampleCount = (idbProject.classes || []).reduce((s: number, c: any) => s + (c.samples?.length || 0), 0)
-                const shouldHydrate = idbSampleCount > localSampleCount || (idbProject.updatedAt || 0) > (project.updatedAt || 0)
+                const localUpdatedAt = (latestProject.updatedAt || 0) as number
+                const idbUpdatedAt = (idbProject.updatedAt || 0) as number
+                // If local has unsaved changes (newer updatedAt or more samples), don't overwrite — local is newer
+                const localIsNewer = localSampleCount > idbSampleCount || localUpdatedAt > idbUpdatedAt
+                // Also check if there is a pending save timeout (user just added images) — don't overwrite
+                const hasPendingSave = !!saveTimeoutRef.current
+                if (localIsNewer || hasPendingSave) {
+                    console.log(`[Neura] Skip hydration for ${type} — local is newer (local ${localSampleCount} vs idb ${idbSampleCount}, pending ${hasPendingSave})`)
+                    isHydratingRef.current = false
+                    return
+                }
+                const shouldHydrate = idbSampleCount > localSampleCount || idbUpdatedAt > localUpdatedAt
                 if (shouldHydrate) {
                     setProject(idbProject)
                     if (typeof idbProject.accuracy !== 'undefined') setAccuracy(idbProject.accuracy ?? null)
@@ -531,6 +601,14 @@ export function useNeuraProject(
                     if (typeof idbProject.dataAccuracy !== 'undefined') setDataAccuracyState(idbProject.dataAccuracy ?? null)
                     if (typeof idbProject.dataModelTrained !== 'undefined') setDataModelTrainedState(!!idbProject.dataModelTrained)
                     console.log(`[Neura] Hydrated ${type} from IndexedDB (${idbSampleCount} samples)`)
+                    hasSuccessfullySavedRef.current = true
+                    setHasSaved(true)
+                    setSaveStatus('saved')
+                    setTimeout(() => setSaveStatus(prev => (prev === 'saved' ? 'idle' : prev)), 2200)
+                } else if (idbSampleCount > 0) {
+                    // Even if we didn't hydrate (local newer), we have at least once saved data, so mark as saved
+                    hasSuccessfullySavedRef.current = true
+                    setHasSaved(true)
                 }
             } catch (e) {
                 console.warn('[Neura] IDB hydrate failed', e)
@@ -546,7 +624,13 @@ export function useNeuraProject(
     useEffect(() => {
         if (isHydratingRef.current) return
         if (!project) return
-        // Don't spam saves for empty initial project
+        // Don't spam saves for empty initial project – but ensure we save as soon as there is data
+        const isEmptyProject = project.classes.length === 0 && !project.modelTrained && !project.accuracy
+        if (isEmptyProject && !hasSuccessfullySavedRef.current) {
+            // For truly empty projects, don't spam IDB; keep idle until user adds data
+            // But if we have just hydrated, hasSuccessfullySavedRef will be true, so we will save
+            return
+        }
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
         setSaveStatus('saving')
         setSaveError(null)
@@ -554,6 +638,8 @@ export function useNeuraProject(
             // Try IDB first (handles large base64 images)
             const idbRes = await saveNeuraProject(type, project)
             if (idbRes.ok) {
+                hasSuccessfullySavedRef.current = true
+                setHasSaved(true)
                 setSaveStatus('saved')
                 setSaveError(null)
                 // Also try lightweight localStorage for fast boot next time (best-effort, ignore quota)
@@ -567,6 +653,8 @@ export function useNeuraProject(
             // IDB failed – try localStorage as fallback and surface error
             try {
                 localStorage.setItem(`neura-project-${type}`, JSON.stringify(project))
+                hasSuccessfullySavedRef.current = true
+                setHasSaved(true)
                 setSaveStatus('saved')
                 setSaveError(null)
                 setTimeout(() => setSaveStatus(prev => (prev === 'saved' ? 'idle' : prev)), 2200)
@@ -581,6 +669,33 @@ export function useNeuraProject(
             if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
         }
     }, [project, type])
+
+    // Flush pending save on page refresh/close – prevents data loss if user refreshes within debounce window
+    useEffect(() => {
+        const flush = () => {
+            if (saveTimeoutRef.current && projectRef.current) {
+                // Clear debounce and save immediately (best-effort, don't await)
+                clearTimeout(saveTimeoutRef.current)
+                saveTimeoutRef.current = null
+                // Use sendBeacon-like: try to save synchronously via IDB (async but we fire and forget)
+                // Also try sync localStorage as immediate fallback for small projects
+                try {
+                    localStorage.setItem(`neura-project-${type}`, JSON.stringify(projectRef.current))
+                } catch {}
+                saveNeuraProject(type, projectRef.current).catch(() => {})
+            }
+        }
+        const onBeforeUnload = () => flush()
+        const onVisibilityChange = () => {
+            if (document.visibilityState === 'hidden') flush()
+        }
+        window.addEventListener('beforeunload', onBeforeUnload)
+        document.addEventListener('visibilitychange', onVisibilityChange)
+        return () => {
+            window.removeEventListener('beforeunload', onBeforeUnload)
+            document.removeEventListener('visibilitychange', onVisibilityChange)
+        }
+    }, [type])
 
     // Persist annotations to localStorage
     useEffect(() => {
@@ -668,6 +783,7 @@ export function useNeuraProject(
         setDataModelTrained,
         saveStatus,
         saveError,
+        hasSaved,
     }
 }
 

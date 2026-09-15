@@ -22,6 +22,7 @@ export default function MediaManager({ appState }) {
     const [isDragOver, setIsDragOver] = useState(false);
     const fileInputRef = useRef(null);
     const audioRef = useRef(null);
+    const videoRef = useRef(null);
     const dragCounterRef = useRef(0);
 
     // Register global window drag-and-drop upload handler
@@ -207,9 +208,26 @@ e.target.value = null;
             if (isPlaying) {
                 audioRef.current.pause();
             } else {
-                audioRef.current.play();
+                const p = audioRef.current.play();
+                if (p && p.catch) p.catch(() => {});
             }
             setIsPlaying(!isPlaying);
+        }
+    };
+
+    const toggleVideo = () => {
+        if (videoRef.current) {
+            if (isPlaying) {
+                videoRef.current.pause();
+                setIsPlaying(false);
+            } else {
+                const p = videoRef.current.play();
+                if (p && p.then) {
+                    p.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+                } else {
+                    setIsPlaying(true);
+                }
+            }
         }
     };
 
@@ -224,14 +242,53 @@ e.target.value = null;
         totalSize: media.reduce((acc, file) => acc + file.size, 0)
     };
 
-    // Cleanup audio on unmount
+    // Auto-play video when preview opens (user gesture from View click allows playback)
+    useEffect(() => {
+        if (previewFile && getFileCategory(previewFile.type) === 'video' && videoRef.current) {
+            // Small delay to ensure video element is mounted and src is set
+            const t = setTimeout(() => {
+                if (videoRef.current) {
+                    videoRef.current.load();
+                    const p = videoRef.current.play();
+                    if (p && p.then) {
+                        p.then(() => setIsPlaying(true)).catch((e) => {
+                            console.warn('[MEDIA] Video autoplay blocked:', e?.message);
+                            setIsPlaying(false);
+                        });
+                    }
+                }
+            }, 80);
+            return () => clearTimeout(t);
+        } else {
+            setIsPlaying(false);
+        }
+    }, [previewFile]);
+
+    // Cleanup media on unmount or preview change
     useEffect(() => {
         return () => {
             if (audioRef.current) {
                 audioRef.current.pause();
             }
+            if (videoRef.current) {
+                videoRef.current.pause();
+                videoRef.current.removeAttribute('src');
+                videoRef.current.load();
+            }
         };
     }, []);
+
+    // Pause previous media when switching preview
+    useEffect(() => {
+        return () => {
+            if (videoRef.current) {
+                try { videoRef.current.pause(); } catch {}
+            }
+            if (audioRef.current) {
+                try { audioRef.current.pause(); } catch {}
+            }
+        };
+    }, [previewFile]);
 
     return (
         <div
@@ -553,6 +610,8 @@ e.target.value = null;
                             </div>
                             <button
                                 onClick={() => {
+                                    try { videoRef.current?.pause(); } catch {}
+                                    try { audioRef.current?.pause(); } catch {}
                                     setPreviewFile(null);
                                     setIsPlaying(false);
                                 }}
@@ -589,8 +648,28 @@ e.target.value = null;
                                 </div>
                             )}
                             {getFileCategory(previewFile.type) === 'video' && (
-                                <div className="relative rounded-xl overflow-hidden shadow-lg border border-white/10 bg-black flex items-center justify-center max-w-full max-h-[45vh]">
-                                    <video src={previewFile.data} controls className="max-w-full max-h-[45vh] object-contain" />
+                                <div className="relative rounded-xl overflow-hidden shadow-lg border border-white/10 bg-black flex flex-col items-center justify-center max-w-full w-full">
+                                    <video
+                                        key={previewFile.filename}
+                                        ref={videoRef}
+                                        src={previewFile.data}
+                                        controls
+                                        autoPlay
+                                        playsInline
+                                        preload="auto"
+                                        onPlay={() => setIsPlaying(true)}
+                                        onPause={() => setIsPlaying(false)}
+                                        onEnded={() => setIsPlaying(false)}
+                                        onError={(e) => console.warn('[MEDIA] Video error', e)}
+                                        className="max-w-full max-h-[45vh] object-contain w-full bg-black"
+                                    />
+                                    {/* Overlay play/pause for blocked autoplay */}
+                                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/60 backdrop-blur px-3 py-1.5 rounded-full">
+                                        <button onClick={toggleVideo} className="p-2 bg-white rounded-full text-slate-900 hover:bg-slate-100 transition-colors flex items-center justify-center">
+                                            {isPlaying ? <Pause size={14} /> : <Play size={14} />}
+                                        </button>
+                                        <span className="text-[11px] font-bold text-white/80">{isPlaying ? 'Playing' : 'Paused – tap play'}</span>
+                                    </div>
                                 </div>
                             )}
                             {getFileCategory(previewFile.type) === 'other' && (
@@ -603,7 +682,7 @@ e.target.value = null;
 
                         <div className="p-7 px-6 flex justify-end gap-3 items-center bg-slate-50 border-t border-slate-200 shrink-0">
                             <button
-                                onClick={() => setPreviewFile(null)}
+                                onClick={() => { try { videoRef.current?.pause(); } catch {} try { audioRef.current?.pause(); } catch {} setPreviewFile(null); setIsPlaying(false); }}
                                 className="min-w-[120px] py-3.5 px-7 inline-flex items-center justify-center rounded-xl font-extrabold text-sm transition-all border border-slate-300 bg-slate-50 text-slate-700 hover:bg-slate-100 hover:text-slate-900 cursor-pointer"
                             >
                                 Close

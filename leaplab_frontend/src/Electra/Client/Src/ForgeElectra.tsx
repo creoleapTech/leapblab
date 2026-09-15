@@ -331,16 +331,19 @@ export default function ForgeElectra({
     }
   }, [redirectProjectData, clearRedirectProjectData, loadProjectData]);
 
-  // Auto-load project from cloud storage (My Projects)
+  // Auto-load project from cloud storage (My Projects) – reactive to LMS selection
+  const pendingProjectElectra = useCloudProjectStore(s => s.pendingProject);
+  const clearPendingElectra = useCloudProjectStore(s => s.clearPendingProject);
   useEffect(() => {
-    const { pendingProject, clearPendingProject } = useCloudProjectStore.getState();
+    const pendingProject = pendingProjectElectra;
+    const clearPendingProject = clearPendingElectra;
     if (!pendingProject || pendingProject.mode !== 'electra') return;
 
     let cancelled = false;
     (async () => {
       try {
         if (cancelled) return;
-        console.log('[FORGE ELECTRA] Loading project from cloud...');
+        console.log('[FORGE ELECTRA] Loading project from cloud...', pendingProject.projectName);
         loadProjectData(pendingProject.data, pendingProject.projectName);
         clearPendingProject();
       } catch (err) {
@@ -349,7 +352,7 @@ export default function ForgeElectra({
     })();
 
     return () => { cancelled = true; };
-  }, [loadProjectData]);
+  }, [pendingProjectElectra, clearPendingElectra, loadProjectData]);
 
   // Initialize board from prop on mount (does not re-fire on internal board changes)
   useEffect(() => {

@@ -64,15 +64,15 @@ function getClassifierPanel(type: ProjectType) {
 
 export default function NeuraApp({ onBack }: NeuraAppProps) {
     const [view, setView] = useState<ViewState>({ screen: 'home' })
+    const pendingProject = useCloudProjectStore(s => s.pendingProject)
 
     React.useEffect(() => {
-        const { pendingProject } = useCloudProjectStore.getState()
         if (pendingProject && pendingProject.mode === 'neura') {
             const data = pendingProject.data
             const projectType: ProjectType = data.type || 'image-classifier'
             setView({ screen: 'workspace', type: projectType })
         }
-    }, [])
+    }, [pendingProject])
 
     const handleSelectType = (type: ProjectType, template?: { name: string; classes: string[] }) => {
         setView({ screen: 'workspace', type, template })
@@ -84,7 +84,10 @@ export default function NeuraApp({ onBack }: NeuraAppProps) {
             try {
                 localStorage.removeItem(`neura-project-${projectType}`)
                 localStorage.removeItem(`neura-annotations-${projectType}`)
+                localStorage.removeItem(`neura-idb-marker-${projectType}`)
             } catch { /* ignore */ }
+            // Also clear IDB cache for this type so next LMS project doesn't re-hydrate old data
+            import('./storage/neuraIDB').then(m => m.deleteNeuraProject(projectType).catch(()=>{}))
             useCloudProjectStore.getState().clearPendingProject()
         }
         setView({ screen: 'home' })

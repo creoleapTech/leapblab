@@ -49,10 +49,41 @@ export default function AudioClassifierPanel({ mode }: AudioClassifierPanelProps
     const [editName, setEditName] = useState('')
     const [expandedClasses, setExpandedClasses] = useState<Record<string, boolean>>({})
     const [playingSampleId, setPlayingSampleId] = useState<string | null>(null)
+    const audioPlaybackRef = useRef<HTMLAudioElement | null>(null)
+    const toneContextRef = useRef<AudioContext | null>(null)
+
+    // Helpers — parse legacy (array) vs new ({features, audio}) sample format
+    const blobToDataUrl = useCallback((blob: Blob): Promise<string> => new Promise((resolve, reject) => {
+        const r = new FileReader()
+        r.onload = () => resolve(r.result as string)
+        r.onerror = reject
+        r.readAsDataURL(blob)
+    }), [])
+    const parseAudioSample = useCallback((data: string): { features: number[]; audio?: string; name?: string } | null => {
+        try {
+            const parsed = JSON.parse(data)
+            if (Array.isArray(parsed)) return { features: parsed as number[] }
+            if (parsed && Array.isArray(parsed.features)) return { features: parsed.features as number[], audio: typeof parsed.audio === 'string' ? parsed.audio : undefined, name: typeof parsed.name === 'string' ? parsed.name : undefined }
+            if (parsed && Array.isArray(parsed.data) && typeof parsed.audio === 'string') return { features: parsed.data as number[], audio: parsed.audio }
+            return null
+        } catch { return null }
+    }, [])
+    const getFeatures = useCallback((data: string): number[] | null => {
+        const p = parseAudioSample(data)
+        return p?.features ?? null
+    }, [parseAudioSample])
 
     // Free canvas state — default 100% for readability
     const [zoom, setZoom] = useState(1)
     const [pan, setPan] = useState({ x: 32, y: 24 })
+    // Helper: context-aware wheel – dataset panel scroll vs canvas zoom
+    const isWheelOverDatasetPanel = useCallback((target: EventTarget | null) => {
+        const el = target as HTMLElement | null
+        if (!el) return false
+        const datasetEl = el.closest('[data-dataset-panel]') as HTMLElement | null
+        if (!datasetEl) return false
+        return datasetEl.scrollHeight > datasetEl.clientHeight
+    }, [])
     const [isPanning, setIsPanning] = useState(false)
     const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null)
     const pinchRef = useRef<{ startDist: number; startZoom: number; startPan: { x: number; y: number }; center: { x: number; y: number } } | null>(null)
@@ -108,8 +139,9 @@ export default function AudioClassifierPanel({ mode }: AudioClassifierPanelProps
                     for (const sample of cls.samples) {
                         if (thisBuild !== rebuildAbortRef.current) return
                         try {
-                            const features = JSON.parse(sample.data)
-                            await classifierRef.current.addSample(features, cls.name)
+                            const parsed = parseAudioSample(sample.data)
+                            const features = parsed?.features ?? JSON.parse(sample.data)
+                            if (Array.isArray(features) && features.length > 0) await classifierRef.current.addSample(features, cls.name)
                         } catch { /* skip malformed */ }
                     }
                 }
@@ -129,7 +161,11 @@ export default function AudioClassifierPanel({ mode }: AudioClassifierPanelProps
             if (updated) {
                 classifierRef.current.clearClass(old.name)
                 for (const s of updated.samples) {
-                    try { const f = JSON.parse(s.data); await classifierRef.current.addSample(f, trimmed) } catch { }
+                    try {
+                        const parsed = parseAudioSample(s.data)
+                        const f = parsed?.features ?? JSON.parse(s.data)
+                        if (Array.isArray(f) && f.length > 0) await classifierRef.current.addSample(f, trimmed)
+                    } catch { }
                 }
             }
         }, 50)
@@ -226,7 +262,14 @@ export default function AudioClassifierPanel({ mode }: AudioClassifierPanelProps
         setIsMicStarting(false)
     }, [])
 
-    useEffect(() => { return () => { stopAudio(); if (savedTimeoutRef.current) clearTimeout(savedTimeoutRef.current) } }, [stopAudio])
+    useEffect(() => {
+        return () => {
+            stopAudio()
+            if (savedTimeoutRef.current) clearTimeout(savedTimeoutRef.current)
+            try { audioPlaybackRef.current?.pause(); audioPlaybackRef.current = null } catch {}
+            try { toneContextRef.current?.close(); toneContextRef.current = null } catch {}
+        }
+    }, [stopAudio])
 
     // Live prediction loop — mirrors ImageClassifierPanel's camera loop but for audio
     useEffect(() => {
@@ -290,9 +333,13 @@ export default function AudioClassifierPanel({ mode }: AudioClassifierPanelProps
         try {
             const blob = await classifierRef.current.captureFromStream(micStreamRef.current, 2000)
             const features = await classifierRef.current.extractFeaturesFromRecording(blob)
+            // Convert blob to data URL for audible playback persistence
+            let audioDataUrl: string | undefined
+            try { audioDataUrl = await blobToDataUrl(blob) } catch {}
             // add to classifier
             await classifierRef.current.addSample(features, cls?.name || mode.project?.classes.find(c => c.id === classId)?.name || '')
-            const ok = mode.addSample(classId, { type: 'audio', data: JSON.stringify(features) })
+            const payload = audioDataUrl ? JSON.stringify({ features, audio: audioDataUrl }) : JSON.stringify(features)
+            const ok = mode.addSample(classId, { type: 'audio', data: payload })
             if (!ok) { showSaved('Folder full (20 max)'); return }
             showSaved(`Captured for ${cls?.name || 'folder'} ✓`)
         } catch (err) { console.warn('[Neura][audio] capture failed', err); showSaved('Capture failed — try again') }
@@ -313,11 +360,13 @@ export default function AudioClassifierPanel({ mode }: AudioClassifierPanelProps
             if (cur && cur.samples.length >= MAX_SAMPLES_PER_CLASS) { showSaved(`Limit reached for ${cls.name}`); break }
             try {
                 const targetName = mode.project?.classes.find(c => c.id === classId)?.name || cls.name
+                // Prepare data URL for audible playback before importing (so we keep original audio)
+                let audioDataUrl: string | undefined
+                try { audioDataUrl = await blobToDataUrl(file) } catch {}
                 const features = await classifierRef.current.importFromFile(file, targetName)
                 // importFromFile already added to KNN, now persist to project — avoid double add to KNN by not calling again
-                // But classifierRef.importFromFile did addSample internally, so we just need project record
-                // However to avoid mismatch if import fails, we already have classifier entry — keep it
-                const ok = mode.addSample(classId, { type: 'audio', data: JSON.stringify(features) })
+                const payload = audioDataUrl ? JSON.stringify({ features, audio: audioDataUrl, name: file.name }) : JSON.stringify(features)
+                const ok = mode.addSample(classId, { type: 'audio', data: payload })
                 if (ok) added++
                 else {
                     // rollback classifier sample if project full — remove last added? best effort clear class and rebuild
@@ -367,6 +416,12 @@ export default function AudioClassifierPanel({ mode }: AudioClassifierPanelProps
     const handleTestDrop = async (e: React.DragEvent) => { e.preventDefault(); setIsTestDragging(false); if (e.dataTransfer.files.length > 0) await handleTestUpload(e.dataTransfer.files) }
 
     const handleRemoveSample = async (classId: string, sampleId: string) => {
+        // Stop playback if removing currently playing sample
+        if (playingSampleId === sampleId) {
+            try { audioPlaybackRef.current?.pause(); audioPlaybackRef.current = null } catch {}
+            try { toneContextRef.current?.close(); toneContextRef.current = null } catch {}
+            setPlayingSampleId(null)
+        }
         const c = mode.project?.classes.find(x => x.id === classId)
         mode.removeSample(classId, sampleId)
         if (removeDebounceRef.current) clearTimeout(removeDebounceRef.current)
@@ -377,7 +432,10 @@ export default function AudioClassifierPanel({ mode }: AudioClassifierPanelProps
             const before = classifierRef.current.getSampleCounts()
             classifierRef.current.clearClass(c.name)
             const datas = (current?.samples || []).map(s => {
-                try { return JSON.parse(s.data) } catch { return null }
+                try {
+                    const p = parseAudioSample(s.data)
+                    return p?.features ?? JSON.parse(s.data)
+                } catch { return null }
             }).filter(Boolean) as number[][]
             for (const f of datas) {
                 try { await classifierRef.current.addSample(f, c.name) } catch { }
@@ -401,7 +459,11 @@ export default function AudioClassifierPanel({ mode }: AudioClassifierPanelProps
             for (const cls of project.classes) {
                 if (cls.samples.length > 0) {
                     for (const sample of cls.samples) {
-                        try { const features = JSON.parse(sample.data); await classifierRef.current.addSample(features, cls.name) } catch { }
+                        try {
+                            const p = parseAudioSample(sample.data)
+                            const features = p?.features ?? JSON.parse(sample.data)
+                            if (Array.isArray(features) && features.length > 0) await classifierRef.current.addSample(features, cls.name)
+                        } catch { }
                     }
                 }
             }
@@ -417,7 +479,9 @@ export default function AudioClassifierPanel({ mode }: AudioClassifierPanelProps
             for (const cls of project.classes) {
                 for (const sample of cls.samples) {
                     try {
-                        const features = JSON.parse(sample.data)
+                        const p = parseAudioSample(sample.data)
+                        const features = p?.features ?? JSON.parse(sample.data)
+                        if (!Array.isArray(features) || features.length === 0) { total++; continue }
                         const result = await classifierRef.current.predict(features, 5)
                         if (result && result.label === cls.name) correct++
                         total++
@@ -459,30 +523,67 @@ export default function AudioClassifierPanel({ mode }: AudioClassifierPanelProps
         setIsTraining(false); setModelLoading(false)
     }
 
-    const handlePlaySample = (sampleId: string, data: string) => {
-        // Features are embeddings, not raw audio — cannot truly playback.
-        // We synthesize a short tone whose frequency is derived from embedding for user feedback.
+    const handlePlaySample = async (sampleId: string, data: string) => {
         try {
-            const features: number[] = JSON.parse(data)
+            const isSame = playingSampleId === sampleId
+            // stop any ongoing playback first (both audio element and synthetic tone)
+            if (audioPlaybackRef.current) {
+                try { audioPlaybackRef.current.pause(); audioPlaybackRef.current.src = '' } catch {}
+                audioPlaybackRef.current = null
+            }
+            if (toneContextRef.current) {
+                try { toneContextRef.current.close() } catch {}
+                toneContextRef.current = null
+            }
+            if (isSame) { setPlayingSampleId(null); return }
+
+            const parsed = parseAudioSample(data)
+            const audioUrl = parsed?.audio
+            const features = parsed?.features
+
+            // Primary: play original recorded/imported audio — this is the audible path users expect
+            if (audioUrl && typeof audioUrl === 'string' && audioUrl.startsWith('data:audio')) {
+                const audio = new Audio(audioUrl)
+                audioPlaybackRef.current = audio
+                setPlayingSampleId(sampleId)
+                audio.onended = () => { setPlayingSampleId(prev => prev === sampleId ? null : prev); audioPlaybackRef.current = null }
+                audio.onerror = () => { setPlayingSampleId(prev => prev === sampleId ? null : prev); audioPlaybackRef.current = null; showSaved('Playback failed') }
+                try {
+                    await audio.play()
+                    showSaved('Playing ♪')
+                } catch (e: any) {
+                    setPlayingSampleId(null); audioPlaybackRef.current = null
+                    showSaved('Playback blocked — check browser permissions')
+                }
+                return
+            }
+
+            // Fallback for legacy samples (features-only, no stored audio): synthesize an audible tone
             if (!features || features.length === 0) { showSaved('No audio data'); return }
-            if (playingSampleId === sampleId) { setPlayingSampleId(null); return }
             setPlayingSampleId(sampleId)
             const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+            toneContextRef.current = ctx
+            if (ctx.state === 'suspended') await ctx.resume()
             const osc = ctx.createOscillator()
             const gain = ctx.createGain()
             osc.type = 'sine'
-            // map first feature to frequency 220-660Hz
             const avg = features.slice(0, 32).reduce((a, b) => a + b, 0) / Math.min(32, features.length)
-            const freq = 220 + Math.abs(avg) * 600 + (features[0] % 1) * 200
-            osc.frequency.value = Math.max(120, Math.min(880, freq))
-            gain.gain.value = 0.12
+            const variance = features.slice(0, 32).reduce((s, v) => s + Math.abs(v - avg), 0) / 32
+            const freq = 320 + Math.abs(avg) * 500 + variance * 400 + ((Math.abs(features[0] || 0) % 1) * 180)
+            osc.frequency.value = Math.max(180, Math.min(880, freq))
+            gain.gain.value = 0.35
             osc.connect(gain).connect(ctx.destination)
             osc.start()
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6)
-            setTimeout(() => { try { osc.stop(); ctx.close() } catch { }; setPlayingSampleId(null) }, 700)
-            showSaved('Preview tone ♪')
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.9)
+            setTimeout(() => {
+                try { osc.stop(); ctx.close() } catch {}
+                if (toneContextRef.current === ctx) toneContextRef.current = null
+                setPlayingSampleId(prev => prev === sampleId ? null : prev)
+            }, 1000)
+            showSaved('Preview tone ♪ (legacy sample)')
         } catch {
             showSaved('Preview unavailable')
+            setPlayingSampleId(null)
         }
     }
 
@@ -536,7 +637,17 @@ export default function AudioClassifierPanel({ mode }: AudioClassifierPanelProps
     }
     const handleViewportMouseUp = () => { setIsPanning(false); panStartRef.current = null; if (draggingId) setDraggingId(null) }
     const handleWheel = (e: React.WheelEvent) => {
-        const delta = -e.deltaY * 0.001
+        // Context-aware: if wheel is over dataset panel, let it scroll; don't zoom canvas
+        if (isWheelOverDatasetPanel(e.target)) {
+            e.stopPropagation()
+            return
+        }
+        // Pinch on trackpad fires ctrlKey+wheel; we hijack it for canvas zoom
+        // and prevent the browser's page-zoom. Regular wheel (no ctrl) also zooms canvas.
+        e.preventDefault()
+        e.stopPropagation()
+        const isPinch = e.ctrlKey || (e as any).ctrlKey
+        const delta = -e.deltaY * (isPinch ? 0.008 : 0.0012)
         const newZoom = Math.min(1.4, Math.max(0.6, zoom + delta))
         const rect = viewportRef.current?.getBoundingClientRect()
         if (rect) {
@@ -617,10 +728,20 @@ export default function AudioClassifierPanel({ mode }: AudioClassifierPanelProps
     }, [isPanning, draggingId, zoom, pan])
 
     // Prevent trackpad pinch from zooming the browser page — always zoom canvas instead
+    // But allow dataset panel to scroll when cursor is inside it
     useEffect(() => {
         const el = viewportRef.current
         if (!el) return
         const onWheelNative = (e: WheelEvent) => {
+            const target = e.target as HTMLElement | null
+            if (target?.closest('[data-dataset-panel]')) {
+                const datasetEl = target.closest('[data-dataset-panel]') as HTMLElement
+                if (datasetEl && datasetEl.scrollHeight > datasetEl.clientHeight) {
+                    // Let dataset panel handle wheel (scroll), don't prevent
+                    return
+                }
+            }
+            // ctrlKey is true for trackpad pinch on macOS/Chrome
             if (e.ctrlKey || Math.abs(e.deltaY) > 0) {
                 e.preventDefault()
             }
@@ -633,13 +754,14 @@ export default function AudioClassifierPanel({ mode }: AudioClassifierPanelProps
     const lastPos = lastClassId ? classPositions[lastClassId] : null
     const isLastExpanded = lastClassId ? !!expandedClasses[lastClassId] : false
     const lastSampleCount = lastClassId ? mode.project?.classes.find(c => c.id === lastClassId)?.samples.length || 0 : 0
-    const floaterTop = lastPos ? lastPos.y + 400 + (isLastExpanded && lastSampleCount > 8 ? Math.ceil((lastSampleCount - 8) / 4) * 86 : 0) : 0
+    const floaterTop = lastPos ? lastPos.y + 400 + (isLastExpanded && lastSampleCount > 6 ? Math.ceil((lastSampleCount - 6) / 2) * 86 : 0) : 0
 
-    // Mini waveform for a sample — derived from embedding values
+    // Mini waveform for a sample — derived from embedding values (supports legacy array and new {features,audio})
     const MiniWaveform = ({ data, color }: { data: string; color: string }) => {
         let bars: number[] = []
         try {
-            const arr: number[] = JSON.parse(data)
+            const parsed = parseAudioSample(data)
+            const arr: number[] = parsed?.features ?? JSON.parse(data)
             // take 20 slices, normalize to 0..1 using min/max of that sample
             const slice = arr.slice(0, 64)
             const min = Math.min(...slice), max = Math.max(...slice)
@@ -789,8 +911,8 @@ export default function AudioClassifierPanel({ mode }: AudioClassifierPanelProps
                                     >
                                         {cls.samples.length > 0 ? (
                                             <>
-                                                <div className="grid grid-cols-2 gap-2 max-h-[160px] overflow-auto pr-0.5">
-                                                    {cls.samples.slice(0, 6).map(s => (
+                                                <div data-dataset-panel className={`grid grid-cols-2 gap-2 ${expandedClasses[cls.id] ? 'max-h-[360px] overflow-auto pr-1 neura-scrollbar' : 'max-h-[160px] overflow-auto pr-0.5'}`}>
+                                                    {(expandedClasses[cls.id] ? cls.samples : cls.samples.slice(0, 6)).map(s => (
                                                         <div key={s.id} className="relative rounded-lg overflow-hidden bg-slate-50 border border-slate-200 group/thumb p-2 flex flex-col gap-1.5">
                                                             <div className="flex items-center justify-between">
                                                                 <span className="text-[10px] font-bold text-slate-600 flex items-center gap-1"><span className="w-4 h-4 rounded bg-white border border-slate-200 flex items-center justify-center text-[10px]">♪</span>#{cls.samples.indexOf(s) + 1}</span>
@@ -800,13 +922,17 @@ export default function AudioClassifierPanel({ mode }: AudioClassifierPanelProps
                                                                 <MiniWaveform data={s.data} color={cls.color} />
                                                             </div>
                                                             <div className="flex gap-1">
-                                                                <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); handlePlaySample(s.id, s.data) }} className={`flex-1 h-6 rounded-md border text-[11px] font-bold flex items-center justify-center gap-1 ${playingSampleId === s.id ? 'bg-violet-600 text-white border-violet-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}>{playingSampleId === s.id ? '■' : '▶'} {playingSampleId === s.id ? '■' : 'Play'}</button>
+                                                                <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); handlePlaySample(s.id, s.data) }} className={`flex-1 h-6 rounded-md border text-[11px] font-bold flex items-center justify-center gap-1 ${playingSampleId === s.id ? 'bg-violet-600 text-white border-violet-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}>{playingSampleId === s.id ? '■ Stop' : '▶ Play'}</button>
                                                                 <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); handleRemoveSample(cls.id, s.id) }} className="w-6 h-6 rounded-md bg-white border border-slate-200 text-slate-500 hover:text-red-600 flex items-center justify-center">×</button>
                                                             </div>
                                                         </div>
                                                     ))}
                                                 </div>
-                                                {cls.samples.length > 6 && <div className="text-[11px] text-slate-500 text-center">+{cls.samples.length - 6} more</div>}
+                                                {cls.samples.length > 6 && (
+                                                    <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); setExpandedClasses(prev => ({ ...prev, [cls.id]: !prev[cls.id] })) }} className="w-full h-7 rounded-full bg-white border border-violet-200 text-violet-700 text-[11px] font-bold hover:bg-violet-50 flex items-center justify-center gap-1">
+                                                        {expandedClasses[cls.id] ? <>Show less ↑</> : <>Expand +{cls.samples.length - 6} more ↓</>}
+                                                    </button>
+                                                )}
                                                 <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); handleImportClick(cls.id) }} disabled={atLimit || isImporting} className={`w-full inline-flex items-center justify-center gap-2 h-11 rounded-xl border text-sm font-bold transition-all ${atLimit ? 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed' : 'bg-gradient-to-r from-violet-50 to-indigo-50 border-violet-200 text-violet-700 hover:from-violet-100 hover:to-indigo-100 hover:border-violet-300 hover:shadow-sm'}`}>
                                                     <span className="w-6 h-6 rounded-full bg-violet-600 text-white flex items-center justify-center text-xs">+</span>
                                                     Add sounds <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white border border-violet-200 text-violet-600 font-bold">multi</span>

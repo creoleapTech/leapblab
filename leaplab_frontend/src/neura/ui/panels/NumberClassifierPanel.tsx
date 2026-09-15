@@ -62,6 +62,14 @@ export default function NumberClassifierPanel({ mode }: NumberClassifierPanelPro
     // Free canvas state — default 100% for readability
     const [zoom, setZoom] = useState(1)
     const [pan, setPan] = useState({ x: 32, y: 24 })
+    // Helper: context-aware wheel – dataset panel scroll vs canvas zoom
+    const isWheelOverDatasetPanel = useCallback((target: EventTarget | null) => {
+        const el = target as HTMLElement | null
+        if (!el) return false
+        const datasetEl = el.closest('[data-dataset-panel]') as HTMLElement | null
+        if (!datasetEl) return false
+        return datasetEl.scrollHeight > datasetEl.clientHeight
+    }, [])
     const [isPanning, setIsPanning] = useState(false)
     const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null)
     const pinchRef = useRef<{ startDist: number; startZoom: number; startPan: { x: number; y: number }; center: { x: number; y: number } } | null>(null)
@@ -569,9 +577,17 @@ export default function NumberClassifierPanel({ mode }: NumberClassifierPanelPro
     }
     const handleViewportMouseUp = () => { setIsPanning(false); panStartRef.current = null; if (draggingId) setDraggingId(null) }
     const handleWheel = (e: React.WheelEvent) => {
+        // Dataset panel scroll should not zoom canvas – let it scroll internally
+        if (isWheelOverDatasetPanel(e.target)) {
+            e.stopPropagation()
+            return
+        }
         const target = e.target as HTMLElement
         if (target.closest('[data-node]') && !e.ctrlKey) return
-        const delta = -e.deltaY * 0.001
+        e.preventDefault()
+        e.stopPropagation()
+        const isPinch = e.ctrlKey || (e as any).ctrlKey
+        const delta = -e.deltaY * (isPinch ? 0.008 : 0.0012)
         const newZoom = Math.min(1.4, Math.max(0.6, zoom + delta))
         const rect = viewportRef.current?.getBoundingClientRect()
         if (rect) {
@@ -655,13 +671,19 @@ export default function NumberClassifierPanel({ mode }: NumberClassifierPanelPro
         return () => { window.removeEventListener('mousemove', onMove as any); window.removeEventListener('mouseup', onUp as any); window.removeEventListener('pointermove', onMove as any); window.removeEventListener('pointerup', onUp as any) }
     }, [isPanning, draggingId, zoom, pan])
 
-    // Prevent trackpad pinch from zooming the browser page — always zoom canvas instead, but allow scrolling inside editable nodes
+    // Prevent trackpad pinch from zooming the browser page — always zoom canvas instead, but allow scrolling inside editable nodes and dataset panels
     useEffect(() => {
         const el = viewportRef.current
         if (!el) return
         const onWheelNative = (e: WheelEvent) => {
-            const target = e.target as HTMLElement
-            if (target.closest('[data-node]') && !e.ctrlKey) return
+            const target = e.target as HTMLElement | null
+            if (target?.closest('[data-dataset-panel]')) {
+                const datasetEl = target.closest('[data-dataset-panel]') as HTMLElement
+                if (datasetEl && datasetEl.scrollHeight > datasetEl.clientHeight) {
+                    return
+                }
+            }
+            if (target?.closest('[data-node]') && !e.ctrlKey) return
             if (e.ctrlKey || Math.abs(e.deltaY) > 0) {
                 e.preventDefault()
             }
@@ -975,7 +997,7 @@ export default function NumberClassifierPanel({ mode }: NumberClassifierPanelPro
                                     >
                                         {cls.samples.length > 0 ? (
                                             <>
-                                                <div className={`grid grid-cols-4 gap-2 ${expandedClasses[cls.id] ? 'max-h-[360px] overflow-auto neura-scrollbar pr-1' : ''}`}>
+                                                <div data-dataset-panel className={`grid grid-cols-4 gap-2 ${expandedClasses[cls.id] ? 'max-h-[360px] overflow-auto neura-scrollbar pr-1' : ''}`}>
                                                     {(expandedClasses[cls.id] ? cls.samples : cls.samples.slice(0, 8)).map(s => (
                                                         <div key={s.id} onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); openImageViewer(cls.samples.map(x => ({ src: x.data, label: `${cls.name} — digit ${cls.samples.indexOf(x) + 1}` })), cls.samples.indexOf(s)) }} title="Click to view (80% screen)" className="relative aspect-square rounded-lg overflow-hidden bg-white border border-slate-200 group/thumb flex items-center justify-center p-0.5 cursor-zoom-in">
                                                             <img src={s.data} alt="" className="w-full h-full object-contain bg-white rounded-md pointer-events-none" draggable={false} />

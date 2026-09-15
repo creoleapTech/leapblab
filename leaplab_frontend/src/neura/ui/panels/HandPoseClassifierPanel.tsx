@@ -495,7 +495,16 @@ export default function HandPoseClassifierPanel({ mode }: HandPoseClassifierPane
     }
     const handleViewportMouseUp = () => { setIsPanning(false); panStartRef.current = null; if (draggingId) setDraggingId(null) }
     const handleWheel = (e: React.WheelEvent) => {
-        const delta = -e.deltaY * 0.001
+        // Context-aware: if wheel is over dataset panel, let it scroll; don't zoom canvas
+        if (isWheelOverDatasetPanel(e.target)) {
+            e.stopPropagation()
+            return
+        }
+        // Pinch on trackpad fires ctrlKey+wheel; we hijack it for canvas zoom
+        e.preventDefault()
+        e.stopPropagation()
+        const isPinch = e.ctrlKey || (e as any).ctrlKey
+        const delta = -e.deltaY * (isPinch ? 0.008 : 0.0012)
         const newZoom = Math.min(1.4, Math.max(0.6, zoom + delta))
         const rect = viewportRef.current?.getBoundingClientRect()
         if (rect) {
@@ -576,10 +585,18 @@ export default function HandPoseClassifierPanel({ mode }: HandPoseClassifierPane
     }, [isPanning, draggingId, zoom, pan])
 
     // Prevent trackpad pinch from zooming the browser page — always zoom canvas instead
+    // But allow dataset panel to scroll when cursor is inside it
     useEffect(() => {
         const el = viewportRef.current
         if (!el) return
         const onWheelNative = (e: WheelEvent) => {
+            const target = e.target as HTMLElement | null
+            if (target?.closest('[data-dataset-panel]')) {
+                const datasetEl = target.closest('[data-dataset-panel]') as HTMLElement
+                if (datasetEl && datasetEl.scrollHeight > datasetEl.clientHeight) {
+                    return
+                }
+            }
             if (e.ctrlKey || Math.abs(e.deltaY) > 0) {
                 e.preventDefault()
             }
@@ -725,8 +742,8 @@ export default function HandPoseClassifierPanel({ mode }: HandPoseClassifierPane
                                     >
                                         {cls.samples.length > 0 ? (
                                             <>
-                                                <div className="grid grid-cols-4 gap-2">
-                                                    {cls.samples.slice(0, 8).map(s => (
+                                                <div data-dataset-panel className={`grid grid-cols-4 gap-2 ${expandedClasses[cls.id] ? 'max-h-[360px] overflow-auto neura-scrollbar pr-1' : ''}`}>
+                                                    {(expandedClasses[cls.id] ? cls.samples : cls.samples.slice(0, 8)).map(s => (
                                                         <div key={s.id} className="relative aspect-square rounded-lg overflow-hidden bg-gradient-to-br from-violet-50 to-indigo-50 border border-violet-100 group/thumb flex items-center justify-center">
                                                             <span className="text-lg">✋</span>
                                                             <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 text-[8px] font-bold text-violet-700 bg-white/80 px-1 rounded">#{cls.samples.indexOf(s) + 1}</span>
@@ -734,7 +751,11 @@ export default function HandPoseClassifierPanel({ mode }: HandPoseClassifierPane
                                                         </div>
                                                     ))}
                                                 </div>
-                                                {cls.samples.length > 8 && <div className="text-[11px] text-slate-500 text-center">+{cls.samples.length - 8} more</div>}
+                                                {cls.samples.length > 8 && (
+                                                    <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); setExpandedClasses(prev => ({ ...prev, [cls.id]: !prev[cls.id] })) }} className="w-full h-7 rounded-full bg-white border border-violet-200 text-violet-700 text-[11px] font-bold hover:bg-violet-50 flex items-center justify-center gap-1">
+                                                        {expandedClasses[cls.id] ? <>Show less ↑</> : <>Expand +{cls.samples.length - 8} more ↓</>}
+                                                    </button>
+                                                )}
                                                 <div className="flex items-center justify-between text-[11px] text-slate-500">
                                                     <span>{cls.samples.length} gestures</span>
                                                     <span className={`px-2 py-0.5 rounded-full border text-[10px] font-bold ${cls.samples.length >= 15 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>{cls.samples.length >= 15 ? 'Goal met ✓' : `${15 - cls.samples.length} to goal`}</span>
