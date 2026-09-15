@@ -15,9 +15,10 @@ export default function AppInventor({ onBack }) {
   const [activeTab, setActiveTab] = useState('designer');
   const [projectPath, setProjectPath] = useState(null);
   const fileInputRef = useRef(null);
+  const pendingProject = useCloudProjectStore(s => s.pendingProject);
+  const clearPendingProject = useCloudProjectStore(s => s.clearPendingProject);
 
   useEffect(() => {
-    const { pendingProject, clearPendingProject } = useCloudProjectStore.getState();
     if (!pendingProject || pendingProject.mode !== 'creova') return;
 
     let cancelled = false;
@@ -36,7 +37,7 @@ export default function AppInventor({ onBack }) {
     })();
 
     return () => { cancelled = true; };
-  }, [appState]);
+  }, [pendingProject, appState, clearPendingProject]);
 
   const [isBuildModalOpen, setIsBuildModalOpen] = useState(false);
   const [buildState, setBuildState] = useState('idle');

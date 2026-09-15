@@ -17,8 +17,7 @@ interface ElectraWorkspaceProps {
     clearRedirectProjectData?: () => void;
 }
 
-function detectBoardFromPendingProject(): 'arduino-uno' | 'esp32-c3' | null {
-    const { pendingProject } = useCloudProjectStore.getState();
+function detectBoardFromPendingProject(pendingProject: any): 'arduino-uno' | 'esp32-c3' | null {
     if (pendingProject?.mode === 'electra') {
         const board = pendingProject.data?.board;
         if (board === 'arduino-uno' || board === 'esp32-c3') {
@@ -36,16 +35,27 @@ export default function ElectraWorkspace({
     redirectProjectData,
     clearRedirectProjectData
 }: ElectraWorkspaceProps) {
+    const pendingProject = useCloudProjectStore(s => s.pendingProject);
     // Auto-detect board from saved/shared projects so the user never has to
     // re-pick the board for a project that already knows what it is.
     const [selectedBoard, setSelectedBoard] = useState<'arduino-uno' | 'esp32-c3' | null>(() => {
         if (redirectProjectData) return null; // handled by redirect effect below
-        return detectBoardFromPendingProject();
+        return detectBoardFromPendingProject(pendingProject);
     });
+
+    // Reactively update board when a new LMS project is selected (fixes stale Project A)
+    useEffect(() => {
+        if (pendingProject?.mode === 'electra' && pendingProject.data?.board) {
+            const board = pendingProject.data.board;
+            if (board === 'arduino-uno' || board === 'esp32-c3') {
+                setSelectedBoard(board);
+            }
+        }
+    }, [pendingProject]);
 
     // Capture any pending cloud/shared project at render time so we can decide
     // whether to clear the workspace after child effects have finished loading.
-    const pendingProjectRef = useRef(useCloudProjectStore.getState().pendingProject);
+    const pendingProjectRef = useRef(pendingProject);
 
     // Clear workspace when component mounts only if we are not about to load a
     // shared/cloud project. Otherwise the clear would wipe the loaded nodes.
@@ -54,7 +64,7 @@ export default function ElectraWorkspace({
 
         const params = new URLSearchParams(window.location.search);
         const hasExternalProject = params.has('share') || params.has('project') || params.has('projectUrl');
-        const hasPendingProject = !!pendingProjectRef.current;
+        const hasPendingProject = !!pendingProject;
 
         if (hasExternalProject || hasPendingProject) {
             console.log('[ELECTRA WORKSPACE] Skipping workspace clear — project load in progress');
@@ -64,7 +74,7 @@ export default function ElectraWorkspace({
         const { clearWorkspace } = useForgeStore.getState();
         clearWorkspace();
         console.log('[ELECTRA WORKSPACE] Workspace cleared on mount');
-    }, [redirectProjectData]);
+    }, [redirectProjectData, pendingProject]);
 
     // Detect board from redirect data
     useEffect(() => {

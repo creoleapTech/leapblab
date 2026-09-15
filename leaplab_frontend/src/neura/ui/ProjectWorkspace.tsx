@@ -158,14 +158,20 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
         }
     }, [hasUnsavedWork, mode, type])
 
+    // LMS → Neura: reactively load pending cloud project (fixes stale Project A when opening Project B)
+    const pendingProject = useCloudProjectStore(s => s.pendingProject)
+    const clearPendingProject = useCloudProjectStore(s => s.clearPendingProject)
+    const loadProject = mode.loadProject
     useEffect(() => {
-        const { pendingProject, clearPendingProject } = useCloudProjectStore.getState()
         if (pendingProject && pendingProject.mode === 'neura') {
             const data = pendingProject.data
+            // If this workspace's type doesn't match the pending project's type, let NeuraApp switch view
+            const pendingType = data.type || 'image-classifier'
+            if (pendingType !== type) return
             clearPendingProject()
             const projectData: NeuraProject = {
                 id: data.id || Date.now().toString(36),
-                type: data.type || type || 'image-classifier',
+                type: pendingType,
                 name: data.projectName || data.name || 'Cloud Project',
                 classes: data.classes || [],
                 createdAt: data.createdAt || data.timestamp || Date.now(),
@@ -174,9 +180,10 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
                 accuracy: data.accuracy,
                 projectData: data.projectData
             }
-            mode.loadProject(projectData)
+            loadProject(projectData)
+            // Also ensure IDB cache for this type is overwritten immediately (loadProject will trigger persist)
         }
-    }, [mode, type])
+    }, [pendingProject, type, clearPendingProject, loadProject])
 
     const handleHomeClick = useCallback(() => {
         if (hasUnsavedWork) {
