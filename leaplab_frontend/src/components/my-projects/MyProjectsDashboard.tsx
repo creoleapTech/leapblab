@@ -23,6 +23,7 @@ import {
     Compass
 } from 'lucide-react';
 import { LMS_API_BASE } from '../../config/api';
+import { useLeapLabAuthStore } from '../../auth/leaplabAuthStore';
 import {
     listMyProjects,
     getCloudProject,
@@ -31,7 +32,6 @@ import {
     CloudProject,
 } from '../../services/cloudProjectApi';
 import ShareProjectModal from './ShareProjectModal';
-import { useLeapLabAuthStore } from '../../auth/leaplabAuthStore';
 import { useCloudProjectStore } from '../../store/cloudProjectStore';
 import { isPacked, unpack } from '../../Electra/Client/utils/compress';
 import '../../Electra/Client/utils/elements/leap-elements';
@@ -1168,13 +1168,48 @@ export default function MyProjectsDashboard({ onOpenProject }: MyProjectsDashboa
 
             const content = await fetchCloudProjectContent(fileUrl);
 
-            setPendingProject({
-                mode: project.mode,
-                data: content,
-                projectName: project.name,
-            });
+            // Curriculum protection: if this project is not owned by current user, treat as read-only curriculum
+            // Student edits must be saved as a separate copy, not overwrite the LMS master.
+            const currentCredentialId = useLeapLabAuthStore.getState().credentialId;
+            const isCurriculum = !!currentCredentialId && !!project.credentialId && project.credentialId !== currentCredentialId;
+            const isSharedViewer = !!project.isShared && project.sharePermission === 'viewer';
+            const shouldProtect = isCurriculum || isSharedViewer;
 
-            useCloudProjectStore.getState().setActiveProjectId(project.id);
+            if (shouldProtect) {
+                // Mark content as curriculum copy – student edits will create a new cloud project
+                const protectedContent = {
+                    ...content,
+                    isCurriculumCopy: true,
+                    originalCurriculumId: project.id,
+                    originalCurriculumName: project.name,
+                    // Also store in projectData for Neura persistence
+                    projectData: {
+                        ...(content.projectData || {}),
+                        isCurriculumCopy: true,
+                        originalCurriculumId: project.id,
+                    }
+                };
+                setPendingProject({
+                    mode: project.mode,
+                    data: protectedContent,
+                    projectName: `${project.name} - Copy`,
+                });
+                // Do NOT set activeProjectId – Save will create a new student copy via saveProjectToCloud
+                useCloudProjectStore.getState().clearActiveProjectId();
+                // Clear any stale IDB auto-save for this type so curriculum edits don't pollute student workspace
+                try {
+                    const { deleteNeuraProject } = await import('../../neura/storage/neuraIDB');
+                    // For Neura types, clear the type-keyed IDB so curriculum doesn't overwrite student's last work
+                    // We don't auto-delete here – let the new copy create fresh IDB on save
+                } catch {}
+            } else {
+                setPendingProject({
+                    mode: project.mode,
+                    data: content,
+                    projectName: project.name,
+                });
+                useCloudProjectStore.getState().setActiveProjectId(project.id);
+            }
             useCloudProjectStore.getState().clearSharedProjectInfo();
 
             onOpenProject(project.mode);

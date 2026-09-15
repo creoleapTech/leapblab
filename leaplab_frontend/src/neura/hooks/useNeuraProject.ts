@@ -85,6 +85,26 @@ export function useNeuraProject(
     const [project, setProject] = useState<NeuraProject>(() => {
         const defaultName = getDefaultName(type)
         const requestedName = projectName || defaultName
+        // New-tab check: don't auto-restore previous LMS project in a fresh tab
+        try {
+            const sessionKey = `neura-tab-${type}`
+            const isNewTab = !sessionStorage.getItem(sessionKey)
+            if (isNewTab) {
+                // Check if there's an explicit LMS pending project for this type – if so, allow restore via pendingProject effect
+                // For now, just start empty; the pendingProject effect will overwrite if needed
+                // Don't read from localStorage for new tab to avoid stale restore
+                return {
+                    id: generateId(),
+                    type,
+                    name: requestedName,
+                    classes: [],
+                    createdAt: Date.now(),
+                    updatedAt: Date.now(),
+                    modelTrained: false,
+                    accuracy: undefined
+                }
+            }
+        } catch {}
         const saved = localStorage.getItem(`neura-project-${type}`)
         if (saved) {
             try {
@@ -118,6 +138,7 @@ export function useNeuraProject(
     const [mode, setMode] = useState<ClassifierMode>('collect')
     const [selectedClassId, setSelectedClassId] = useState<string | null>(null)
     const [accuracy, setAccuracy] = useState<number | null>(() => {
+        try { if (!sessionStorage.getItem(`neura-tab-${type}`)) return null } catch {}
         const saved = localStorage.getItem(`neura-project-${type}`)
         if (saved) {
             try { return (JSON.parse(saved) as NeuraProject).accuracy ?? null } catch { /* ignore */ }
@@ -125,6 +146,7 @@ export function useNeuraProject(
         return null
     })
     const [modelTrained, setModelTrainedState] = useState<boolean>(() => {
+        try { if (!sessionStorage.getItem(`neura-tab-${type}`)) return false } catch {}
         const saved = localStorage.getItem(`neura-project-${type}`)
         if (saved) {
             try { return (JSON.parse(saved) as NeuraProject).modelTrained || false } catch { /* ignore */ }
@@ -150,6 +172,7 @@ export function useNeuraProject(
 
     // Data Mode separate training state
     const [dataAccuracy, setDataAccuracyState] = useState<number | null>(() => {
+        try { if (!sessionStorage.getItem(`neura-tab-${type}`)) return null } catch {}
         const saved = localStorage.getItem(`neura-project-${type}`)
         if (saved) {
             try { return (JSON.parse(saved) as NeuraProject).dataAccuracy ?? null } catch { /* ignore */ }
@@ -157,6 +180,7 @@ export function useNeuraProject(
         return null
     })
     const [dataModelTrained, setDataModelTrainedState] = useState<boolean>(() => {
+        try { if (!sessionStorage.getItem(`neura-tab-${type}`)) return false } catch {}
         const saved = localStorage.getItem(`neura-project-${type}`)
         if (saved) {
             try { return (JSON.parse(saved) as NeuraProject).dataModelTrained || false } catch { /* ignore */ }
@@ -181,6 +205,7 @@ export function useNeuraProject(
     // Annotation state
     const [annotations, setAnnotations] = useState<Annotation[]>(() => {
         try {
+            try { if (!sessionStorage.getItem(`neura-tab-${type}`)) return [] } catch {}
             const saved = localStorage.getItem(`neura-annotations-${type}`)
             return saved ? JSON.parse(saved) : []
         } catch {
@@ -512,10 +537,32 @@ export function useNeuraProject(
     }, [project, selectedClassId])
 
     // Hydrate from IndexedDB on mount (large image projects exceed localStorage quota)
+    // For new Chrome tab, don't auto-restore previous LMS project – show empty workspace
     useEffect(() => {
         let cancelled = false
         ;(async () => {
             try {
+                // New-tab detection via sessionStorage (per-tab, not shared like IDB/localStorage)
+                // If this is a fresh tab (no session flag), skip auto-restore of previous IDB project
+                // unless there's an explicit LMS pendingProject for this type.
+                try {
+                    const sessionKey = `neura-tab-${type}`
+                    const isNewTab = !sessionStorage.getItem(sessionKey)
+                    if (isNewTab) {
+                        sessionStorage.setItem(sessionKey, '1')
+                        // For new tab, skip auto-restore from IDB unless there's a pending LMS project
+                        try {
+                            const { useCloudProjectStore } = await import('../../store/cloudProjectStore')
+                            const pending = useCloudProjectStore.getState().pendingProject
+                            if (pending && pending.mode === 'neura' && (pending.data?.type === type || !pending.data?.type)) {
+                                isHydratingRef.current = false
+                                return
+                            }
+                        } catch {}
+                        isHydratingRef.current = false
+                        return
+                    }
+                } catch {}
                 // Migrate any existing localStorage project to IDB once
                 await migrateLocalStorageToIDB(type)
                 const idbProject = await loadNeuraProject(type)

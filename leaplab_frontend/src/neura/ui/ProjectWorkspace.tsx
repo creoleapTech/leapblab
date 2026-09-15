@@ -106,10 +106,18 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
         if (!mode.project) return
         if (isSaving) return
         setIsSaving(true)
-        showToast('Saving project...', 'info', 30000)
+        if (isCurriculumCopy) {
+            showToast('Saving your copy of the curriculum…', 'info', 30000)
+        } else {
+            showToast('Saving project...', 'info', 30000)
+        }
         try {
             await fileService.saveProject(mode.project.name, 'neura', mode.project)
-            showToast('Project saved successfully!', 'success')
+            if (isCurriculumCopy) {
+                showToast(`Saved as your copy "${mode.project.name}" – original curriculum protected ✓`, 'success')
+            } else {
+                showToast('Project saved successfully!', 'success')
+            }
         } catch (e: any) {
             console.error('[Neura] Save failed', e)
             showToast(e?.message || 'Failed to save project.', 'error')
@@ -147,6 +155,7 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
     }, [mode.project])
 
     const hasUnsavedWork = mode.project && mode.project.classes.length > 0
+    const isCurriculumCopy = !!(mode.project as any)?.isCurriculumCopy || !!(mode.project?.projectData as any)?.isCurriculumCopy
 
     const handleNewProject = useCallback(() => {
         if (hasUnsavedWork) {
@@ -169,6 +178,7 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
             const pendingType = data.type || 'image-classifier'
             if (pendingType !== type) return
             clearPendingProject()
+            const isCurriculumCopy = !!(data as any).isCurriculumCopy || !!(data as any).projectData?.isCurriculumCopy
             const projectData: NeuraProject = {
                 id: data.id || Date.now().toString(36),
                 type: pendingType,
@@ -178,9 +188,17 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
                 updatedAt: data.updatedAt || Date.now(),
                 modelTrained: data.modelTrained || false,
                 accuracy: data.accuracy,
-                projectData: data.projectData
-            }
+                projectData: {
+                    ...(data.projectData || {}),
+                    ...(isCurriculumCopy ? { isCurriculumCopy: true, originalCurriculumId: (data as any).originalCurriculumId, originalCurriculumName: (data as any).originalCurriculumName } : {}),
+                },
+            } as any
+            // Preserve top-level flag for easy checks
+            if (isCurriculumCopy) (projectData as any).isCurriculumCopy = true
             loadProject(projectData)
+            if (isCurriculumCopy) {
+                setTimeout(() => showToast(`Curriculum "${data.projectName || data.name}" opened as your copy – edits will be saved as "${projectData.name}" (original protected)`, 'info', 4000), 400)
+            }
             // Also ensure IDB cache for this type is overwritten immediately (loadProject will trigger persist)
         }
     }, [pendingProject, type, clearPendingProject, loadProject])
@@ -455,6 +473,13 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
                     </div>
                 }
             />
+            {isCurriculumCopy && (
+                <div className="mx-4 mt-3 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 flex items-center gap-2 text-amber-800 text-xs font-semibold shadow-sm">
+                    <span className="text-sm">🛡️</span>
+                    <span>Curriculum protected — you’re editing your copy “{mode.project?.name}”. Save will create your own project; the original LMS curriculum stays unchanged.</span>
+                    <button onClick={handleSaveAs} className="ml-auto px-2.5 py-1 rounded-full bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold">Save As</button>
+                </div>
+            )}
 
             <div className="flex-1 flex overflow-hidden relative">
                 {/* Desktop sidebar - hidden when hideSidebar is true */}

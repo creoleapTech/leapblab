@@ -138,9 +138,17 @@ class FileService {
         const sharedInfo = useCloudProjectStore.getState().sharedProjectInfo;
         const thumbnail = await captureProjectScreenshot();
 
+        // Curriculum protection: if this is a curriculum copy (from LMS) or a viewer-shared project,
+        // never overwrite the original – force Save As (create new).
+        const isCurriculumCopy = !!(payload?.isCurriculumCopy || payload?.projectData?.isCurriculumCopy || (payload as any)?.originalCurriculumId)
+        if (isCurriculumCopy) {
+            // Clear any active ID that points to the curriculum master so we create a student copy
+            useCloudProjectStore.getState().clearActiveProjectId();
+        }
+
         // If this project was opened via a shared link with editor permission,
         // save changes back to the shared project (no auth required).
-        if (sharedInfo?.permission === 'editor') {
+        if (sharedInfo?.permission === 'editor' && !isCurriculumCopy) {
             await updateSharedProject(sharedInfo.shareId, {
                 projectName,
                 mode,
@@ -148,6 +156,10 @@ class FileService {
                 thumbnail,
             });
             return;
+        }
+        // Viewer-shared or curriculum copies must not overwrite the master – force Save As
+        if (sharedInfo?.permission === 'viewer') {
+            useCloudProjectStore.getState().clearActiveProjectId();
         }
 
         const authState = useLeapLabAuthStore.getState();
