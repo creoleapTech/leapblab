@@ -424,7 +424,7 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
                 onChange={handleFileImport}
             />
             <IgniteTopbar
-                title={mode.project?.name || 'Classifier'}
+                title={mode.project?.name ?? 'Classifier'}
                 onBack={handleHomeClick}
                 onSave={handleSave}
                 onDownload={handleDownload}
@@ -500,28 +500,32 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
                             </div>
                         </>
                     )}
-                    {/* Auto-saved – now reflects real IDB persistence (fixes false "Auto Saved" when localStorage quota exceeded) */}
+                    {/* Auto-saved – reflects real IDB persistence; idle only shows Auto-saved after a successful save (fixes false indication) */}
+                    {(mode.saveStatus === 'saving' || mode.saveStatus === 'error' || mode.saveStatus === 'saved' || mode.hasSaved) && (
                     <div
-                        title={mode.saveStatus === 'error' ? (mode.saveError || 'Save failed – storage full. Try fewer/larger images or export via File > Save.') : mode.saveStatus === 'saving' ? 'Saving to browser storage…' : 'All changes are stored in this browser (IndexedDB) and survive refresh'}
+                        title={mode.saveStatus === 'error' ? (mode.saveError || 'Save failed – storage full. Try fewer/larger images or export via File > Save.') : mode.saveStatus === 'saving' ? 'Saving to browser storage…' : mode.hasSaved ? 'All changes are stored in this browser (IndexedDB) and survive refresh' : 'Not yet saved'}
                         className={`hidden sm:flex items-center gap-1.5 px-3 py-1.25 rounded-xl text-xs font-semibold border ${
                             mode.saveStatus === 'error'
                                 ? 'bg-red-50 text-red-700 border-red-200 cursor-pointer'
                                 : mode.saveStatus === 'saving'
                                     ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                    : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                    : mode.hasSaved
+                                        ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                        : 'bg-slate-50 text-slate-500 border-slate-200'
                         }`}
                         onClick={() => {
                             if (mode.saveStatus === 'error') {
                                 // Force a re-save attempt by touching project timestamp
-                                mode.setProjectName(mode.project?.name || 'My Image Classifier')
+                                mode.setProjectName(mode.project?.name ?? 'My Image Classifier')
                             }
                         }}
                     >
-                        <span className="text-sm">{mode.saveStatus === 'saving' ? '⏳' : mode.saveStatus === 'error' ? '⚠️' : '💾'}</span>
+                        <span className="text-sm">{mode.saveStatus === 'saving' ? '⏳' : mode.saveStatus === 'error' ? '⚠️' : mode.hasSaved ? '💾' : '○'}</span>
                         <span>
-                            {mode.saveStatus === 'saving' ? 'Saving…' : mode.saveStatus === 'error' ? 'Save failed – tap to retry' : mode.saveStatus === 'saved' ? 'Auto-saved ✓' : 'Auto-saved'}
+                            {mode.saveStatus === 'saving' ? 'Saving…' : mode.saveStatus === 'error' ? 'Save failed – tap to retry' : mode.saveStatus === 'saved' ? 'Auto-saved ✓' : mode.hasSaved ? 'Auto-saved' : 'Not saved'}
                         </span>
                     </div>
+                    )}
                 </div>
                 <div className="flex items-center gap-2">
                     <button

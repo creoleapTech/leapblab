@@ -140,6 +140,14 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
     // Free canvas state
     const [zoom, setZoom] = useState(1)
     const [pan, setPan] = useState({ x: 32, y: 24 })
+    // Helper: context-aware wheel – dataset panel scroll vs canvas zoom
+    const isWheelOverDatasetPanel = useCallback((target: EventTarget | null) => {
+        const el = target as HTMLElement | null
+        if (!el) return false
+        const datasetEl = el.closest('[data-dataset-panel]') as HTMLElement | null
+        if (!datasetEl) return false
+        return datasetEl.scrollHeight > datasetEl.clientHeight
+    }, [])
     const [isPanning, setIsPanning] = useState(false)
     const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null)
     const pinchRef = useRef<{ startDist: number; startZoom: number; startPan: { x: number; y: number }; center: { x: number; y: number } } | null>(null)
@@ -1035,7 +1043,14 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
     }
     const handleViewportMouseUp = () => { setIsPanning(false); panStartRef.current = null; if (draggingId) setDraggingId(null) }
     const handleWheel = (e: React.WheelEvent) => {
-        const delta = -e.deltaY * 0.001
+        if (isWheelOverDatasetPanel(e.target)) {
+            e.stopPropagation()
+            return
+        }
+        e.preventDefault()
+        e.stopPropagation()
+        const isPinch = e.ctrlKey || (e as any).ctrlKey
+        const delta = -e.deltaY * (isPinch ? 0.008 : 0.0012)
         const newZoom = Math.min(1.4, Math.max(0.6, zoom + delta))
         const rect = viewportRef.current?.getBoundingClientRect()
         if (rect) {
@@ -1117,10 +1132,18 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
     }, [isPanning, draggingId, zoom, pan])
 
     // Prevent trackpad pinch from zooming the browser page — always zoom canvas instead
+    // But allow dataset panel to scroll when cursor is inside it
     useEffect(() => {
         const el = viewportRef.current
         if (!el) return
         const onWheelNative = (e: WheelEvent) => {
+            const target = e.target as HTMLElement | null
+            if (target?.closest('[data-dataset-panel]')) {
+                const datasetEl = target.closest('[data-dataset-panel]') as HTMLElement
+                if (datasetEl && datasetEl.scrollHeight > datasetEl.clientHeight) {
+                    return
+                }
+            }
             if (e.ctrlKey || Math.abs(e.deltaY) > 0) {
                 e.preventDefault()
             }
@@ -1309,7 +1332,7 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
                                         >
                                             {allSamples.length>0 ? (
                                                 <>
-                                                    <div className="grid grid-cols-4 gap-2 max-h-[360px] overflow-auto pr-1 neura-scrollbar">
+                                                    <div data-dataset-panel className="grid grid-cols-4 gap-2 max-h-[360px] overflow-auto pr-1 neura-scrollbar">
                                                         {allSamples.slice(0, 32).map(({s, originClassId}, idx, arr) => {
                                                             const annotated = isSampleAnnotated(s.data)
                                                             const boxes = getSampleBoxes(s.data)
@@ -1405,8 +1428,8 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
                                                         </>
                                                     )
                                                 })()}
-                                                <div className="grid grid-cols-4 gap-2">
-                                                    {cls.samples.slice(0, expandedClasses[cls.id] ? cls.samples.length : 8).map((s, idx) => {
+                                                <div data-dataset-panel className={`grid grid-cols-4 gap-2 ${expandedClasses[cls.id] ? 'max-h-[360px] overflow-auto neura-scrollbar pr-1' : ''}`}>
+                                                    {(expandedClasses[cls.id] ? cls.samples : cls.samples.slice(0, 8)).map((s, idx) => {
                                                         const annotated = isSampleAnnotated(s.data)
                                                         const boxes = getSampleBoxes(s.data)
                                                         return (
