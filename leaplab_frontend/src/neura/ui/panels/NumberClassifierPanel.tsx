@@ -457,13 +457,34 @@ export default function NumberClassifierPanel({ mode }: NumberClassifierPanelPro
         if (added > 0) showSaved(`Added ${added} image${added > 1 ? 's' : ''} to ${cls.name}${skipped ? ` (${skipped} skipped)` : ''}`)
         else if (skipped > 0) showSaved(`No images added — ${skipped} file${skipped > 1 ? 's' : ''} could not be read`)
     }
-    const handleUploadClick = (classId: string) => { pendingUploadClassRef.current = classId; fileInputRef.current?.click() }
+    const handleUploadClick = (classId: string) => {
+        mode.setSelectedClassId(classId)
+        pendingUploadClassRef.current = classId
+        if (fileInputRef.current) {
+            try { (fileInputRef.current as any).dataset.targetClassId = classId } catch {}
+        }
+        fileInputRef.current?.click()
+        setTimeout(() => {
+            if (pendingUploadClassRef.current === classId && fileInputRef.current && !fileInputRef.current.files?.length) {
+                // keep pending for paste, but ensure selectedClassId is correct
+            }
+        }, 1500)
+    }
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files; if (!files || files.length === 0) return
-        const targetId = pendingUploadClassRef.current || mode.selectedClassId || mode.project?.classes[0]?.id
+        const files = e.target.files
+        const attrTarget = (e.currentTarget as any)?.dataset?.targetClassId as string | undefined
+        const targetId = attrTarget || pendingUploadClassRef.current || mode.selectedClassId || mode.project?.classes[0]?.id
+        if (!files || files.length === 0) {
+            if (fileInputRef.current) try { delete (fileInputRef.current as any).dataset.targetClassId } catch {}
+            return
+        }
         if (!targetId) { showSaved('Create a folder first'); return }
         await processFilesForClass(files, targetId)
-        if (fileInputRef.current) fileInputRef.current.value = ''; pendingUploadClassRef.current = null
+        if (fileInputRef.current) {
+            fileInputRef.current.value = ''
+            try { delete (fileInputRef.current as any).dataset.targetClassId } catch {}
+        }
+        pendingUploadClassRef.current = null
     }
     // Paste images from clipboard (Ctrl+V) — multi-image up to 20, extension fallback, sync loader compatible
     useEffect(() => {

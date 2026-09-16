@@ -239,36 +239,61 @@ export default function TextClassifierPanel({ mode }: TextClassifierPanelProps) 
     }
 
     useEffect(() => {
+        const extractTextFromClipboard = async (e: ClipboardEvent): Promise<File[]> => {
+            const out: File[] = []
+            const items = e.clipboardData?.items
+            if (items) {
+                for (let i = 0; i < items.length; i++) {
+                    const it = items[i]
+                    if (it.kind === 'file') {
+                        const f = it.getAsFile()
+                        if (f && (f.type.startsWith('text/') || /\.(txt|csv|md|json|tsv)$/i.test(f.name))) {
+                            if (out.length >= 20) break
+                            out.push(f)
+                        }
+                    } else if (it.type === 'text/html') {
+                        const html = await new Promise<string>(res => it.getAsString(s => res(s || '')))
+                        const matches = [...html.matchAll(/<a[^>]+href=["']([^"']+)["']/gi)]
+                        for (const match of matches) {
+                            if (out.length >= 20) break
+                            const src = match[1]
+                            try {
+                                if (src.startsWith('data:text')) {
+                                    const res = await fetch(src); const blob = await res.blob(); out.push(new File([blob], 'pasted.txt', { type: blob.type || 'text/plain' }))
+                                } else if (src.startsWith('http')) {
+                                    const res = await fetch(src, { mode: 'cors' }).catch(() => null)
+                                    if (res && res.ok) { const blob = await res.blob(); if (blob.type.startsWith('text/') || /\.(txt|csv|md|json|tsv)$/i.test(blob.type)) out.push(new File([blob], 'pasted.txt', { type: blob.type })) }
+                                }
+                            } catch {}
+                        }
+                    } else if (it.type === 'text/plain') {
+                        const text = await new Promise<string>(res => it.getAsString(s => res(s || '')))
+                        const t = text.trim()
+                        if (t.startsWith('data:text') && t.length > 100) {
+                            try { const res = await fetch(t); const blob = await res.blob(); if (out.length < 20) out.push(new File([blob], 'pasted.txt', { type: blob.type })) } catch {}
+                        }
+                    }
+                    if (out.length >= 20) break
+                }
+            }
+            if (out.length === 0 && e.clipboardData?.files?.length) {
+                for (let i = 0; i < e.clipboardData.files.length; i++) {
+                    if (out.length >= 20) break
+                    const f = e.clipboardData.files[i]
+                    if (f.type.startsWith('text/') || /\.(txt|csv|md|json|tsv)$/i.test(f.name)) out.push(f)
+                }
+            }
+            return out.slice(0, 20)
+        }
         const handlePaste = async (e: ClipboardEvent) => {
             const active = document.activeElement as HTMLElement | null
             if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return
-            const items = e.clipboardData?.items
-            const textFiles: File[] = []
-            if (items) {
-                for (let i = 0; i < items.length; i++) {
-                    const item = items[i]
-                    if (item.kind === 'file') {
-                        const file = item.getAsFile()
-                        if (file && (file.type.startsWith('text/') || /\.(txt|csv|md|json|tsv)$/i.test(file.name))) {
-                            if (textFiles.length >= 20) break
-                            textFiles.push(file)
-                        }
-                    }
-                    if (textFiles.length >= 20) break
-                }
-            }
-            if (textFiles.length === 0 && e.clipboardData?.files?.length) {
-                for (let i = 0; i < e.clipboardData.files.length; i++) {
-                    if (textFiles.length >= 20) break
-                    const f = e.clipboardData.files[i]
-                    if (f.type.startsWith('text/') || /\.(txt|csv|md|json|tsv)$/i.test(f.name)) textFiles.push(f)
-                }
-            }
+            const textFiles = await extractTextFromClipboard(e)
             if (textFiles.length === 0) return
             e.preventDefault()
             const targetId = mode.selectedClassId || mode.project?.classes[0]?.id
             if (!targetId) { showSaved('Create a folder first, then paste'); return }
-            await processFilesForClass(textFiles.slice(0, 20), targetId)
+            await processFilesForClass(textFiles, targetId)
         }
         window.addEventListener('paste', handlePaste as any)
         return () => window.removeEventListener('paste', handlePaste as any)

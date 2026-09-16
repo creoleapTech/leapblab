@@ -339,11 +339,14 @@ export default function HandPoseClassifierPanel({ mode }: HandPoseClassifierPane
             const cur = mode.project?.classes.find(c => c.id === classId)
             if (cur && cur.samples.length >= MAX_SAMPLES_PER_CLASS) { showSaved(`Limit reached for ${cls.name}`); decrementLoader(); break }
             try {
-                const dataUrl = await new Promise<string>(resolve => {
+                const dataUrl = await new Promise<string>((resolve) => {
                     const r = new FileReader()
                     r.onload = () => resolve(r.result as string)
-                    r.onerror = () => resolve('')
-                    try { r.readAsDataURL(file) } catch { resolve('') }
+                    r.onerror = () => {
+                        console.warn('[HandPoseClassifier] FileReader error for', file.name, r.error)
+                        resolve('')
+                    }
+                    try { r.readAsDataURL(file) } catch (e) { console.warn(e); resolve('') }
                 })
                 if (!dataUrl || dataUrl.length < 100) { noHand++; decrementLoader(); continue }
                 const img = new Image(); img.src = dataUrl
@@ -369,22 +372,45 @@ export default function HandPoseClassifierPanel({ mode }: HandPoseClassifierPane
                         decrementLoader()
                     } else { noHand++; decrementLoader() }
                 } catch (e) { console.warn('[HandPose] upload detect failed', e); noHand++; decrementLoader() }
-            } catch {
+            } catch (e) {
+                console.warn('[HandPose] process file failed', file.name, e)
                 noHand++
                 decrementLoader()
             }
         }
+        // Ensure loaders cleared (handles break case)
         setUploadingByClass(prev => { const { [classId]: _, ...rest } = prev as any; return rest })
         if (added > 0) showSaved(`Added ${added} gesture${added > 1 ? 's' : ''} to ${cls.name} ✓`)
         if (noHand > 0) showSaved(`No hand in ${noHand} image(s)`)
     }
-    const handleUploadClick = (classId: string) => { pendingUploadClassRef.current = classId; fileInputRef.current?.click() }
+    const handleUploadClick = (classId: string) => {
+        mode.setSelectedClassId(classId)
+        pendingUploadClassRef.current = classId
+        if (fileInputRef.current) {
+            try { (fileInputRef.current as any).dataset.targetClassId = classId } catch {}
+        }
+        fileInputRef.current?.click()
+        setTimeout(() => {
+            if (pendingUploadClassRef.current === classId && fileInputRef.current && !fileInputRef.current.files?.length) {
+                // keep pending for paste, but ensure selectedClassId is correct
+            }
+        }, 1500)
+    }
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files; if (!files || files.length === 0) return
-        const targetId = pendingUploadClassRef.current || mode.selectedClassId || mode.project?.classes[0]?.id
+        const files = e.target.files
+        const attrTarget = (e.currentTarget as any)?.dataset?.targetClassId as string | undefined
+        const targetId = attrTarget || pendingUploadClassRef.current || mode.selectedClassId || mode.project?.classes[0]?.id
+        if (!files || files.length === 0) {
+            if (fileInputRef.current) try { delete (fileInputRef.current as any).dataset.targetClassId } catch {}
+            return
+        }
         if (!targetId) { showSaved('Create a folder first'); return }
         await processFilesForClass(files, targetId)
-        if (fileInputRef.current) fileInputRef.current.value = ''; pendingUploadClassRef.current = null
+        if (fileInputRef.current) {
+            fileInputRef.current.value = ''
+            try { delete (fileInputRef.current as any).dataset.targetClassId } catch {}
+        }
+        pendingUploadClassRef.current = null
     }
     // Paste images from clipboard (Ctrl+V) — multi-image up to 20, extension fallback, sync loader compatible
     useEffect(() => {

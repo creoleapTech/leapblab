@@ -398,13 +398,34 @@ export default function AudioClassifierPanel({ mode }: AudioClassifierPanelProps
         if (added > 0) showSaved(`Added ${added} sound${added > 1 ? 's' : ''} to ${cls.name}`)
     }
 
-    const handleImportClick = (classId: string) => { pendingImportClassRef.current = classId; fileInputRef.current?.click() }
+    const handleImportClick = (classId: string) => {
+        mode.setSelectedClassId(classId)
+        pendingImportClassRef.current = classId
+        if (fileInputRef.current) {
+            try { (fileInputRef.current as any).dataset.targetClassId = classId } catch {}
+        }
+        fileInputRef.current?.click()
+        setTimeout(() => {
+            if (pendingImportClassRef.current === classId && fileInputRef.current && !fileInputRef.current.files?.length) {
+                // keep pending for paste, but ensure selectedClassId is correct
+            }
+        }, 1500)
+    }
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files; if (!files || files.length === 0) return
-        const targetId = pendingImportClassRef.current || mode.selectedClassId || mode.project?.classes[0]?.id
+        const files = e.target.files
+        const attrTarget = (e.currentTarget as any)?.dataset?.targetClassId as string | undefined
+        const targetId = attrTarget || pendingImportClassRef.current || mode.selectedClassId || mode.project?.classes[0]?.id
+        if (!files || files.length === 0) {
+            if (fileInputRef.current) try { delete (fileInputRef.current as any).dataset.targetClassId } catch {}
+            return
+        }
         if (!targetId) { showSaved('Create a folder first'); return }
         await processFilesForClass(files, targetId)
-        if (fileInputRef.current) fileInputRef.current.value = ''; pendingImportClassRef.current = null
+        if (fileInputRef.current) {
+            fileInputRef.current.value = ''
+            try { delete (fileInputRef.current as any).dataset.targetClassId } catch {}
+        }
+        pendingImportClassRef.current = null
     }
     // Paste audio from clipboard (Ctrl+V) — multi-file up to 20, extension fallback, sync loader compatible
     useEffect(() => {
@@ -865,7 +886,7 @@ export default function AudioClassifierPanel({ mode }: AudioClassifierPanelProps
     return (
         <div className="flex flex-col h-full overflow-hidden bg-[#F8FAFC] relative">
             {savedMessage && <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[80] px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-bold shadow-lg">{savedMessage}</div>}
-            <input ref={fileInputRef} type="file" accept=".wav,.mp3,audio/wav,audio/mpeg" multiple onChange={handleFileChange} className="hidden" />
+            <input ref={fileInputRef} type="file" accept="audio/*,.wav,.mp3,.ogg,.m4a,.aac,.flac" multiple onChange={handleFileChange} className="hidden" />
             <input ref={testFileInputRef} type="file" accept=".wav,.mp3,audio/wav,audio/mpeg" onChange={handleTestUpload as any} className="hidden" />
 
             {/* Header — Teach Your AI to Hear */}
