@@ -299,19 +299,24 @@ export function useNeuraProject(
     }, [])
 
     const resetProject = useCallback(() => {
-        setProject(prev => ({
-            ...prev,
+        const defaultName = getDefaultName(type)
+        setProject({
+            id: generateId(),
+            type,
+            name: defaultName,
             classes: [],
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
             modelTrained: false,
-            accuracy: undefined,
-            updatedAt: Date.now()
-        }))
+            accuracy: undefined
+        })
         setAccuracy(null)
         setMode('collect')
         setAnnotations([])
         setCurrentAnnotation(null)
         try { localStorage.removeItem(`neura-annotations-${type}`) } catch { /* ignore */ }
         try { localStorage.removeItem(`neura-project-${type}`) } catch {}
+        try { localStorage.removeItem(`neura-idb-marker-${type}`) } catch {}
         deleteNeuraProject(type).catch(() => {})
         setSaveStatus('idle')
         setSaveError(null)

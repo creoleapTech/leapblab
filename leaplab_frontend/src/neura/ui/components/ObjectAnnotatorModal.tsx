@@ -318,9 +318,9 @@ export default function ObjectAnnotatorModal({ imageUrl, initialBoxes, classOpti
                         <button onClick={onClose} className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center hover:bg-slate-800">✕</button>
                     </div>
                 </div>
-                {/* Label selector inside annotator — pick active class for next box */}
+                {/* Label selector — single instruction (was duplicated) */}
                 <div className="shrink-0 flex items-center gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200 overflow-x-auto neura-scrollbar">
-                    <span className="text-[11px] font-bold text-slate-600 shrink-0">Label for next box:</span>
+                    <span className="text-[11px] font-bold text-slate-600 shrink-0">Next box will be labelled as:</span>
                     {classOptions.map(opt => {
                         const isActive = activeLabel === opt.name
                         const count = boxes.filter(b => b.label === opt.name).length
@@ -337,7 +337,6 @@ export default function ObjectAnnotatorModal({ imageUrl, initialBoxes, classOpti
                             </button>
                         )
                     })}
-                    <span className="ml-1 text-[10px] text-slate-400 hidden sm:inline">Next box → <b className="text-slate-700">{activeLabel}</b> • existing boxes keep their label</span>
                 </div>
 
                 <div className="flex-1 flex flex-col lg:flex-row min-h-0">

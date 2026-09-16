@@ -266,30 +266,111 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
         try {
             const start = performance.now()
             let result: { class: string; score: number; bbox: [number, number, number, number] }[] = []
+            const hasYoloCustom = yoloTrainerRef.current.getLabels().length > 0
+            const hasKnnCustom = trainerRef.current.canClassify
             if (useYolo && yoloAvailable) {
                 try {
-                    const yoloBoxes = await yoloDetect(video, 0.35, 0.45)
-                    const userClasses = mode.project?.classes || []
-                    // If YOLO COCO maps to user classes, use directly; else use KNN on YOLO boxes if trained
-                    const mapped = yoloBoxes.map(b => ({ class: mapToUserClass(b.class, userClasses), score: b.score, bbox: b.bbox })).filter(b => userClasses.length === 0 || userClasses.some(c => c.name === b.class))
-                    if (mapped.length > 0) result = mapped
-                    else if (trainerRef.current.canClassify) {
-                        const customResult = await trainerRef.current.detect(video, 20, true)
-                        result = customResult.objects.map(o => ({ class: o.label, score: o.confidence, bbox: o.bbox }))
-                    } else if (yoloBoxes.length > 0) {
-                        // Show raw YOLO even if not mapped (for debugging)
-                        result = yoloBoxes.slice(0, 8).map(b => ({ class: b.class, score: b.score, bbox: b.bbox }))
+                    // If we have a trained YOLO custom head (73% case), use it to classify YOLO proposals — this is the trained model
+                    if (hasYoloCustom) {
+                        const yoloBoxes = await yoloDetect(video, 0.35, 0.45)
+                        if (yoloBoxes.length > 0) {
+                            // Capture frame as dataURL for YOLO head crop classification
+                            const tmp = document.createElement('canvas')
+                            tmp.width = video.videoWidth; tmp.height = video.videoHeight
+                            const tctx = tmp.getContext('2d')
+                            let frameUrl: string | null = null
+                            if (tctx) { tctx.drawImage(video, 0, 0, tmp.width, tmp.height); try { frameUrl = tmp.toDataURL('image/jpeg', 0.85) } catch {} }
+                            const classified: typeof result = []
+                            for (const prop of yoloBoxes.slice(0, 8)) {
+                                const [x, y, w, h] = prop.bbox
+                                const pct = { x: (x / video.videoWidth) * 100, y: (y / video.videoHeight) * 100, width: (w / video.videoWidth) * 100, height: (h / video.videoHeight) * 100 }
+                                try {
+                                    const pred = frameUrl ? await (yoloTrainerRef.current as any).classifyProposal(frameUrl, pct) : null
+                                    if (pred && pred.confidence > 0.30) classified.push({ class: pred.label, score: pred.confidence, bbox: prop.bbox })
+                                    else if (pred && pred.confidence > 0.20) {
+                                        // low threshold fallback — still show
+                                        classified.push({ class: pred.label, score: pred.confidence, bbox: prop.bbox })
+                                    }
+                                } catch {}
+                            }
+                            if (classified.length > 0) result = classified
+                        }
+                        // If YOLO proposals yielded nothing, fallback to KNN sliding-window or YOLO+KNN
+                        if (result.length === 0 && hasKnnCustom) {
+                            const customResult = await trainerRef.current.detect(video, 20, true)
+                            result = customResult.objects.map(o => ({ class: o.label, score: o.confidence, bbox: o.bbox }))
+                        }
+                        // If still nothing but YOLO had raw boxes, try to classify raw boxes with KNN as last resort
+                        if (result.length === 0 && hasKnnCustom) {
+                            const customResult2 = await trainerRef.current.detect(video, 20, true)
+                            if (customResult2.objects.length) result = customResult2.objects.map(o => ({ class: o.label, score: o.confidence, bbox: o.bbox }))
+                        }
+                    } else {
+                        // No custom YOLO head — use COCO mapping path
+                        const yoloBoxes = await yoloDetect(video, 0.35, 0.45)
+                        const userClasses = mode.project?.classes || []
+                        const mapped = yoloBoxes.map(b => ({ class: mapToUserClass(b.class, userClasses), score: b.score, bbox: b.bbox })).filter(b => userClasses.length === 0 || userClasses.some(c => c.name === b.class))
+                        if (mapped.length > 0) result = mapped
+                        else if (hasKnnCustom) {
+                            const customResult = await trainerRef.current.detect(video, 20, true)
+                            result = customResult.objects.map(o => ({ class: o.label, score: o.confidence, bbox: o.bbox }))
+                        } else if (yoloBoxes.length > 0) {
+                            result = yoloBoxes.slice(0, 8).map(b => ({ class: b.class, score: b.score, bbox: b.bbox }))
+                        }
                     }
-                } catch (e) { console.warn('[detectFrame] YOLO fail, fallback KNN', e) }
-                if (result.length === 0 && trainerRef.current.canClassify) {
+                } catch (e) { console.warn('[detectFrame] YOLO fail, fallback', e) }
+                if (result.length === 0 && hasKnnCustom) {
                     const customResult = await trainerRef.current.detect(video, 20, true)
                     result = customResult.objects.map(o => ({ class: o.label, score: o.confidence, bbox: o.bbox }))
                 }
-            } else if (trainerRef.current.canClassify) {
+                // Final fallback: if custom model exists but we still have 0, try KNN or YOLO custom directly (covers 73% trained case where proposals were empty)
+                if (result.length === 0 && (hasYoloCustom || hasKnnCustom)) {
+                    if (hasKnnCustom) {
+                        try {
+                            const cr = await trainerRef.current.detect(video, 20, true)
+                            if (cr.objects.length) result = cr.objects.map(o => ({ class: o.label, score: o.confidence, bbox: o.bbox }))
+                        } catch {}
+                    }
+                }
+            } else if (hasKnnCustom) {
                 const customResult = await trainerRef.current.detect(video, 20, true)
                 result = customResult.objects.map(o => ({ class: o.label, score: o.confidence, bbox: o.bbox }))
+            } else if (hasYoloCustom) {
+                // KNN not available but YOLO custom is — try YOLO proposals + classify
+                try {
+                    const yoloBoxes = await yoloDetect(video, 0.35, 0.45)
+                    if (yoloBoxes.length) {
+                        const tmp = document.createElement('canvas')
+                        tmp.width = video.videoWidth; tmp.height = video.videoHeight
+                        const tctx = tmp.getContext('2d'); let frameUrl: string | null = null
+                        if (tctx) { tctx.drawImage(video, 0, 0, tmp.width, tmp.height); try { frameUrl = tmp.toDataURL('image/jpeg', 0.85)} catch{} }
+                        const classified: typeof result = []
+                        for (const prop of yoloBoxes.slice(0,8)) {
+                            const [x,y,w,h]=prop.bbox
+                            const pct={x:(x/video.videoWidth)*100,y:(y/video.videoHeight)*100,width:(w/video.videoWidth)*100,height:(h/video.videoHeight)*100}
+                            try{ const pred=frameUrl?await (yoloTrainerRef.current as any).classifyProposal(frameUrl,pct):null; if(pred&&pred.confidence>0.30) classified.push({class:pred.label,score:pred.confidence,bbox:prop.bbox})}catch{}
+                        }
+                        if (classified.length) result=classified
+                    }
+                } catch {}
+                if (result.length===0 && hasKnnCustom) {
+                    const cr=await trainerRef.current.detect(video,20,true); result=cr.objects.map(o=>({class:o.label,score:o.confidence,bbox:o.bbox}))
+                }
             } else if (useCustomModel && customModelTrained) {
-                result = []
+                // Custom flagged but canClassify false — try both heads anyway
+                if (hasYoloCustom || hasKnnCustom) {
+                    try {
+                        if (hasYoloCustom) {
+                            const yoloBoxes=await yoloDetect(video,0.35,0.45)
+                            if(yoloBoxes.length){
+                                const tmp=document.createElement('canvas');tmp.width=video.videoWidth;tmp.height=video.videoHeight;const c=tmp.getContext('2d');let fu:string|null=null;if(c){c.drawImage(video,0,0,tmp.width,tmp.height);try{fu=tmp.toDataURL('image/jpeg',0.85)}catch{}}
+                                const cl:typeof result=[];for(const p of yoloBoxes.slice(0,8)){const[x,y,w,h]=p.bbox;const pct={x:(x/video.videoWidth)*100,y:(y/video.videoHeight)*100,width:(w/video.videoWidth)*100,height:(h/video.videoHeight)*100};try{const pr=fu?await (yoloTrainerRef.current as any).classifyProposal(fu,pct):null;if(pr&&pr.confidence>0.30) cl.push({class:pr.label,score:pr.confidence,bbox:p.bbox})}catch{}}
+                                if(cl.length) result=cl
+                            }
+                        }
+                        if(result.length===0 && hasKnnCustom){const cr=await trainerRef.current.detect(video,20,true);result=cr.objects.map(o=>({class:o.label,score:o.confidence,bbox:o.bbox}))}
+                    }catch{}
+                } else result=[]
             } else {
                 const cocoResult = await detectorRef.current.detect(video)
                 const userClasses = mode.project?.classes || []
@@ -452,11 +533,12 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
                         // For YOLO mode, use YOLO boxes directly but re-score with trained classifier if needed
                         // YOLO COCO classes mapped to user classes
                         const userClasses = mode.project?.classes || []
+                        const hasYoloHead = yoloTrainerRef.current.getLabels().length > 0
                         result = yoloProps.map(p => ({ class: mapToUserClass(p.class, userClasses), score: p.score, bbox: p.bbox }))
                             .filter(p => userClasses.length === 0 || userClasses.some(c => c.name === p.class))
-                        // If no user mapping (custom cat/dog not in COCO), fallback to KNN classification on YOLO boxes
-                        if (result.length === 0 && trainerRef.current.canClassify) {
-                            console.log('[ObjectDetectorPanel] YOLO COCO no match → classify YOLO boxes with KNN/YOLO head')
+                        // If no user mapping (custom cat/dog not in COCO), fallback to YOLO custom head classification on YOLO boxes
+                        if (result.length === 0 && hasYoloHead) {
+                            console.log('[ObjectDetectorPanel] YOLO COCO no match → classify YOLO boxes with YOLO head (custom model)')
                             const fallback: typeof result = []
                             for (const prop of yoloProps.slice(0, 8)) {
                                 const [x, y, w, h] = prop.bbox
@@ -466,16 +548,35 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
                                     const emb = await (yoloTrainerRef.current as any).embedCrop ? await (yoloTrainerRef.current as any).embedCrop(imageUrl, pct) : null
                                     if (!emb) continue
                                     const pred = await yoloTrainerRef.current.predict(emb)
-                                    if (pred && pred.confidences[pred.label] > 0.38) fallback.push({ class: pred.label, score: pred.confidences[pred.label], bbox: prop.bbox })
+                                    if (pred && pred.confidences[pred.label] > 0.30) fallback.push({ class: pred.label, score: pred.confidences[pred.label], bbox: prop.bbox })
                                 } catch {}
                             }
                             if (fallback.length) result = fallback
                         }
+                        if (result.length === 0 && hasYoloHead) {
+                            // Try YOLO head on its own if still empty — maybe COCO missed custom objects entirely, fallback to KNN as last resort
+                            console.log('[ObjectDetectorPanel] YOLO custom still 0 → try KNN fallback if available')
+                            if (trainerRef.current.canClassify) {
+                                const customResult = await trainerRef.current.detect(img, 20, false)
+                                if (customResult.objects.length) result = customResult.objects.map(o => ({ class: o.label, score: o.confidence, bbox: o.bbox }))
+                            }
+                        }
                     }
-                    if (result.length === 0 && trainerRef.current.canClassify) {
-                        console.log('[ObjectDetectorPanel] YOLO gave 0 → fallback to KNN proposals (still YOLO era)')
-                        const customResult = await trainerRef.current.detect(img, 20, false)
-                        result = customResult.objects.map(o => ({ class: o.label, score: o.confidence, bbox: o.bbox }))
+                    if (result.length === 0 && (trainerRef.current.canClassify || yoloTrainerRef.current.getLabels().length > 0)) {
+                        console.log('[ObjectDetectorPanel] YOLO gave 0 → fallback to available custom model')
+                        if (trainerRef.current.canClassify) {
+                            const customResult = await trainerRef.current.detect(img, 20, false)
+                            if (customResult.objects.length) result = customResult.objects.map(o => ({ class: o.label, score: o.confidence, bbox: o.bbox }))
+                        }
+                        if (result.length === 0 && yoloTrainerRef.current.getLabels().length > 0) {
+                            // Last resort: YOLO head sliding window via KNN detector's proposals classified by YOLO head
+                            const knnRes = trainerRef.current.canClassify ? await trainerRef.current.detect(img, 20, false) : { objects: [] as any[] }
+                            // If KNN had no model, try YOLO head on YOLO proposals already tried, so just return 0
+                            if (knnRes.objects.length === 0) {
+                                // Try YOLO head directly on image crops via yoloTrainer classifyProposal for all proposals
+                                // (already tried above)
+                            }
+                        }
                     }
                 } catch (e) { console.warn('[ObjectDetectorPanel] YOLO detect failed, fallback to KNN', e) }
                 if (result.length === 0 && trainerRef.current.canClassify) {

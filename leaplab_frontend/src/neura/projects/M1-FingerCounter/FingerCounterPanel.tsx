@@ -66,10 +66,25 @@ function getSampleImageSrc(sample: { type: string; data: string }): string | nul
     if (sample.data.startsWith('data:image')) return sample.data
     try {
         const parsed = JSON.parse(sample.data)
-        if (parsed && typeof parsed === 'object' && typeof parsed.image === 'string' && parsed.image.startsWith('data:image')) return parsed.image
-        if (parsed && typeof parsed.data === 'string' && parsed.data.startsWith('data:image')) return parsed.data
+        if (parsed && typeof parsed === 'object') {
+            if (typeof parsed.thumb === 'string' && parsed.thumb.startsWith('data:image')) return parsed.thumb
+            if (typeof parsed.image === 'string' && parsed.image.startsWith('data:image')) return parsed.image
+            if (typeof parsed.data === 'string' && parsed.data.startsWith('data:image')) return parsed.data
+        }
     } catch {}
     return null
+}
+function getSampleFullSrc(sample: { type: string; data: string }): string | null {
+    if (!sample?.data) return null
+    try {
+        const parsed = JSON.parse(sample.data)
+        if (parsed && typeof parsed === 'object') {
+            if (typeof parsed.original === 'string' && parsed.original.startsWith('data:image')) return parsed.original
+            if (typeof parsed.data === 'string' && parsed.data.startsWith('data:image') && parsed.data.length > 1000) return parsed.data
+        }
+    } catch {}
+    // Fallback to thumb/single image
+    return getSampleImageSrc(sample)
 }
 
 export default function FingerCounterPanel({ mode }: FingerCounterPanelProps) {
@@ -520,8 +535,10 @@ classifierRef.current.drawHand(overlayCanvasRef.current, keypoints, undefined, {
             if (keypoints && keypoints.length > 0) {
                 const features = classifierRef.current.extractFeatures(keypoints)
                 const thumb = createThumbnailFromCanvas(tempCanvas, 160, 120, 0.6)
-                const payload = JSON.stringify({ image: thumb, keypoints: Array.from(features) })
-                const added = mode.addSample(mode.selectedClassId, { type: 'image', data: thumb } as any)
+                const full = tempCanvas.toDataURL('image/jpeg', 0.85)
+                const payload = JSON.stringify({ image: thumb, thumb, original: full, keypoints: Array.from(features) })
+                const enriched = JSON.stringify({ thumb, original: full, image: thumb, keypoints: Array.from(features) })
+                const added = mode.addSample(mode.selectedClassId, { type: 'image', data: enriched } as any)
                 // Fallback: if image type fails due to storage, try keypoints with embedded preview
                 let finalAdded = added
                 if (!added) {
@@ -594,7 +611,7 @@ classifierRef.current.drawHand(overlayCanvasRef.current, keypoints, undefined, {
         }
         for (let i = 0; i < files.length; i++) {
             const file = files[i]
-            if (!file.type.startsWith('image/')) continue
+            if (!(file.type && file.type.startsWith('image/')) && !/\.(png|jpe?g|gif|webp|bmp|svg|heic|heif|avif)$/i.test(file.name)) continue
             const currentCls = mode.getSelectedClass()
             if (currentCls && currentCls.samples.length >= MAX_SAMPLES_PER_CLASS) break
             const dataUrl = await new Promise<string>((resolve) => {
@@ -623,10 +640,11 @@ classifierRef.current.drawHand(overlayCanvasRef.current, keypoints, undefined, {
                         if (keypoints && keypoints.length > 0) {
                             const features = classifierRef.current.extractFeatures(keypoints)
                             const thumb = await createThumbnailFromDataUrl(dataUrl, 160, 120, 0.6)
-                            const added = mode.addSample(mode.selectedClassId!, { type: 'image', data: thumb } as any)
+                            const enriched = JSON.stringify({ thumb, original: dataUrl, image: thumb, keypoints: Array.from(features) })
+                            const added = mode.addSample(mode.selectedClassId!, { type: 'image', data: enriched } as any)
                             let finalAdded = added
                             if (!finalAdded) {
-                                const payload = JSON.stringify({ image: thumb, keypoints: Array.from(features) })
+                                const payload = JSON.stringify({ image: thumb, thumb, original: dataUrl, keypoints: Array.from(features) })
                                 finalAdded = mode.addSample(mode.selectedClassId!, { type: 'keypoints', data: payload } as any)
                             }
                             if (!finalAdded) {
@@ -842,13 +860,22 @@ classifierRef.current.drawHand(overlayCanvasRef.current, keypoints, undefined, {
                                         <div className="grid grid-cols-3 gap-2 max-h-[320px] overflow-y-auto neura-scrollbar pr-0.5 p-0.5">
                                             {selectedClass.samples.map((s, idx) => {
                                                 const src = getSampleImageSrc(s)
+                                                const fullSrc = getSampleFullSrc(s) || src
                                                 const label = `${selectedClass.name} #${idx + 1}`
                                                 return (
                                                     <div
                                                         key={s.id}
-                                                        onClick={() => src && openSingleImage(src, label)}
-                                                        title={src ? 'Click to view • Hover for delete' : 'Sample (no preview)'}
-                                                        className={`group relative aspect-square rounded-lg overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 flex items-center justify-center transition-all hover:shadow-md hover:scale-[1.02] ${src ? 'cursor-zoom-in' : 'cursor-default'}`}
+                                                        onClick={() => {
+                                                            if (!fullSrc) return
+                                                            const all = selectedClass.samples.map((x, i) => {
+                                                                const f = getSampleFullSrc(x) || getSampleImageSrc(x)
+                                                                return f ? { src: f, label: `${selectedClass.name} #${i + 1}` } : null
+                                                            }).filter(Boolean) as { src: string; label: string }[]
+                                                            if (all.length > 1) openImageViewer(all, idx)
+                                                            else openSingleImage(fullSrc, label)
+                                                        }}
+                                                        title={fullSrc ? 'Click to view full size (80% screen) • Hover for delete' : 'Sample (no preview)'}
+                                                        className={`group relative aspect-square rounded-lg overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 flex items-center justify-center transition-all hover:shadow-md hover:scale-[1.02] ${fullSrc ? 'cursor-zoom-in' : 'cursor-default'}`}
                                                     >
                                                         {src ? (
                                                             <img src={src} alt={label} className="w-full h-full object-cover pointer-events-none" draggable={false} />
@@ -886,7 +913,7 @@ classifierRef.current.drawHand(overlayCanvasRef.current, keypoints, undefined, {
                                     {selectedClass.samples.length > 0 && (
                                         <button
                                             onClick={() => {
-                                                const imgs = selectedClass.samples.map(s => getSampleImageSrc(s)).filter(Boolean) as string[]
+                                                const imgs = selectedClass.samples.map(s => getSampleFullSrc(s) || getSampleImageSrc(s)).filter(Boolean) as string[]
                                                 if (imgs.length > 0) openImageViewer(imgs.map((src, i) => ({ src, label: `${selectedClass.name} #${i + 1}` })), 0)
                                             }}
                                             className="mt-2 w-full py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-[10px] font-bold text-slate-700 transition-colors"
