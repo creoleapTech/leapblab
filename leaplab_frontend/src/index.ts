@@ -20,6 +20,16 @@ import type { UpdateInfo, DownloadProgress } from './update/updateChecker';
 // Suppress development security warnings in the console
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true';
 
+// Dev-only: bypass the Chromium HTTP disk cache entirely. In dev the cache can
+// become corrupted when the process is hard-killed mid-write (Ctrl+C), after
+// which every media/asset request fails with ERR_CACHE_READ_FAILURE or
+// ERR_CACHE_OPERATION_NOT_SUPPORTED. The dev server is localhost, so caching
+// buys nothing — disabling it removes the failure mode at the source. Must run
+// before app 'ready'.
+if (!app.isPackaged) {
+  app.commandLine.appendSwitch('disable-http-cache');
+}
+
 // Only one LeapBlocks instance may run at a time. Without this, multiple
 // instances (e.g. a leftover `npm run dev` window) fight over the same COM
 // port and the loser fails to connect with "Access denied".
@@ -209,7 +219,8 @@ const createWindow = (): void => {
     mainWindow.webContents.openDevTools();
     logTiming('DevTools opened');
 
-    // Clear session cache to prevent ERR_CACHE_READ_FAILURE
+    // Belt-and-braces alongside the `disable-http-cache` switch: purges any
+    // corrupted entries left on disk from an earlier hard-kill.
     mainWindow.webContents.session.clearCache()
       .then(() => log('MAIN', 'Chromium cache cleared in development mode'))
       .catch((err) => log('MAIN', `Failed to clear Chromium cache: ${err.message}`));
