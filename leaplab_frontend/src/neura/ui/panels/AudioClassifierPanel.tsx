@@ -50,6 +50,7 @@ export default function AudioClassifierPanel({ mode }: AudioClassifierPanelProps
     const [editingClassId, setEditingClassId] = useState<string | null>(null)
     const [editName, setEditName] = useState('')
     const [expandedClasses, setExpandedClasses] = useState<Record<string, boolean>>({})
+    const [uploadingByClass, setUploadingByClass] = useState<Record<string, number>>({})
     const [playingSampleId, setPlayingSampleId] = useState<string | null>(null)
     const audioPlaybackRef = useRef<HTMLAudioElement | null>(null)
     const toneContextRef = useRef<AudioContext | null>(null)
@@ -353,31 +354,46 @@ export default function AudioClassifierPanel({ mode }: AudioClassifierPanelProps
         if (cls.samples.length >= MAX_SAMPLES_PER_CLASS) { showSaved('Maximum 20 per folder'); return }
         let added = 0
         const list = Array.from(files as any) as File[]
-        const audioFiles = list.filter(f => f.type.startsWith('audio/') || /\.(wav|mp3)$/i.test(f.name))
-        if (audioFiles.length === 0) { showSaved('No audio files found (.wav/.mp3)'); return }
+        const audioFiles = list.filter(f => {
+            if (f.type && f.type.startsWith('audio/')) return true
+            return /\.(mp3|wav|ogg|m4a|aac|flac|mp4|mpeg)$/i.test(f.name)
+        })
+        if (audioFiles.length === 0) { showSaved('No audio files found'); return }
+        const remaining = MAX_SAMPLES_PER_CLASS - cls.samples.length
+        const toProcess = audioFiles.slice(0, remaining)
+        if (audioFiles.length > remaining) {
+            showSaved(`Only ${remaining} of ${audioFiles.length} will be added (20 max per folder)`)
+        }
+        if (toProcess.length === 0) return
+        setUploadingByClass(prev => ({ ...prev, [classId]: (prev[classId] || 0) + toProcess.length }))
+        const decrementLoader = () => {
+            setUploadingByClass(prev => {
+                const cur = (prev[classId] || 0) - 1
+                if (cur <= 0) { const { [classId]: _, ...rest } = prev as any; return rest }
+                return { ...prev, [classId]: cur }
+            })
+        }
         setIsImporting(true); setImportError(null)
-        for (let i = 0; i < audioFiles.length; i++) {
-            const file = audioFiles[i]
+        for (let i = 0; i < toProcess.length; i++) {
+            const file = toProcess[i]
             const cur = mode.project?.classes.find(c => c.id === classId)
-            if (cur && cur.samples.length >= MAX_SAMPLES_PER_CLASS) { showSaved(`Limit reached for ${cls.name}`); break }
+            if (cur && cur.samples.length >= MAX_SAMPLES_PER_CLASS) { showSaved(`Limit reached for ${cls.name}`); decrementLoader(); break }
             try {
                 const targetName = mode.project?.classes.find(c => c.id === classId)?.name || cls.name
-                // Prepare data URL for audible playback before importing (so we keep original audio)
                 let audioDataUrl: string | undefined
                 try { audioDataUrl = await blobToDataUrl(file) } catch {}
                 const features = await classifierRef.current.importFromFile(file, targetName)
-                // importFromFile already added to KNN, now persist to project — avoid double add to KNN by not calling again
                 const payload = audioDataUrl ? JSON.stringify({ features, audio: audioDataUrl, name: file.name }) : JSON.stringify(features)
                 const ok = mode.addSample(classId, { type: 'audio', data: payload })
-                if (ok) added++
-                else {
-                    // rollback classifier sample if project full — remove last added? best effort clear class and rebuild
-                }
+                if (ok) { added++; decrementLoader() }
+                else { decrementLoader(); break }
             } catch (e: any) {
                 setImportError(e?.message || 'Import failed')
                 console.warn('[Neura][audio] import failed', e)
+                decrementLoader()
             }
         }
+        setUploadingByClass(prev => { const { [classId]: _, ...rest } = prev as any; return rest })
         setIsImporting(false)
         if (added > 0) showSaved(`Added ${added} sound${added > 1 ? 's' : ''} to ${cls.name}`)
     }
@@ -390,6 +406,67 @@ export default function AudioClassifierPanel({ mode }: AudioClassifierPanelProps
         await processFilesForClass(files, targetId)
         if (fileInputRef.current) fileInputRef.current.value = ''; pendingImportClassRef.current = null
     }
+    // Paste audio from clipboard (Ctrl+V) — multi-file up to 20, extension fallback, sync loader compatible
+    useEffect(() => {
+        const extractAudioFromClipboard = async (e: ClipboardEvent): Promise<File[]> => {
+            const out: File[] = []
+            const items = e.clipboardData?.items
+            if (items) {
+                for (let i = 0; i < items.length; i++) {
+                    const it = items[i]
+                    if (it.kind === 'file') {
+                        const f = it.getAsFile()
+                        if (f && (f.type.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|aac|flac|mp4|mpeg)$/i.test(f.name))) {
+                            if (out.length >= 20) break
+                            out.push(f)
+                        }
+                    } else if (it.type === 'text/html') {
+                        const html = await new Promise<string>(res => it.getAsString(s => res(s || '')))
+                        const matches = [...html.matchAll(/<audio[^>]+src=["']([^"']+)["']/gi), ...html.matchAll(/<source[^>]+src=["']([^"']+)["']/gi)]
+                        for (const match of matches) {
+                            if (out.length >= 20) break
+                            const src = match[1]
+                            try {
+                                if (src.startsWith('data:audio')) {
+                                    const res = await fetch(src); const blob = await res.blob(); out.push(new File([blob], 'pasted.mp3', { type: blob.type || 'audio/mpeg' }))
+                                } else if (src.startsWith('http')) {
+                                    const res = await fetch(src, { mode: 'cors' }).catch(() => null)
+                                    if (res && res.ok) { const blob = await res.blob(); out.push(new File([blob], 'pasted.mp3', { type: blob.type })) }
+                                }
+                            } catch {}
+                        }
+                    } else if (it.type === 'text/plain') {
+                        const text = await new Promise<string>(res => it.getAsString(s => res(s || '')))
+                        const t = text.trim()
+                        if (t.startsWith('data:audio') && t.length > 100) {
+                            try { const res = await fetch(t); const blob = await res.blob(); if (out.length < 20) out.push(new File([blob], 'pasted.mp3', { type: blob.type })) } catch {}
+                        }
+                    }
+                    if (out.length >= 20) break
+                }
+            }
+            if (out.length === 0 && e.clipboardData?.files?.length) {
+                for (let i = 0; i < e.clipboardData.files.length; i++) {
+                    if (out.length >= 20) break
+                    const f = e.clipboardData.files[i]
+                    if (f.type.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|aac|flac|mp4|mpeg)$/i.test(f.name)) out.push(f)
+                }
+            }
+            return out.slice(0, 20)
+        }
+        const handlePaste = async (e: ClipboardEvent) => {
+            const active = document.activeElement as HTMLElement | null
+            if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return
+            const audioFiles = await extractAudioFromClipboard(e)
+            if (audioFiles.length === 0) return
+            e.preventDefault()
+            const targetId = mode.selectedClassId || mode.project?.classes[0]?.id
+            if (!targetId) { showSaved('Create a folder first, then paste (Ctrl+V)'); return }
+            await processFilesForClass(audioFiles, targetId)
+        }
+        window.addEventListener('paste', handlePaste as any)
+        return () => window.removeEventListener('paste', handlePaste as any)
+    }, [mode.selectedClassId, mode.project?.classes])
 
     const handleTestUpload = async (e: React.ChangeEvent<HTMLInputElement> | FileList | File[]) => {
         let file: File | null = null
@@ -911,7 +988,7 @@ export default function AudioClassifierPanel({ mode }: AudioClassifierPanelProps
                                         onDrop={async e => { e.preventDefault(); setDragOverClass(null); if (e.dataTransfer.files.length > 0) await processFilesForClass(e.dataTransfer.files, cls.id) }}
                                         className="flex-1 p-3 flex flex-col gap-3 min-h-[170px]"
                                     >
-                                        {cls.samples.length > 0 ? (
+                                        {(cls.samples.length > 0 || (uploadingByClass[cls.id] || 0) > 0) ? (
                                             <>
                                                 <div data-dataset-panel className={`grid grid-cols-2 gap-2 ${expandedClasses[cls.id] ? 'max-h-[360px] overflow-auto pr-1 neura-scrollbar' : 'max-h-[160px] overflow-auto pr-0.5'}`}>
                                                     {(expandedClasses[cls.id] ? cls.samples : cls.samples.slice(0, 6)).map(s => (
@@ -927,6 +1004,12 @@ export default function AudioClassifierPanel({ mode }: AudioClassifierPanelProps
                                                                 <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); handlePlaySample(s.id, s.data) }} className={`flex-1 h-6 rounded-md border text-[11px] font-bold flex items-center justify-center gap-1 ${playingSampleId === s.id ? 'bg-violet-600 text-white border-violet-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}>{playingSampleId === s.id ? '■ Stop' : '▶ Play'}</button>
                                                                 <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); handleRemoveSample(cls.id, s.id) }} className="w-6 h-6 rounded-md bg-white border border-slate-200 text-slate-500 hover:text-red-600 flex items-center justify-center">×</button>
                                                             </div>
+                                                        </div>
+                                                    ))}
+                                                    {(uploadingByClass[cls.id] || 0) > 0 && Array.from({ length: uploadingByClass[cls.id] }).map((_, i) => (
+                                                        <div key={`uploading-${cls.id}-${i}`} className="aspect-square rounded-lg bg-white border-2 border-violet-200 flex flex-col items-center justify-center gap-1 animate-pulse">
+                                                            <div className="w-6 h-6 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
+                                                            <span className="text-[8px] font-bold text-violet-600 tracking-wide">Loading…</span>
                                                         </div>
                                                     ))}
                                                 </div>

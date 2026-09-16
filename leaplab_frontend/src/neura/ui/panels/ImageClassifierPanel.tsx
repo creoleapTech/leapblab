@@ -50,6 +50,7 @@ export default function ImageClassifierPanel({ mode }: ImageClassifierPanelProps
     const [expandedClasses, setExpandedClasses] = useState<Record<string, boolean>>({})
     const [copyMenuFor, setCopyMenuFor] = useState<string | null>(null)
     const [confirmState, setConfirmState] = useState<{ title: string; message: string; confirmText: string; variant: 'danger' | 'primary' | 'warning'; icon?: string; onConfirm: () => void } | null>(null)
+    const [uploadingByClass, setUploadingByClass] = useState<Record<string, number>>({})
 
     // Close copy menu on outside click
     useEffect(() => {
@@ -298,6 +299,16 @@ export default function ImageClassifierPanel({ mode }: ImageClassifierPanelProps
         if (imageFiles.length > remaining) {
             showSaved(`Only ${remaining} of ${imageFiles.length} will be added (20 max per folder)`)
         }
+        if (toProcess.length === 0) return
+        // Show sync lazy loaders for all pending files immediately — one by one sync appearance
+        setUploadingByClass(prev => ({ ...prev, [classId]: (prev[classId] || 0) + toProcess.length }))
+        const decrementLoader = () => {
+            setUploadingByClass(prev => {
+                const cur = (prev[classId] || 0) - 1
+                if (cur <= 0) { const { [classId]: _, ...rest } = prev as any; return rest }
+                return { ...prev, [classId]: cur }
+            })
+        }
         for (let i = 0; i < toProcess.length; i++) {
             const file = toProcess[i]
             try {
@@ -310,12 +321,12 @@ export default function ImageClassifierPanel({ mode }: ImageClassifierPanelProps
                     }
                     try { r.readAsDataURL(file) } catch (e) { console.warn(e); resolve('') }
                 })
-                if (!dataUrl || dataUrl.length < 100) { skipped++; continue }
+                if (!dataUrl || dataUrl.length < 100) { skipped++; decrementLoader(); continue }
                 const img = new Image(); img.src = dataUrl
                 await new Promise<void>(resolve => { img.onload = () => resolve(); img.onerror = () => resolve(); setTimeout(() => resolve(), 3000) })
-                if (!img.complete || img.naturalWidth === 0) { skipped++; continue }
+                if (!img.complete || img.naturalWidth === 0) { skipped++; decrementLoader(); continue }
                 const ok = mode.addSample(classId, { type: 'image', data: dataUrl })
-                if (!ok) { showSaved(`Limit reached for ${cls.name} (20 max)`); break }
+                if (!ok) { showSaved(`Limit reached for ${cls.name} (20 max)`); decrementLoader(); break }
                 const targetName = mode.project?.classes.find(c => c.id === classId)?.name || cls.name
                 try {
                     if (augmentMode) await classifierRef.current.addSampleAugmented(img, targetName)
@@ -325,11 +336,15 @@ export default function ImageClassifierPanel({ mode }: ImageClassifierPanelProps
                     // Project sample already added, keep counted as added (visible in UI)
                 }
                 added++
+                decrementLoader()
             } catch (e) {
                 console.warn('[ImageClassifier] process file failed', file.name, e)
                 skipped++
+                decrementLoader()
             }
         }
+        // Ensure loaders cleared (handles break case)
+        setUploadingByClass(prev => { const { [classId]: _, ...rest } = prev as any; return rest })
         if (added > 0) showSaved(`Added ${added} image${added > 1 ? 's' : ''} to ${cls.name}${skipped ? ` (${skipped} skipped)` : ''}`)
         else if (skipped > 0) showSaved(`No images added — ${skipped} file${skipped>1?'s':''} could not be read`)
     }
@@ -390,7 +405,7 @@ export default function ImageClassifierPanel({ mode }: ImageClassifierPanelProps
         showSaved(`Copied to ${targetClass?.name || 'folder'} ✓`)
     }, [mode, augmentMode])
 
-    // Pasted images from clipboard (Ctrl+V) — handles file, image/*, text/html with <img>, and dataUrl
+    // Pasted images from clipboard (Ctrl+V) — handles file, image/*, text/html with <img>, and dataUrl (multi-image up to 20, sync loader compatible)
     useEffect(() => {
         const extractImagesFromClipboard = async (e: ClipboardEvent): Promise<File[]> => {
             const out: File[] = []
@@ -398,14 +413,19 @@ export default function ImageClassifierPanel({ mode }: ImageClassifierPanelProps
             if (items) {
                 for (let i = 0; i < items.length; i++) {
                     const it = items[i]
-                    if (it.kind === 'file' && it.type.startsWith('image/')) {
-                        const f = it.getAsFile(); if (f) out.push(f)
+                    if (it.kind === 'file') {
+                        const f = it.getAsFile()
+                        if (f && (f.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|svg|heic|heif|avif)$/i.test(f.name))) {
+                            if (out.length >= 20) break
+                            out.push(f)
+                        }
                     } else if (it.type === 'text/html') {
                         const html = await new Promise<string>(res => it.getAsString(s => res(s || '')))
-                        const match = html.match(/<img[^>]+src=["']([^"']+)["']/i)
-                        if (match && match[1]) {
+                        const matches = [...html.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)]
+                        for (const match of matches) {
+                            if (out.length >= 20) break
+                            const src = match[1]
                             try {
-                                const src = match[1]
                                 if (src.startsWith('data:image')) {
                                     const res = await fetch(src); const blob = await res.blob(); out.push(new File([blob], 'pasted.png', { type: blob.type || 'image/png' }))
                                 } else if (src.startsWith('http')) {
@@ -418,18 +438,20 @@ export default function ImageClassifierPanel({ mode }: ImageClassifierPanelProps
                         const text = await new Promise<string>(res => it.getAsString(s => res(s || '')))
                         const t = text.trim()
                         if (t.startsWith('data:image') && t.length > 100) {
-                            try { const res = await fetch(t); const blob = await res.blob(); out.push(new File([blob], 'pasted.png', { type: blob.type })) } catch {}
+                            try { const res = await fetch(t); const blob = await res.blob(); if (out.length < 20) out.push(new File([blob], 'pasted.png', { type: blob.type })) } catch {}
                         }
                     }
+                    if (out.length >= 20) break
                 }
             }
             if (out.length === 0 && e.clipboardData?.files?.length) {
                 for (let i = 0; i < e.clipboardData.files.length; i++) {
+                    if (out.length >= 20) break
                     const f = e.clipboardData.files[i]
-                    if (f.type.startsWith('image/')) out.push(f)
+                    if (f.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|svg|heic|heif|avif)$/i.test(f.name)) out.push(f)
                 }
             }
-            return out
+            return out.slice(0, 20)
         }
         const handlePaste = async (e: ClipboardEvent) => {
             const active = document.activeElement as HTMLElement | null
@@ -875,7 +897,7 @@ export default function ImageClassifierPanel({ mode }: ImageClassifierPanelProps
                                         onDrop={async e => { e.preventDefault(); setDragOverClass(null); if (e.dataTransfer.files.length > 0) await processFilesForClass(e.dataTransfer.files, cls.id) }}
                                         className="flex-1 p-3 flex flex-col gap-3 min-h-[150px]"
                                     >
-                                        {cls.samples.length > 0 ? (
+                                        {(cls.samples.length > 0 || (uploadingByClass[cls.id] || 0) > 0) ? (
                                             <>
                                                 <div data-dataset-panel className={`grid grid-cols-4 gap-2 ${expandedClasses[cls.id] ? 'max-h-[360px] overflow-auto neura-scrollbar pr-1' : ''}`}>
                                                     {(expandedClasses[cls.id] ? cls.samples : cls.samples.slice(0, 8)).map((s, idx) => (
@@ -895,6 +917,12 @@ export default function ImageClassifierPanel({ mode }: ImageClassifierPanelProps
                                                                     {mode.project?.classes.filter(c => c.id !== cls.id).length === 0 && <span className="text-xs text-slate-400 px-2.5 py-1.5">No other folder – create one first</span>}
                                                                 </div>
                                                             )}
+                                                        </div>
+                                                    ))}
+                                                    {(uploadingByClass[cls.id] || 0) > 0 && Array.from({ length: uploadingByClass[cls.id] }).map((_, i) => (
+                                                        <div key={`uploading-${cls.id}-${i}`} className="aspect-square rounded-lg bg-white border-2 border-violet-200 flex flex-col items-center justify-center gap-1 animate-pulse">
+                                                            <div className="w-6 h-6 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
+                                                            <span className="text-[8px] font-bold text-violet-600 tracking-wide">Loading…</span>
                                                         </div>
                                                     ))}
                                                 </div>

@@ -161,6 +161,7 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
     const [activePaletteId, setActivePaletteId] = useState<string | null>(null)
     const [datasetPos, setDatasetPos] = useState({ x: 48, y: 80 })
     const [confirmState, setConfirmState] = useState<{ title: string; message: string; confirmText: string; variant: 'danger' | 'primary' | 'warning'; icon?: string; onConfirm: () => void } | null>(null)
+    const [uploadingCount, setUploadingCount] = useState(0)
 
     const camera = useCamera({ videoConstraints: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user', frameRate: { ideal: 30 } } })
 
@@ -636,18 +637,41 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
         const cls = mode.project?.classes.find(c => c.id === classId); if (!cls) return
         if (cls.samples.length >= MAX_SAMPLES_PER_CLASS) { showSaved('Maximum 20 per folder'); return }
         let added = 0
+        let skipped = 0
         const list = Array.from(files as any) as File[]
-        const imageFiles = list.filter(f => f.type.startsWith('image/'))
+        const imageFiles = list.filter(f => {
+            if (f.type && f.type.startsWith('image/')) return true
+            return /\.(png|jpe?g|gif|webp|bmp|svg|heic|heif|avif)$/i.test(f.name)
+        })
         if (imageFiles.length === 0) { showSaved('No images found'); return }
-        for (let i = 0; i < imageFiles.length; i++) {
-            const file = imageFiles[i]
+        const remaining = MAX_SAMPLES_PER_CLASS - cls.samples.length
+        const toProcess = imageFiles.slice(0, remaining)
+        if (imageFiles.length > remaining) {
+            showSaved(`Only ${remaining} of ${imageFiles.length} will be added (20 max per folder)`)
+        }
+        if (toProcess.length === 0) return
+        setUploadingCount(toProcess.length)
+        const decrementLoader = () => {
+            setUploadingCount(prev => Math.max(0, prev - 1))
+        }
+        for (let i = 0; i < toProcess.length; i++) {
+            const file = toProcess[i]
             const cur = mode.project?.classes.find(c => c.id === classId)
-            if (cur && cur.samples.length >= MAX_SAMPLES_PER_CLASS) { showSaved(`Limit reached for ${cls.name}`); break }
-            const dataUrl = await new Promise<string>(resolve => { const r = new FileReader(); r.onload = () => resolve(r.result as string); r.readAsDataURL(file) })
-            // resize
-            const img = new Image(); img.src = dataUrl
-            await new Promise<void>(resolve => { img.onload = () => resolve(); img.onerror = () => resolve(); setTimeout(() => resolve(), 3000) })
-            if (img.complete && img.naturalWidth > 0) {
+            if (cur && cur.samples.length >= MAX_SAMPLES_PER_CLASS) { showSaved(`Limit reached for ${cls.name}`); decrementLoader(); break }
+            try {
+                const dataUrl = await new Promise<string>((resolve) => {
+                    const r = new FileReader()
+                    r.onload = () => resolve(r.result as string)
+                    r.onerror = () => {
+                        console.warn('[ObjectDetector] FileReader error for', file.name, r.error)
+                        resolve('')
+                    }
+                    try { r.readAsDataURL(file) } catch (e) { console.warn(e); resolve('') }
+                })
+                if (!dataUrl || dataUrl.length < 100) { skipped++; decrementLoader(); continue }
+                const img = new Image(); img.src = dataUrl
+                await new Promise<void>(resolve => { img.onload = () => resolve(); img.onerror = () => resolve(); setTimeout(() => resolve(), 3000) })
+                if (!img.complete || img.naturalWidth === 0) { skipped++; decrementLoader(); continue }
                 const maxDim = 640
                 const scale = Math.min(maxDim / img.naturalWidth, maxDim / img.naturalHeight, 1)
                 const canvas = document.createElement('canvas')
@@ -658,10 +682,17 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
                 const resizedUrl = canvas.toDataURL('image/jpeg', 0.7)
                 const annotatedData = JSON.stringify({ imageUrl: resizedUrl, boxes: [], imageName: file.name })
                 const saved = mode.addSample(classId, { type: 'image', data: annotatedData })
-                if (saved) added++
+                if (saved) { added++; decrementLoader() }
+                else { skipped++; decrementLoader(); break }
+            } catch (e) {
+                console.warn('[ObjectDetector] process file failed', file.name, e)
+                skipped++
+                decrementLoader()
             }
         }
-        if (added > 0) showSaved(`Added ${added} image${added > 1 ? 's' : ''} to ${cls.name} — annotate them before training!`)
+        setUploadingCount(0)
+        if (added > 0) showSaved(`Added ${added} image${added > 1 ? 's' : ''} to ${cls.name} — annotate them before training!${skipped ? ` (${skipped} skipped)` : ''}`)
+        else if (skipped > 0) showSaved(`No images added — ${skipped} file${skipped>1?'s':''} could not be read`)
     }
 
     const handleUploadClick = (classId: string) => { pendingUploadClassRef.current = classId; fileInputRef.current?.click() }
@@ -673,36 +704,64 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
         if (fileInputRef.current) fileInputRef.current.value = ''; pendingUploadClassRef.current = null
     }
 
-    // Copy-Paste support: Paste image from clipboard (Ctrl+V) directly into selected folder
+    // Copy-Paste support: Paste image from clipboard (Ctrl+V) directly into selected folder (multi-image up to 20, sync loader compatible)
     useEffect(() => {
         const handlePaste = async (e: ClipboardEvent) => {
             const active = document.activeElement as HTMLElement | null
             if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return
             // Only handle paste when panel is visible (avoid interfering with other inputs)
             const items = e.clipboardData?.items
-            if (!items || items.length === 0) return
             const imageFiles: File[] = []
-            for (let i = 0; i < items.length; i++) {
-                const item = items[i]
-                if (item.kind === 'file' && item.type.startsWith('image/')) {
-                    const file = item.getAsFile()
-                    if (file) imageFiles.push(file)
+            if (items) {
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i]
+                    if (item.kind === 'file') {
+                        const file = item.getAsFile()
+                        if (file && (file.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|svg|heic|heif|avif)$/i.test(file.name))) {
+                            if (imageFiles.length >= 20) break
+                            imageFiles.push(file)
+                        }
+                    } else if (item.type === 'text/html') {
+                        const html = await new Promise<string>(res => item.getAsString(s => res(s || '')))
+                        const matches = [...html.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)]
+                        for (const match of matches) {
+                            if (imageFiles.length >= 20) break
+                            const src = match[1]
+                            try {
+                                if (src.startsWith('data:image')) {
+                                    const res = await fetch(src); const blob = await res.blob(); imageFiles.push(new File([blob], 'pasted.png', { type: blob.type || 'image/png' }))
+                                } else if (src.startsWith('http')) {
+                                    const res = await fetch(src, { mode: 'cors' }).catch(() => null)
+                                    if (res && res.ok) { const blob = await res.blob(); imageFiles.push(new File([blob], 'pasted.png', { type: blob.type })) }
+                                }
+                            } catch {}
+                        }
+                    } else if (item.type === 'text/plain') {
+                        const text = await new Promise<string>(res => item.getAsString(s => res(s || '')))
+                        const t = text.trim()
+                        if (t.startsWith('data:image') && t.length > 100) {
+                            try { const res = await fetch(t); const blob = await res.blob(); if (imageFiles.length < 20) imageFiles.push(new File([blob], 'pasted.png', { type: blob.type })) } catch {}
+                        }
+                    }
+                    if (imageFiles.length >= 20) break
                 }
             }
-            // Fallback: clipboardData.files (e.g., copied file from OS)
+            // Fallback: clipboardData.files (e.g., copied file from OS) — with extension fallback and 20 cap
             if (imageFiles.length === 0 && e.clipboardData?.files?.length) {
                 for (let i = 0; i < e.clipboardData.files.length; i++) {
+                    if (imageFiles.length >= 20) break
                     const f = e.clipboardData.files[i]
-                    if (f.type.startsWith('image/')) imageFiles.push(f)
+                    if (f.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|svg|heic|heif|avif)$/i.test(f.name)) imageFiles.push(f)
                 }
             }
             if (imageFiles.length === 0) return
             e.preventDefault()
+            const capped = imageFiles.slice(0, 20)
             const targetId = isSingleDataset ? (activePaletteId || mode.project?.classes[0]?.id) : (dragOverClass || pendingUploadClassRef.current || mode.selectedClassId || mode.project?.classes[0]?.id)
             if (!targetId) { showSaved(isSingleDataset ? 'Create a class first, then paste (Ctrl+V)' : 'Create a folder first, then paste (Ctrl+V)'); return }
             const targetName = mode.project?.classes.find(c => c.id === targetId)?.name || (isSingleDataset ? 'Dataset' : 'folder')
-            showSaved(`Pasting ${imageFiles.length} image${imageFiles.length>1?'s':''} to ${targetName}…`)
-            await processFilesForClass(imageFiles, targetId)
+            showSaved(`Pasting ${capped.length} image${capped.length>1?'s':''} to ${targetName}…`)
+            await processFilesForClass(capped, targetId)
         }
         window.addEventListener('paste', handlePaste as any)
         return () => window.removeEventListener('paste', handlePaste as any)
@@ -1332,7 +1391,7 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
                                             onDrop={async e => { e.preventDefault(); setDragOverClass(null); if (e.dataTransfer.files.length>0) { const tid = activePaletteId || mode.project?.classes[0]?.id; if(!tid){ showSaved('Create a class first'); return } await processFilesForClass(e.dataTransfer.files, tid) } }}
                                             className="flex-1 p-3 flex flex-col gap-3 min-h-[220px]"
                                         >
-                                            {allSamples.length>0 ? (
+                                            {(allSamples.length>0 || uploadingCount>0) ? (
                                                 <>
                                                     <div data-dataset-panel className="grid grid-cols-4 gap-2 max-h-[360px] overflow-auto pr-1 neura-scrollbar">
                                                         {allSamples.slice(0, 32).map(({s, originClassId}, idx, arr) => {
@@ -1349,6 +1408,12 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
                                                                 </div>
                                                             )
                                                         })}
+                                                        {uploadingCount > 0 && Array.from({ length: uploadingCount }).map((_, i) => (
+                                                            <div key={`uploading-${i}`} className="aspect-square rounded-lg bg-white border-2 border-violet-200 flex flex-col items-center justify-center gap-1 animate-pulse">
+                                                                <div className="w-6 h-6 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
+                                                                <span className="text-[8px] font-bold text-violet-600 tracking-wide">Loading…</span>
+                                                            </div>
+                                                        ))}
                                                     </div>
                                                     {allSamples.length>32 && <div className="text-[11px] text-slate-500 text-center">+{allSamples.length-32} more</div>}
                                                     <div className="flex gap-2">

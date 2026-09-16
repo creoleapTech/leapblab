@@ -15,6 +15,8 @@ export default function TextClassifierPanel({ mode }: TextClassifierPanelProps) 
     const removeDebounceRef = useRef<NodeJS.Timeout | null>(null)
     const predictTimeoutRef = useRef<NodeJS.Timeout | null>(null)
     const savedTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
+    const pendingUploadClassRef = useRef<string | null>(null)
 
     const [textInput, setTextInput] = useState('')
     const [isTraining, setIsTraining] = useState(false)
@@ -35,6 +37,8 @@ export default function TextClassifierPanel({ mode }: TextClassifierPanelProps) 
     const [expandedClasses, setExpandedClasses] = useState<Record<string, boolean>>({})
     const [sampleInputs, setSampleInputs] = useState<Record<string, string>>({})
     const [confirmState, setConfirmState] = useState<{ title: string; message: string; confirmText: string; variant: 'danger' | 'primary' | 'warning'; icon?: string; onConfirm: () => void } | null>(null)
+    const [uploadingByClass, setUploadingByClass] = useState<Record<string, number>>({})
+    const [dragOverClass, setDragOverClass] = useState<string | null>(null)
 
     // Free canvas state — default 100% for readability
     const [zoom, setZoom] = useState(1)
@@ -151,6 +155,124 @@ export default function TextClassifierPanel({ mode }: TextClassifierPanelProps) 
         try { await classifierRef.current.addSample(txt, cls.name) } catch { }
         showSaved(`Added to ${cls.name}`)
     }, [mode, sampleInputs, showSaved])
+
+    const processFilesForClass = async (files: FileList | File[], classId: string) => {
+        const cls = mode.project?.classes.find(c => c.id === classId); if (!cls) return
+        if (cls.samples.length >= MAX_SAMPLES_PER_CLASS) { showSaved('Maximum 20 texts per folder'); return }
+        let added = 0
+        let skipped = 0
+        const list = Array.from(files as any) as File[]
+        const textFiles = list.filter(f => {
+            if (f.type && f.type.startsWith('text/')) return true
+            return /\.(txt|csv|md|json|tsv)$/i.test(f.name)
+        })
+        if (textFiles.length === 0) { showSaved('No text files found'); return }
+        const remaining = MAX_SAMPLES_PER_CLASS - cls.samples.length
+        const toProcess = textFiles.slice(0, remaining)
+        if (textFiles.length > remaining) {
+            showSaved(`Only ${remaining} of ${textFiles.length} will be added (20 max per folder)`)
+        }
+        if (toProcess.length === 0) return
+        setUploadingByClass(prev => ({ ...prev, [classId]: (prev[classId] || 0) + toProcess.length }))
+        const decrementLoader = () => {
+            setUploadingByClass(prev => {
+                const cur = (prev[classId] || 0) - 1
+                if (cur <= 0) { const { [classId]: _, ...rest } = prev as any; return rest }
+                return { ...prev, [classId]: cur }
+            })
+        }
+        for (let i = 0; i < toProcess.length; i++) {
+            const file = toProcess[i]
+            try {
+                const text = await new Promise<string>((resolve) => {
+                    const r = new FileReader()
+                    r.onload = () => resolve(r.result as string)
+                    r.onerror = () => {
+                        console.warn('[TextClassifier] FileReader error for', file.name, r.error)
+                        resolve('')
+                    }
+                    try { r.readAsText(file) } catch (e) { console.warn(e); resolve('') }
+                })
+                if (!text || !text.trim()) { skipped++; decrementLoader(); continue }
+                const trimmed = text.trim()
+                const ok = mode.addSample(classId, { type: 'text', data: trimmed })
+                if (!ok) { showSaved(`Limit reached for ${cls.name} (20 max)`); decrementLoader(); break }
+                const targetName = mode.project?.classes.find(c => c.id === classId)?.name || cls.name
+                try { await classifierRef.current.addSample(trimmed, targetName) } catch (e) {
+                    console.warn('[TextClassifier] classifier addSample failed for', file.name, e)
+                }
+                added++
+                decrementLoader()
+            } catch (e) {
+                console.warn('[TextClassifier] process file failed', file.name, e)
+                skipped++
+                decrementLoader()
+            }
+        }
+        setUploadingByClass(prev => { const { [classId]: _, ...rest } = prev as any; return rest })
+        if (added > 0) showSaved(`Added ${added} text${added > 1 ? 's' : ''} to ${cls.name}${skipped ? ` (${skipped} skipped)` : ''}`)
+        else if (skipped > 0) showSaved(`No texts added — ${skipped} file${skipped>1?'s':''} could not be read`)
+    }
+    const handleUploadClick = (classId: string) => {
+        mode.setSelectedClassId(classId)
+        pendingUploadClassRef.current = classId
+        if (fileInputRef.current) {
+            try { (fileInputRef.current as any).dataset.targetClassId = classId } catch {}
+        }
+        fileInputRef.current?.click()
+    }
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files
+        const attrTarget = (e.currentTarget as any)?.dataset?.targetClassId as string | undefined
+        const targetId = attrTarget || pendingUploadClassRef.current || mode.selectedClassId || mode.project?.classes[0]?.id
+        if (!files || files.length === 0) {
+            if (fileInputRef.current) try { delete (fileInputRef.current as any).dataset.targetClassId } catch {}
+            return
+        }
+        if (!targetId) { showSaved('Create a folder first'); return }
+        await processFilesForClass(files, targetId)
+        if (fileInputRef.current) {
+            fileInputRef.current.value = ''
+            try { delete (fileInputRef.current as any).dataset.targetClassId } catch {}
+        }
+        pendingUploadClassRef.current = null
+    }
+
+    useEffect(() => {
+        const handlePaste = async (e: ClipboardEvent) => {
+            const active = document.activeElement as HTMLElement | null
+            if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return
+            const items = e.clipboardData?.items
+            const textFiles: File[] = []
+            if (items) {
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i]
+                    if (item.kind === 'file') {
+                        const file = item.getAsFile()
+                        if (file && (file.type.startsWith('text/') || /\.(txt|csv|md|json|tsv)$/i.test(file.name))) {
+                            if (textFiles.length >= 20) break
+                            textFiles.push(file)
+                        }
+                    }
+                    if (textFiles.length >= 20) break
+                }
+            }
+            if (textFiles.length === 0 && e.clipboardData?.files?.length) {
+                for (let i = 0; i < e.clipboardData.files.length; i++) {
+                    if (textFiles.length >= 20) break
+                    const f = e.clipboardData.files[i]
+                    if (f.type.startsWith('text/') || /\.(txt|csv|md|json|tsv)$/i.test(f.name)) textFiles.push(f)
+                }
+            }
+            if (textFiles.length === 0) return
+            e.preventDefault()
+            const targetId = mode.selectedClassId || mode.project?.classes[0]?.id
+            if (!targetId) { showSaved('Create a folder first, then paste'); return }
+            await processFilesForClass(textFiles.slice(0, 20), targetId)
+        }
+        window.addEventListener('paste', handlePaste as any)
+        return () => window.removeEventListener('paste', handlePaste as any)
+    }, [mode.selectedClassId, mode.project?.classes])
 
     const handlePredict = useCallback(async (text: string) => {
         if (!text.trim()) { setPrediction(null); return }
@@ -417,6 +539,7 @@ export default function TextClassifierPanel({ mode }: TextClassifierPanelProps) 
     return (
         <div className="flex flex-col h-full overflow-hidden bg-[#F8FAFC] relative">
             {savedMessage && <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[80] px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-bold shadow-lg">{savedMessage}</div>}
+            <input ref={fileInputRef} type="file" accept=".txt,.csv,.md,.json,.tsv,text/*" multiple onChange={handleFileChange} className="hidden" />
 
             {/* Professional header — single row, no duplicate */}
             <div className="shrink-0 h-[48px] flex items-center justify-between px-4 bg-white border-b border-slate-200 z-20">
@@ -505,12 +628,13 @@ export default function TextClassifierPanel({ mode }: TextClassifierPanelProps) 
                     {mode.project?.classes.map(cls => {
                         const pos = classPositions[cls.id] || { x: 48, y: 80 }
                         const isSelected = mode.selectedClassId === cls.id
+                        const isDragOver = dragOverClass === cls.id
                         const atLimit = cls.samples.length >= MAX_SAMPLES_PER_CLASS
                         const progress = Math.min(100, (cls.samples.length / 15) * 100)
                         const inputVal = sampleInputs[cls.id] || ''
                         return (
                             <div key={cls.id} data-node onPointerDown={e => startNodeDrag(e, cls.id, pos)} onClick={() => mode.setSelectedClassId(cls.id)} style={{ left: pos.x, top: pos.y, width: 344, touchAction: 'none' as any }} className={`absolute select-none ${draggingId === cls.id ? 'z-40' : isSelected ? 'z-20' : 'z-10'}`}>
-                                <div className={`bg-white rounded-xl border overflow-hidden flex flex-col transition-shadow ${isSelected ? 'border-violet-300 shadow-md' : 'border-slate-200 shadow-sm hover:shadow-md'}`} style={{ minHeight: 320 }}>
+                                <div className={`bg-white rounded-xl border overflow-hidden flex flex-col transition-shadow ${isDragOver ? 'border-violet-400 shadow-lg' : isSelected ? 'border-violet-300 shadow-md' : 'border-slate-200 shadow-sm hover:shadow-md'}`} style={{ minHeight: 320 }}>
                                     <div className="h-[44px] flex items-center gap-3 px-3 border-b border-slate-100 shrink-0" style={{ background: `${cls.color}0D`, borderLeft: `4px solid ${cls.color}` }}>
                                         <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border" style={{ background: `${cls.color}18`, borderColor: `${cls.color}30`, color: cls.color }}>
                                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M3 7a2 2 0 012-2h5l2 2h7a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" /></svg>
@@ -531,7 +655,12 @@ export default function TextClassifierPanel({ mode }: TextClassifierPanelProps) 
                                         </div>
                                     </div>
                                     <div className="h-1.5 bg-slate-100 shrink-0"><div className="h-full transition-all" style={{ width: `${progress}%`, background: cls.color }} /></div>
-                                    <div className="flex-1 p-3 flex flex-col gap-3 min-h-[200px]" onPointerDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
+                                    {isDragOver && <div className="mx-3 mt-3 h-11 rounded-xl bg-violet-50 border border-violet-200 text-violet-700 text-sm font-bold flex items-center justify-center">Drop text files here</div>}
+                                    <div
+                                        onDragOver={e => { e.preventDefault(); setDragOverClass(cls.id) }}
+                                        onDragLeave={e => { e.preventDefault(); if (dragOverClass === cls.id) setDragOverClass(null) }}
+                                        onDrop={async e => { e.preventDefault(); setDragOverClass(null); if (e.dataTransfer.files.length > 0) await processFilesForClass(e.dataTransfer.files, cls.id) }}
+                                        className="flex-1 p-3 flex flex-col gap-3 min-h-[200px]" onPointerDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
                                         {/* input row */}
                                         <div className="flex gap-2">
                                             <input
@@ -553,7 +682,7 @@ export default function TextClassifierPanel({ mode }: TextClassifierPanelProps) 
                                             </button>
                                         </div>
                                         {atLimit && <p className="text-[11px] text-amber-600 font-medium">Folder full (20 max)</p>}
-                                        {cls.samples.length > 0 ? (
+                                        {(cls.samples.length > 0 || (uploadingByClass[cls.id] || 0) > 0) ? (
                                             <>
                                                 <div data-dataset-panel className={`grid grid-cols-1 gap-1.5 ${expandedClasses[cls.id] ? 'max-h-[360px]' : 'max-h-[180px]'} overflow-auto neura-scrollbar pr-0.5`}>
                                                     {(expandedClasses[cls.id] ? cls.samples : cls.samples.slice(0, 10)).map(s => (
@@ -562,20 +691,32 @@ export default function TextClassifierPanel({ mode }: TextClassifierPanelProps) 
                                                             <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); handleRemoveSample(cls.id, s.id) }} className="absolute top-1.5 right-1.5 w-5 h-5 rounded-md bg-white border border-slate-200 text-slate-500 hover:text-slate-700 flex items-center justify-center opacity-0 group-hover/chip:opacity-100 transition-opacity shadow-sm text-xs">×</button>
                                                         </div>
                                                     ))}
+                                                    {(uploadingByClass[cls.id] || 0) > 0 && Array.from({ length: uploadingByClass[cls.id] }).map((_, i) => (
+                                                        <div key={`uploading-${cls.id}-${i}`} className="flex items-center gap-2 p-2 rounded-lg bg-white border-2 border-violet-200 animate-pulse">
+                                                            <div className="w-4 h-4 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
+                                                            <span className="text-[11px] font-bold text-violet-600 tracking-wide">Loading…</span>
+                                                        </div>
+                                                    ))}
                                                 </div>
                                                 {cls.samples.length > 10 && (
                                                     <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); setExpandedClasses(prev => ({ ...prev, [cls.id]: !prev[cls.id] })) }} className="w-full h-7 rounded-full bg-white border border-violet-200 text-violet-700 text-[11px] font-bold hover:bg-violet-50 flex items-center justify-center gap-1">
                                                         {expandedClasses[cls.id] ? <>Show less ↑</> : <>Expand +{cls.samples.length - 10} more ↓</>}
                                                     </button>
                                                 )}
+                                                <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); handleUploadClick(cls.id) }} disabled={atLimit} className={`w-full inline-flex items-center justify-center gap-2 h-10 rounded-xl border text-sm font-bold transition-all ${atLimit ? 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed' : 'bg-gradient-to-r from-violet-50 to-indigo-50 border-violet-200 text-violet-700 hover:from-violet-100 hover:to-indigo-100 hover:border-violet-300 hover:shadow-sm'}`}>
+                                                    <span className="w-5 h-5 rounded-full bg-violet-600 text-white flex items-center justify-center text-xs">+</span>
+                                                    Add text files <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white border border-violet-200 text-violet-600 font-bold">multi</span>
+                                                </button>
                                             </>
                                         ) : (
                                             <div className="flex-1 flex flex-col items-center justify-center gap-2 py-4 text-center">
                                                 <div className="w-12 h-12 rounded-xl border flex items-center justify-center bg-slate-50 border-slate-200 text-slate-400"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><path d="M14 2v6h6" /><path d="M10 13H8" /><path d="M16 17H8" /><path d="M13 13h1" /></svg></div>
                                                 <div>
                                                     <p className="text-sm font-bold text-slate-700">No texts yet</p>
-                                                    <p className="text-[11px] text-slate-500">Type above and Add</p>
+                                                    <p className="text-[11px] text-slate-500">Type above and Add or drop files</p>
                                                 </div>
+                                                <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); handleUploadClick(cls.id) }} className="h-10 px-5 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-sm font-bold shadow-sm hover:from-violet-700 hover:to-indigo-700">＋ Add text files</button>
+                                                <p className="text-[10px] text-slate-400">.txt, .csv • Multi-select • or Ctrl+V to paste</p>
                                             </div>
                                         )}
                                         <div className="flex gap-2 pt-2 border-t border-slate-100 mt-auto">
