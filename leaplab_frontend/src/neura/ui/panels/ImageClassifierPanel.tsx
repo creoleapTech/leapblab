@@ -7,6 +7,7 @@ import { MAX_SAMPLES_PER_CLASS } from '../../types/neura.types'
 import { nudgeToNonColliding, layoutNonColliding, layoutInitialClasses, getInitialClassPosition } from '../layoutCollision'
 import AccuracyChart from '../components/AccuracyChart'
 import NotRelatedModal from '../components/NotRelatedModal'
+import ConfirmModal from '../components/ConfirmModal'
 import { openImageViewer, openSingleImage } from '../components/neuraImageViewer'
 
 interface ImageClassifierPanelProps { mode: UseNeuraProjectReturn }
@@ -48,6 +49,7 @@ export default function ImageClassifierPanel({ mode }: ImageClassifierPanelProps
     const [editName, setEditName] = useState('')
     const [expandedClasses, setExpandedClasses] = useState<Record<string, boolean>>({})
     const [copyMenuFor, setCopyMenuFor] = useState<string | null>(null)
+    const [confirmState, setConfirmState] = useState<{ title: string; message: string; confirmText: string; variant: 'danger' | 'primary' | 'warning'; icon?: string; onConfirm: () => void } | null>(null)
 
     // Close copy menu on outside click
     useEffect(() => {
@@ -282,26 +284,54 @@ export default function ImageClassifierPanel({ mode }: ImageClassifierPanelProps
         const cls = mode.project?.classes.find(c => c.id === classId); if (!cls) return
         if (cls.samples.length >= MAX_SAMPLES_PER_CLASS) { showSaved('Maximum 20 per folder'); return }
         let added = 0
+        let skipped = 0
         const list = Array.from(files as any) as File[]
-        const imageFiles = list.filter(f => f.type.startsWith('image/'))
+        const imageFiles = list.filter(f => {
+            if (f.type && f.type.startsWith('image/')) return true
+            // Fallback for files with empty type (drag-drop, HEIC/HEIF, etc.)
+            return /\.(png|jpe?g|gif|webp|bmp|svg|heic|heif|avif)$/i.test(f.name)
+        })
         if (imageFiles.length === 0) { showSaved('No images found'); return }
-        for (let i = 0; i < imageFiles.length; i++) {
-            const file = imageFiles[i]
-            const cur = mode.project?.classes.find(c => c.id === classId)
-            if (cur && cur.samples.length >= MAX_SAMPLES_PER_CLASS) { showSaved(`Limit reached for ${cls.name}`); break }
-            const dataUrl = await new Promise<string>(resolve => { const r = new FileReader(); r.onload = () => resolve(r.result as string); r.readAsDataURL(file) })
-            const ok = mode.addSample(classId, { type: 'image', data: dataUrl })
-            if (!ok) { showSaved(`Limit reached for ${cls.name} (20 max)`); break }
-            const img = new Image(); img.src = dataUrl
-            await new Promise<void>(resolve => { img.onload = () => resolve(); img.onerror = () => resolve(); setTimeout(() => resolve(), 3000) })
-            if (img.complete && img.naturalWidth > 0) {
+        // Respect 20 per folder limit for this batch
+        const remaining = MAX_SAMPLES_PER_CLASS - cls.samples.length
+        const toProcess = imageFiles.slice(0, remaining)
+        if (imageFiles.length > remaining) {
+            showSaved(`Only ${remaining} of ${imageFiles.length} will be added (20 max per folder)`)
+        }
+        for (let i = 0; i < toProcess.length; i++) {
+            const file = toProcess[i]
+            try {
+                const dataUrl = await new Promise<string>((resolve, reject) => {
+                    const r = new FileReader()
+                    r.onload = () => resolve(r.result as string)
+                    r.onerror = () => {
+                        console.warn('[ImageClassifier] FileReader error for', file.name, r.error)
+                        resolve('')
+                    }
+                    try { r.readAsDataURL(file) } catch (e) { console.warn(e); resolve('') }
+                })
+                if (!dataUrl || dataUrl.length < 100) { skipped++; continue }
+                const img = new Image(); img.src = dataUrl
+                await new Promise<void>(resolve => { img.onload = () => resolve(); img.onerror = () => resolve(); setTimeout(() => resolve(), 3000) })
+                if (!img.complete || img.naturalWidth === 0) { skipped++; continue }
+                const ok = mode.addSample(classId, { type: 'image', data: dataUrl })
+                if (!ok) { showSaved(`Limit reached for ${cls.name} (20 max)`); break }
                 const targetName = mode.project?.classes.find(c => c.id === classId)?.name || cls.name
-                if (augmentMode) await classifierRef.current.addSampleAugmented(img, targetName)
-                else await classifierRef.current.addSample(img, targetName)
+                try {
+                    if (augmentMode) await classifierRef.current.addSampleAugmented(img, targetName)
+                    else await classifierRef.current.addSample(img, targetName)
+                } catch (e) {
+                    console.warn('[ImageClassifier] classifier addSample failed for', file.name, e)
+                    // Project sample already added, keep counted as added (visible in UI)
+                }
                 added++
+            } catch (e) {
+                console.warn('[ImageClassifier] process file failed', file.name, e)
+                skipped++
             }
         }
-        if (added > 0) showSaved(`Added ${added} image${added > 1 ? 's' : ''} to ${cls.name}`)
+        if (added > 0) showSaved(`Added ${added} image${added > 1 ? 's' : ''} to ${cls.name}${skipped ? ` (${skipped} skipped)` : ''}`)
+        else if (skipped > 0) showSaved(`No images added — ${skipped} file${skipped>1?'s':''} could not be read`)
     }
     const handleUploadClick = (classId: string) => {
         mode.setSelectedClassId(classId)
@@ -831,7 +861,7 @@ export default function ImageClassifierPanel({ mode }: ImageClassifierPanelProps
                                             <p className="text-[11px] text-slate-500 leading-none mt-0.5">{cls.samples.length} / {MAX_SAMPLES_PER_CLASS} images</p>
                                         </div>
                                         <div className="flex items-center gap-1 shrink-0">
-                                            <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); if (confirm(`Delete folder "${cls.name}"?`)) { classifierRef.current.clearClass(cls.name); mode.removeClass(cls.id) } }} className="w-7 h-7 rounded-md hover:bg-slate-50 text-slate-400 hover:text-slate-700 flex items-center justify-center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M3 6h18M8 6V4h8v2M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6" /></svg></button>
+                                            <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); setConfirmState({ title: `Delete folder "${cls.name}"?`, message: `All ${cls.samples.length} images in this folder will be permanently removed. This cannot be undone.`, confirmText: 'Delete folder', variant: 'danger', icon: '🗑️', onConfirm: () => { classifierRef.current.clearClass(cls.name); mode.removeClass(cls.id); setConfirmState(null); showSaved(`Deleted folder "${cls.name}"`) } })}} className="w-7 h-7 rounded-md hover:bg-slate-50 text-slate-400 hover:text-red-600 flex items-center justify-center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M3 6h18M8 6V4h8v2M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6" /></svg></button>
                                             <div className="w-7 h-7 rounded-md bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400 cursor-grab active:cursor-grabbing" title="Drag to move">
                                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="9" cy="7" r="1" /><circle cx="9" cy="12" r="1" /><circle cx="9" cy="17" r="1" /><circle cx="15" cy="7" r="1" /><circle cx="15" cy="12" r="1" /><circle cx="15" cy="17" r="1" /></svg>
                                             </div>
@@ -1041,6 +1071,7 @@ export default function ImageClassifierPanel({ mode }: ImageClassifierPanelProps
             </div>
 
             <NotRelatedModal isOpen={showNotRelated} onClose={() => setShowNotRelated(false)} onUpload={() => testFileInputRef.current?.click()} />
+            {confirmState && <ConfirmModal isOpen={!!confirmState} title={confirmState.title} message={confirmState.message} confirmText={confirmState.confirmText} variant={confirmState.variant} icon={confirmState.icon} onConfirm={confirmState.onConfirm} onCancel={() => setConfirmState(null)} />}
         </div>
     )
 }

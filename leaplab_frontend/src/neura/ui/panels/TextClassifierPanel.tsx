@@ -4,6 +4,7 @@ import { TextClassifier } from '../../ml/classifiers/TextClassifier'
 import { MAX_SAMPLES_PER_CLASS } from '../../types/neura.types'
 import AccuracyChart from '../components/AccuracyChart'
 import NotRelatedModal from '../components/NotRelatedModal'
+import ConfirmModal from '../components/ConfirmModal'
 
 interface TextClassifierPanelProps { mode: UseNeuraProjectReturn }
 
@@ -33,6 +34,7 @@ export default function TextClassifierPanel({ mode }: TextClassifierPanelProps) 
     const [editName, setEditName] = useState('')
     const [expandedClasses, setExpandedClasses] = useState<Record<string, boolean>>({})
     const [sampleInputs, setSampleInputs] = useState<Record<string, string>>({})
+    const [confirmState, setConfirmState] = useState<{ title: string; message: string; confirmText: string; variant: 'danger' | 'primary' | 'warning'; icon?: string; onConfirm: () => void } | null>(null)
 
     // Free canvas state — default 100% for readability
     const [zoom, setZoom] = useState(1)
@@ -522,7 +524,7 @@ export default function TextClassifierPanel({ mode }: TextClassifierPanelProps) 
                                             <p className="text-[11px] text-slate-500 leading-none mt-0.5">{cls.samples.length} / {MAX_SAMPLES_PER_CLASS} texts</p>
                                         </div>
                                         <div className="flex items-center gap-1 shrink-0">
-                                            <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); if (confirm(`Delete folder "${cls.name}"?`)) { classifierRef.current.clearClass(cls.name); mode.removeClass(cls.id) } }} className="w-7 h-7 rounded-md hover:bg-slate-50 text-slate-400 hover:text-slate-700 flex items-center justify-center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M3 6h18M8 6V4h8v2M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6" /></svg></button>
+                                            <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); setConfirmState({ title: `Delete folder "${cls.name}"?`, message: `All ${cls.samples.length} texts in this folder will be permanently removed. This cannot be undone.`, confirmText: 'Delete folder', variant: 'danger', icon: '🗑️', onConfirm: () => { classifierRef.current.clearClass(cls.name); mode.removeClass(cls.id); setConfirmState(null); showSaved(`Deleted folder "${cls.name}"`) } }) }} className="w-7 h-7 rounded-md hover:bg-slate-50 text-slate-400 hover:text-slate-700 flex items-center justify-center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M3 6h18M8 6V4h8v2M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6" /></svg></button>
                                             <div className="w-7 h-7 rounded-md bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400 cursor-grab active:cursor-grabbing" title="Drag to move">
                                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="9" cy="7" r="1" /><circle cx="9" cy="12" r="1" /><circle cx="9" cy="17" r="1" /><circle cx="15" cy="7" r="1" /><circle cx="15" cy="12" r="1" /><circle cx="15" cy="17" r="1" /></svg>
                                             </div>
@@ -716,6 +718,7 @@ export default function TextClassifierPanel({ mode }: TextClassifierPanelProps) 
             </div>
 
             <NotRelatedModal isOpen={showNotRelated} onClose={() => setShowNotRelated(false)} title="No match found" description="This text doesn't match any of your folders. Try adding more varied samples or check your spelling." />
+            {confirmState && <ConfirmModal isOpen={!!confirmState} title={confirmState.title} message={confirmState.message} confirmText={confirmState.confirmText} variant={confirmState.variant} icon={confirmState.icon} onConfirm={confirmState.onConfirm} onCancel={() => setConfirmState(null)} />}
         </div>
     )
 }
