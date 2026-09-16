@@ -95,7 +95,8 @@ export default defineConfig({
   server: {
     watch: {
       // Prevent EBUSY on Windows when build/ contains locked assets (video_frames etc.)
-      ignored: ['**/build/**', '**/dist/**', '**/out/**', '**/.wrangler/**', '**/node_modules/**', '**/build-electron/**'],
+      // and when large public/ media (mp4) is being written or locked by other apps.
+      ignored: ['**/build/**', '**/dist/**', '**/out/**', '**/.wrangler/**', '**/node_modules/**', '**/build-electron/**', '**/public/**'],
     },
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',

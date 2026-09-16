@@ -9,8 +9,8 @@ import MyProjectsDashboard from './components/my-projects/MyProjectsDashboard';
 import './components/my-projects/keyframes.css';
 import { lazyWithRetry } from './utils/lazyWithRetry';
 
-/** 3D hero animation — lazy loaded for performance */
-const Robot3DAnimation = lazyWithRetry(() => import('./components/Robot3DAnimation'), 'Robot3DAnimation');
+/** Hero card deck animation — lazy loaded for performance */
+const HeroCardDeckAnimation = lazyWithRetry(() => import('./components/HeroCardDeckAnimation'), 'HeroCardDeckAnimation');
 
 interface LandingPageProps {
   onSelect: (mode: 'intermediate' | 'junior' | 'python' | 'appinventor' | 'vision3d' | any) => void;
@@ -366,15 +366,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
                   </div>
                 </div>
 
-                {/* RIGHT: 3D Hero Scene */}
-                <div className="flex items-center justify-center relative w-full h-full min-h-0 max-h-full max-[1024px]:min-h-[280px] max-[1024px]:max-h-[360px] max-[768px]:min-h-[220px] max-[768px]:max-h-[280px] max-[480px]:min-h-[180px] max-[480px]:max-h-[220px] animate-hero-reveal [animation-delay:0.4s]">
-                  <div className="absolute w-[120%] h-[120%] bg-[radial-gradient(circle,rgba(99,102,241,0.08)_0%,transparent_70%)] z-[-1] animate-float-glow pointer-events-none" />
+                {/* RIGHT: Cinematic 3D video card cascade (Meta AI / keynote style) */}
+                <div className="flex items-center justify-center relative w-full animate-hero-reveal [animation-delay:0.4s]">
                   <Suspense fallback={
-                    <div className="w-full h-full flex items-center justify-center">
+                    <div className="w-full flex items-center justify-center min-h-[340px]">
                       <div className="w-10 h-10 border-3 border-[rgba(99,102,241,0.15)] border-t-[#6366F1] rounded-full animate-hero3d-spin" />
                     </div>
                   }>
-                    <Robot3DAnimation onSelect={onSelect} />
+                    <HeroCardDeckAnimation onSelect={onSelect} />
                   </Suspense>
                 </div>
               </div>

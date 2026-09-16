@@ -111,8 +111,9 @@ export default defineConfig({
         overlay: false, // Disable error overlay for faster HMR
       },
       watch: {
-        // Ignore node_modules for faster file watching
-        ignored: ['**/node_modules/**', '**/dist/**'],
+        // Ignore node_modules for faster file watching; ignore public media to
+        // avoid Windows EBUSY crashes on locked/streaming mp4 files
+        ignored: ['**/node_modules/**', '**/dist/**', '**/public/**'],
       },
     },
   },
