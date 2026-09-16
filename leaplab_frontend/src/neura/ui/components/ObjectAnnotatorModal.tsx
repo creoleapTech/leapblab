@@ -433,16 +433,6 @@ export default function ObjectAnnotatorModal({ imageUrl, initialBoxes, classOpti
                                 )}
                             </div>
                         </div>
-                        <div className="h-9 flex items-center justify-between px-3 bg-white border-t border-slate-200 shrink-0">
-                            <div className="flex items-center gap-3 text-xs">
-                                <span className="text-slate-500 font-medium">B: box • L: hide labels • Del: delete • Ctrl+Z: undo</span>
-                                <span className="text-slate-300">|</span>
-                                <span className="text-slate-600 font-bold">Double-click label to edit • labels hide when crowded</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <button onClick={()=> setShowClearConfirm(true)} className="h-7 px-3 rounded-full bg-slate-50 border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100">Clear</button>
-                            </div>
-                        </div>
                     </div>
 
                     {/* Right sidebar: box list */}
@@ -472,7 +462,7 @@ export default function ObjectAnnotatorModal({ imageUrl, initialBoxes, classOpti
                                 </div>
                             ))}
                         </div>
-                        <div className="p-3 border-t border-slate-200 bg-white flex gap-1.5">
+                        <div className="min-h-[56px] px-3 py-2 border-t border-slate-200 bg-white flex items-center gap-1.5">
                             <button onClick={onClose} className="h-9 px-3 rounded-xl bg-white border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 shrink-0">Cancel</button>
                             {hasPrev !== undefined && (
                                 <button
