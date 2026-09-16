@@ -433,6 +433,21 @@ export default function ObjectAnnotatorModal({ imageUrl, initialBoxes, classOpti
                                 )}
                             </div>
                         </div>
+                        {/* Bottom white bar — shortcuts, connected with right Cancel/Prev/Next */}
+                        <div className="min-h-[56px] px-3 py-2 bg-white border-t border-slate-200 flex items-center justify-between gap-3 shrink-0">
+                            <div className="flex items-center gap-2 text-[11px] leading-none flex-wrap">
+                                <span className="inline-flex items-center gap-1.5 font-medium text-slate-600"><span className="inline-flex items-center justify-center w-5 h-5 rounded bg-slate-100 border border-slate-200 text-[10px] font-bold">B</span> box</span>
+                                <span className="w-px h-4 bg-slate-200 hidden sm:block"></span>
+                                <span className="inline-flex items-center gap-1.5 font-medium text-slate-600"><span className="inline-flex items-center justify-center w-5 h-5 rounded bg-slate-100 border border-slate-200 text-[10px] font-bold">L</span> hide labels</span>
+                                <span className="w-px h-4 bg-slate-200 hidden sm:block"></span>
+                                <span className="inline-flex items-center gap-1.5 font-medium text-slate-600"><span className="inline-flex items-center justify-center w-5 h-5 rounded bg-slate-100 border border-slate-200 text-[10px] font-bold">Del</span> delete</span>
+                                <span className="w-px h-4 bg-slate-200 hidden sm:block"></span>
+                                <span className="inline-flex items-center gap-1.5 font-medium text-slate-600"><span className="inline-flex items-center justify-center px-1 h-5 rounded bg-slate-100 border border-slate-200 text-[10px] font-bold">Ctrl+Z</span> undo</span>
+                            </div>
+                            <div className="hidden lg:flex items-center gap-1.5 text-[11px] font-medium text-slate-500 shrink-0">
+                                <span className="w-1.5 h-1.5 rounded-full bg-violet-500"></span> Double-click label to edit • labels hide when crowded
+                            </div>
+                        </div>
                     </div>
 
                     {/* Right sidebar: box list */}

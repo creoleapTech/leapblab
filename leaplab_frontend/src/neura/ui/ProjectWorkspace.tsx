@@ -388,7 +388,8 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
                 )}
             </div>
 
-            {/* Workflow Stepper */}
+            {/* Workflow Stepper — hidden for Virtual Drawing Canvas (rule-based, no training workflow) */}
+            {type !== 'drawing-canvas' && (
             <div className="p-3.5 border-t-1.5 border-gray-200">
                 {isObjectDetection ? (
                     <div className="flex items-center justify-between">
@@ -436,6 +437,7 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
                     </div>
                 )}
             </div>
+            )}
         </>
     )
 
@@ -518,7 +520,7 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
             {/* Status Bar */}
             <footer className="flex items-center justify-between bg-white/90 backdrop-blur-md border-t-1.5 border-gray-200 px-4 py-2.5">
                 <div className="flex items-center gap-3">
-                    {!mode.hideSidebar && (
+                    {!mode.hideSidebar && type !== 'drawing-canvas' && (
                         <>
                             {/* Pics */}
                             <div className="flex items-center gap-1.5 px-3 py-1.25 rounded-xl bg-purple-50 text-xs font-semibold text-[#630ed4]">
@@ -532,32 +534,7 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
                             </div>
                         </>
                     )}
-                    {/* Auto-saved – reflects real IDB persistence; idle only shows Auto-saved after a successful save (fixes false indication) */}
-                    {(mode.saveStatus === 'saving' || mode.saveStatus === 'error' || mode.saveStatus === 'saved' || mode.hasSaved) && (
-                    <div
-                        title={mode.saveStatus === 'error' ? (mode.saveError || 'Save failed – storage full. Try fewer/larger images or export via File > Save.') : mode.saveStatus === 'saving' ? 'Saving to browser storage…' : mode.hasSaved ? 'All changes are stored in this browser (IndexedDB) and survive refresh' : 'Not yet saved'}
-                        className={`hidden sm:flex items-center gap-1.5 px-3 py-1.25 rounded-xl text-xs font-semibold border ${
-                            mode.saveStatus === 'error'
-                                ? 'bg-red-50 text-red-700 border-red-200 cursor-pointer'
-                                : mode.saveStatus === 'saving'
-                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                    : mode.hasSaved
-                                        ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                                        : 'bg-slate-50 text-slate-500 border-slate-200'
-                        }`}
-                        onClick={() => {
-                            if (mode.saveStatus === 'error') {
-                                // Force a re-save attempt by touching project timestamp
-                                mode.setProjectName(mode.project?.name ?? 'My Image Classifier')
-                            }
-                        }}
-                    >
-                        <span className="text-sm">{mode.saveStatus === 'saving' ? '⏳' : mode.saveStatus === 'error' ? '⚠️' : mode.hasSaved ? '💾' : '○'}</span>
-                        <span>
-                            {mode.saveStatus === 'saving' ? 'Saving…' : mode.saveStatus === 'error' ? 'Save failed – tap to retry' : mode.saveStatus === 'saved' ? 'Auto-saved ✓' : mode.hasSaved ? 'Auto-saved' : 'Not saved'}
-                        </span>
-                    </div>
-                    )}
+
                 </div>
                 <div className="flex items-center gap-2">
                     <button
