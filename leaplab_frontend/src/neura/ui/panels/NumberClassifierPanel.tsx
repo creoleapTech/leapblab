@@ -154,6 +154,35 @@ export default function NumberClassifierPanel({ mode }: NumberClassifierPanelPro
         })
     }, [mode.project?.classes.map(c => c.id).join(',')])
 
+    // Reposition tabular nodes (Data/Setup/Train/Test) to the right of class grid when opening existing project (LMS) — avoids overlap seen in screenshot
+    useEffect(() => {
+        if (!mode.project) return
+        const t = setTimeout(() => {
+            const n = mode.project!.classes.length
+            if (n > 0) {
+                const cols = Math.ceil(n / 4)
+                const maxRight = 48 + cols * 400 - (400 - 344) // rightmost edge of class grid
+                const baseX = maxRight + 80
+                setDataNodePos({ x: baseX, y: 80 })
+                setSetupNodePos({ x: baseX + 560, y: 80 })
+                setTrainNodePos({ x: baseX + 1120, y: 80 })
+                setTestNodePos({ x: baseX + 1680, y: 80 })
+                setBrainPos(prevB => {
+                    const desiredX = baseX + 2240
+                    return prevB.x < desiredX ? { ...prevB, x: desiredX } : prevB
+                })
+                setVisionPos(prevV => {
+                    const desiredX = baseX + 2240 + 480
+                    return prevV.x < desiredX ? { ...prevV, x: desiredX } : prevV
+                })
+                // Reset viewport to show top-left, ensure overall container not clipped
+                setPan({ x: 32, y: 24 })
+                setZoom(1)
+            }
+        }, 120)
+        return () => clearTimeout(t)
+    }, [mode.project?.id])
+
     useEffect(() => {
         if (!mode.project) return
         const thisBuild = ++rebuildAbortRef.current

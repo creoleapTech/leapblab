@@ -157,6 +157,18 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
     const hasUnsavedWork = mode.project && mode.project.classes.length > 0
     const isCurriculumCopy = !!(mode.project as any)?.isCurriculumCopy || !!(mode.project?.projectData as any)?.isCurriculumCopy
 
+    // Show browser dialog if user tries to close/refresh tab with unsaved Neura work (no cache, so would be lost)
+    useEffect(() => {
+        const handler = (e: BeforeUnloadEvent) => {
+            if (hasUnsavedWork) {
+                e.preventDefault()
+                e.returnValue = ''
+            }
+        }
+        window.addEventListener('beforeunload', handler)
+        return () => window.removeEventListener('beforeunload', handler)
+    }, [hasUnsavedWork])
+
     const handleNewProject = useCallback(() => {
         if (hasUnsavedWork) {
             setPendingAction('new')
@@ -442,7 +454,7 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
     )
 
     return (
-        <div className="h-screen flex flex-col bg-[#faf8ff]">
+        <div className="h-full flex flex-col bg-[#faf8ff] min-h-0 overflow-hidden">
             <input
                 type="file"
                 ref={fileInputRef}
@@ -510,8 +522,8 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
                 )}
 
                 {/* Main content – keyed by project id so File → New/Open fully resets panel state (dataset images, Train button, canvas) */}
-                <main className="flex-1 bg-[#faf8ff] min-w-0 flex flex-col overflow-y-auto neura-scrollbar relative">
-                    <div key={mode.project?.id || 'no-project'} className="animate-fade-in flex-1 flex flex-col min-h-0 relative">
+                <main className="flex-1 bg-[#faf8ff] min-w-0 flex flex-col overflow-hidden relative">
+                    <div key={mode.project?.id || 'no-project'} className="animate-fade-in flex-1 flex flex-col min-h-0 relative overflow-hidden">
                         {children({ mode })}
                     </div>
                 </main>
