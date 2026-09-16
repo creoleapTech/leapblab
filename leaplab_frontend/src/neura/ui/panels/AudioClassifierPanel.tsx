@@ -744,7 +744,7 @@ export default function AudioClassifierPanel({ mode }: AudioClassifierPanelProps
         }
         // Pinch on trackpad fires ctrlKey+wheel; we hijack it for canvas zoom
         // and prevent the browser's page-zoom. Regular wheel (no ctrl) also zooms canvas.
-        e.preventDefault()
+        if (e.cancelable) e.preventDefault()
         e.stopPropagation()
         const isPinch = e.ctrlKey || (e as any).ctrlKey
         const delta = -e.deltaY * (isPinch ? 0.008 : 0.0012)
@@ -770,7 +770,7 @@ export default function AudioClassifierPanel({ mode }: AudioClassifierPanelProps
     }
     const handleTouchMove = (e: React.TouchEvent) => {
         if (e.touches.length === 2 && pinchRef.current) {
-            e.preventDefault()
+            if (e.cancelable) e.preventDefault()
             const dx = e.touches[0].clientX - e.touches[1].clientX
             const dy = e.touches[0].clientY - e.touches[1].clientY
             const dist = Math.hypot(dx, dy)
@@ -842,7 +842,7 @@ export default function AudioClassifierPanel({ mode }: AudioClassifierPanelProps
                 }
             }
             // ctrlKey is true for trackpad pinch on macOS/Chrome
-            if (e.ctrlKey || Math.abs(e.deltaY) > 0) {
+            if (e.cancelable && (e.ctrlKey || Math.abs(e.deltaY) > 0)) {
                 e.preventDefault()
             }
         }
