@@ -81,7 +81,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
       }
     }
 
-    return `group relative flex flex-1 flex-col rounded-[20px] border border-slate-100/80 p-5 cursor-pointer overflow-hidden shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:border-slate-200/80 ${themeClasses} ${stateClasses}`;
+    return `group relative flex flex-1 flex-col rounded-[20px] border border-slate-100/80 p-4 cursor-pointer overflow-hidden shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:border-slate-200/80 max-[768px]:p-3 max-[768px]:rounded-[14px] ${themeClasses} ${stateClasses}`;
   };
 
   /* ── Cleanup scan on unmount ── */
@@ -322,7 +322,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
           <div className="h-[2px] w-full bg-[linear-gradient(90deg,rgba(249,115,22,0.5),rgba(20,184,166,0.5),rgba(59,130,246,0.5),rgba(168,85,247,0.5),rgba(34,197,94,0.5),rgba(236,72,153,0.5))] opacity-60"></div>
         </div>
 
-        <div className="relative z-10 flex flex-col flex-1">
+        <div className="relative z-10 flex flex-col flex-1 overflow-hidden">
 
           {activeTab === 'my-projects' && (
             <MyProjectsDashboard onOpenProject={(mode) => onSelect(mode)} />
@@ -331,21 +331,21 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
           {activeTab === 'modules' && (
             <>
               {/* HERO */}
-              <div className="grid grid-cols-[1.1fr_0.9fr] items-center w-full max-w-[1600px] mx-auto py-4 px-10 gap-10 flex-none min-h-[clamp(240px,38vh,520px)] max-[1024px]:grid-cols-1 max-[1024px]:text-center max-[1024px]:gap-6 max-[1024px]:p-6 max-[1024px]:min-h-0 max-[1024px]:flex-none max-[640px]:py-[30px] max-[640px]:px-4 max-[640px]:gap-[30px] max-[480px]:py-5 max-[480px]:px-3 max-[480px]:gap-5">
+              <div className="grid grid-cols-[1.1fr_0.9fr] items-center w-full max-w-[1600px] mx-auto py-3 px-10 gap-8 flex-none min-h-[clamp(200px,32vh,440px)] max-[1280px]:py-2 max-[1280px]:gap-6 max-[1024px]:grid-cols-1 max-[1024px]:text-center max-[1024px]:gap-4 max-[1024px]:p-5 max-[1024px]:min-h-0 max-[1024px]:flex-none max-[768px]:py-3 max-[768px]:px-4 max-[768px]:gap-4 max-[640px]:py-3 max-[640px]:px-4 max-[640px]:gap-3 max-[480px]:py-3 max-[480px]:px-3 max-[480px]:gap-3">
                 <div className="max-[1024px]:flex max-[1024px]:flex-col max-[1024px]:items-center">
                   <div className="inline-block text-[10px] font-extrabold text-black uppercase tracking-[0.25em] mb-2 px-3 py-1 bg-[#BEF264] border-2 border-black shadow-[2px_2px_0px_#000] -rotate-1 max-[480px]:text-[10px] max-[480px]:px-2.5 max-[480px]:py-1 max-[480px]:mb-2 animate-hero-reveal">Curiosity - Creativity - Critical Thinking</div>
-                  <h1 className="headline text-[clamp(2.2rem,3.8vw,3.9rem)] font-black leading-[1.12] tracking-[-0.04em] mb-3 text-[#0a0a18] font-['Poppins','Inter',sans-serif] max-[640px]:text-[2.6rem] max-[480px]:text-[2.2rem] animate-hero-reveal [animation-delay:0.1s] overflow-visible pr-2 pb-1">
+                  <h1 className="headline text-[clamp(2.2rem,3.8vw,3.9rem)] font-black leading-[1.12] tracking-[-0.04em] mb-3 text-[#0a0a18] font-['Poppins','Inter',sans-serif] max-[768px]:text-[2rem] max-[768px]:leading-[1.1] max-[768px]:mb-2 max-[640px]:text-[2.6rem] max-[480px]:text-[2.2rem] animate-hero-reveal [animation-delay:0.1s] overflow-visible pr-2 pb-1">
                     <span className="font-black tracking-[-0.04em]">Learn to</span> <span className="bg-gradient-to-r from-[#3B5BFF] to-[#7A3FF2] bg-clip-text text-transparent font-black tracking-[-0.02em]">code</span><span className="bg-gradient-to-r from-[#7A3FF2] to-[#E63FA0] bg-clip-text text-transparent font-black tracking-[-0.04em] ml-[0.06em]">»»</span>
                     <br />
                     <span className="font-black tracking-[-0.04em]">the</span> <span className="font-black italic bg-gradient-to-r from-[#7A18FF] to-[#E63FA0] bg-clip-text text-transparent tracking-[-0.02em] pl-1 pr-4 mr-1 inline-block overflow-visible" style={{ paddingRight: '0.22em', marginRight: '0.08em' }}>bold</span> <span className="font-black tracking-[-0.04em]">way</span>
                   </h1>
-                  <p className="text-[clamp(0.9rem,1.5vw,1.1rem)] text-slate-600 font-normal leading-[1.6] max-w-[600px] mb-3.5 relative z-10 max-[1024px]:mx-auto max-[1024px]:max-w-[90%] max-[640px]:text-md max-[640px]:max-w-full max-[640px]:p-0 max-[480px]:text-[0.9rem] max-[480px]:leading-[1.4] max-[480px]:mb-4 animate-hero-reveal [animation-delay:0.2s]">
+                  <p className="text-[clamp(0.9rem,1.5vw,1.1rem)] text-slate-600 font-normal leading-[1.6] max-w-[600px] mb-3 relative z-10 max-[1024px]:mx-auto max-[1024px]:max-w-[90%] max-[768px]:mb-2 max-[768px]:text-[0.9rem] max-[640px]:text-md max-[640px]:max-w-full max-[640px]:p-0 max-[480px]:text-[0.9rem] max-[480px]:leading-[1.4] max-[480px]:mb-3 animate-hero-reveal [animation-delay:0.2s]">
                     Eight unique tracks from junior picture-blocks all the way to AI,
                     robotics, and machine vision. Pick your adventure.
                   </p>
-                  <div className="flex gap-4 flex-wrap max-[1024px]:justify-center max-[1024px]:w-full max-[1024px]:gap-4 max-[640px]:gap-3 max-[640px]:flex-col animate-hero-reveal [animation-delay:0.3s]">
+                  <div className="flex gap-4 flex-wrap max-[1024px]:justify-center max-[1024px]:w-full max-[1024px]:gap-3 max-[768px]:gap-2 max-[640px]:gap-3 max-[640px]:flex-col animate-hero-reveal [animation-delay:0.3s]">
                     <button
-                      className="bg-gradient-to-r from-[#4F46E5] via-[#6366F1] to-[#7A3FF2] border-none text-white text-[0.95rem] font-bold cursor-pointer font-inherit py-4 px-8 rounded-full transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] shadow-[0_8px_20px_rgba(79,70,229,0.28),0_4px_12px_rgba(99,102,241,0.18)] hover:from-[#4338CA] hover:via-[#4F46E5] hover:to-[#6366F1] hover:scale-[1.02] hover:shadow-[0_12px_28px_rgba(79,70,229,0.35)] active:scale-[0.98] max-[640px]:w-full max-[640px]:py-3.5 max-[640px]:px-6 max-[640px]:text-md max-[480px]:py-3.5 max-[480px]:px-5 max-[480px]:text-[0.9rem]"
+                      className="bg-gradient-to-r from-[#4F46E5] via-[#6366F1] to-[#7A3FF2] border-none text-white text-[0.95rem] font-bold cursor-pointer font-inherit py-3.5 px-7 rounded-full transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] shadow-[0_8px_20px_rgba(79,70,229,0.28),0_4px_12px_rgba(99,102,241,0.18)] hover:from-[#4338CA] hover:via-[#4F46E5] hover:to-[#6366F1] hover:scale-[1.02] hover:shadow-[0_12px_28px_rgba(79,70,229,0.35)] active:scale-[0.98] max-[768px]:py-3 max-[768px]:px-6 max-[768px]:text-[0.9rem] max-[640px]:w-full max-[640px]:py-3.5 max-[640px]:px-6 max-[640px]:text-md max-[480px]:py-3.5 max-[480px]:px-5 max-[480px]:text-[0.9rem]"
                       onClick={() => {
                         if (highlightCards) {
                           stopCardScan();
@@ -367,7 +367,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
                 </div>
 
                 {/* RIGHT: Cinematic 3D video card cascade (Meta AI / keynote style) */}
-                <div className="flex items-center justify-center relative w-full animate-hero-reveal [animation-delay:0.4s]">
+                <div className="flex items-center justify-center relative w-full animate-hero-reveal [animation-delay:0.4s] max-[1280px]:max-h-[340px] max-[1024px]:max-h-[300px] max-[768px]:max-h-[260px]">
                   <Suspense fallback={
                     <div className="w-full flex items-center justify-center min-h-[340px]">
                       <div className="w-10 h-10 border-3 border-[rgba(99,102,241,0.15)] border-t-[#6366F1] rounded-full animate-hero3d-spin" />
@@ -379,14 +379,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
               </div>
 
               {/* 8 TRACK CARDS — premium light pastel, responsive */}
-              <div className="cards-wrap w-full mx-auto py-4 px-6 pb-3 shrink-0 flex items-center justify-center">
-                <div className={`grid w-full max-w-[1600px] grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-8 ${highlightCards ? 'highlight-active' : ''} ${scanIndex >= 0 ? 'is-scanning' : ''}`}>
+              <div className="cards-wrap w-full mx-auto py-3 px-6 pb-2 shrink-0 flex items-center justify-center overflow-hidden max-[768px]:py-2 max-[768px]:px-4 max-[768px]:pb-1">
+                <div className={`grid w-full max-w-[1600px] grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8 min-h-0 ${highlightCards ? 'highlight-active' : ''} ${scanIndex >= 0 ? 'is-scanning' : ''}`}>
 
                   {/* 1 IGNITE — orange/amber */}
                   <div className={getCardClasses(0, 'bg-gradient-to-br from-orange-100 via-amber-50 to-orange-100')} onClick={() => handleCardClick(() => onSelect('junior'))}>
                     <div className="flex flex-1 flex-col">
-                      <div className="mb-5 flex h-28 items-center justify-center">
-                        <img src="assets/ignite_icon.png" alt="Ignite" className="h-24 w-24 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110" />
+                      <div className="mb-4 flex h-24 items-center justify-center max-[768px]:mb-3 max-[768px]:h-16">
+                        <img src="assets/ignite_icon.png" alt="Ignite" className="h-20 w-20 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110 max-[768px]:h-14 max-[768px]:w-14" />
                       </div>
                       <h3 className="text-[20px] font-extrabold tracking-tight text-orange-700 uppercase">IGNITE</h3>
                       <p className="mt-1 max-w-[170px] text-[14px] font-medium leading-5 text-slate-600">Learn coding<br/>with fun visual blocks</p>
@@ -397,8 +397,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
                   {/* 2 EMBED — cyan/blue */}
                   <div className={getCardClasses(1, 'bg-gradient-to-br from-cyan-100 via-sky-50 to-blue-100')} onClick={() => handleCardClick(() => onSelect('intermediate'))}>
                     <div className="flex flex-1 flex-col">
-                      <div className="mb-5 flex h-28 items-center justify-center">
-                        <img src="assets/arduino_icon.png" alt="Embed" className="h-24 w-24 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110" />
+                      <div className="mb-4 flex h-24 items-center justify-center max-[768px]:mb-3 max-[768px]:h-16">
+                        <img src="assets/arduino_icon.png" alt="Embed" className="h-20 w-20 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110 max-[768px]:h-14 max-[768px]:w-14" />
                       </div>
                       <h3 className="text-[20px] font-extrabold tracking-tight text-cyan-600 uppercase">EMBED</h3>
                       <p className="mt-1 max-w-[170px] text-[14px] font-medium leading-5 text-slate-600">Build with<br/>Arduino, sensors & IoT</p>
@@ -409,8 +409,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
                   {/* 3 LOGIX — blue/indigo */}
                   <div className={getCardClasses(2, 'bg-gradient-to-br from-blue-100 via-indigo-50 to-blue-100')} onClick={() => handleCardClick(() => onSelect('python'))}>
                     <div className="flex flex-1 flex-col">
-                      <div className="mb-5 flex h-28 items-center justify-center">
-                        <img src="assets/python_icon.png" alt="Logix" className="h-24 w-24 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110" />
+                      <div className="mb-4 flex h-24 items-center justify-center max-[768px]:mb-3 max-[768px]:h-16">
+                        <img src="assets/python_icon.png" alt="Logix" className="h-20 w-20 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110 max-[768px]:h-14 max-[768px]:w-14" />
                       </div>
                       <h3 className="text-[20px] font-extrabold tracking-tight text-blue-600 uppercase">LOGIX</h3>
                       <p className="mt-1 max-w-[170px] text-[14px] font-medium leading-5 text-slate-600">Learn Python &<br/>programming logic</p>
@@ -421,8 +421,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
                   {/* 4 NEURA — violet/purple */}
                   <div className={getCardClasses(3, 'bg-gradient-to-br from-violet-100 via-purple-50 to-violet-100')} onClick={() => handleCardClick(() => onSelect('neura'))}>
                     <div className="flex flex-1 flex-col">
-                      <div className="mb-5 flex h-28 items-center justify-center">
-                        <img src="assets/ml_brain_icon.png" alt="Neura" className="h-24 w-24 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110" />
+                      <div className="mb-4 flex h-24 items-center justify-center max-[768px]:mb-3 max-[768px]:h-16">
+                        <img src="assets/ml_brain_icon.png" alt="Neura" className="h-20 w-20 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110 max-[768px]:h-14 max-[768px]:w-14" />
                       </div>
                       <h3 className="text-[20px] font-extrabold tracking-tight text-violet-600 uppercase">NEURA</h3>
                       <p className="mt-1 max-w-[170px] text-[14px] font-medium leading-5 text-slate-600">Explore AI, logic<br/>& intelligent systems</p>
@@ -433,8 +433,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
                   {/* 5 ELECTRA — green/emerald */}
                   <div className={getCardClasses(4, 'bg-gradient-to-br from-green-100 via-emerald-50 to-green-100')} onClick={() => handleCardClick(() => onSelect('electra'))}>
                     <div className="flex flex-1 flex-col">
-                      <div className="mb-5 flex h-28 items-center justify-center">
-                        <img src="assets/creocad_icon.png" alt="Electra" className="h-24 w-24 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110" />
+                      <div className="mb-4 flex h-24 items-center justify-center max-[768px]:mb-3 max-[768px]:h-16">
+                        <img src="assets/creocad_icon.png" alt="Electra" className="h-20 w-20 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110 max-[768px]:h-14 max-[768px]:w-14" />
                       </div>
                       <h3 className="text-[20px] font-extrabold tracking-tight text-green-600 uppercase">ELECTRA</h3>
                       <p className="mt-1 max-w-[170px] text-[14px] font-medium leading-5 text-slate-600">Design circuits &<br/>simulate electronics</p>
@@ -445,8 +445,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
                   {/* 6 VISION3D — sky/cyan */}
                   <div className={getCardClasses(5, 'bg-gradient-to-br from-sky-100 via-cyan-50 to-sky-100')} onClick={() => handleCardClick(() => onSelect('vision3d'))}>
                     <div className="flex flex-1 flex-col">
-                      <div className="mb-5 flex h-28 items-center justify-center">
-                        <img src="assets/vision3d_icon.png" alt="Vision3D" className="h-24 w-24 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110" />
+                      <div className="mb-4 flex h-24 items-center justify-center max-[768px]:mb-3 max-[768px]:h-16">
+                        <img src="assets/vision3d_icon.png" alt="Vision3D" className="h-20 w-20 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110 max-[768px]:h-14 max-[768px]:w-14" />
                       </div>
                       <h3 className="text-[20px] font-extrabold tracking-tight text-sky-600 uppercase">VISION3D</h3>
                       <p className="mt-1 max-w-[170px] text-[14px] font-medium leading-5 text-slate-600">Create 3D models<br/>& digital designs</p>
@@ -457,8 +457,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
                   {/* 7 CREOVA — pink/rose */}
                   <div className={getCardClasses(6, 'bg-gradient-to-br from-pink-100 via-rose-50 to-pink-100')} onClick={() => handleCardClick(() => onSelect('creova'))}>
                     <div className="flex flex-1 flex-col">
-                      <div className="mb-5 flex h-28 items-center justify-center">
-                        <img src="assets/app_game_dev_icon.png" alt="Creova" className="h-24 w-24 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110" />
+                      <div className="mb-4 flex h-24 items-center justify-center max-[768px]:mb-3 max-[768px]:h-16">
+                        <img src="assets/app_game_dev_icon.png" alt="Creova" className="h-20 w-20 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110 max-[768px]:h-14 max-[768px]:w-14" />
                       </div>
                       <h3 className="text-[20px] font-extrabold tracking-tight text-pink-600 uppercase">CREOVA</h3>
                       <p className="mt-1 max-w-[170px] text-[14px] font-medium leading-5 text-slate-600">Build apps, games<br/>& interactive projects</p>
@@ -469,8 +469,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
                   {/* 8 PULSE — emerald/green */}
                   <div className={getCardClasses(7, 'bg-gradient-to-br from-emerald-100 via-green-50 to-emerald-100')} onClick={() => handleCardClick(() => onSelect('pulse'))}>
                     <div className="flex flex-1 flex-col">
-                      <div className="mb-5 flex h-28 items-center justify-center">
-                        <img src="assets/quiz_icon.png" alt="Pulse" className="h-24 w-24 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110" />
+                      <div className="mb-4 flex h-24 items-center justify-center max-[768px]:mb-3 max-[768px]:h-16">
+                        <img src="assets/quiz_icon.png" alt="Pulse" className="h-20 w-20 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110 max-[768px]:h-14 max-[768px]:w-14" />
                       </div>
                       <h3 className="text-[20px] font-extrabold tracking-tight text-emerald-600 uppercase">PULSE</h3>
                       <p className="mt-1 max-w-[170px] text-[14px] font-medium leading-5 text-slate-600">Create quizzes &<br/>assess learning</p>
@@ -485,7 +485,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
 
           {/* FOOTER */}
           {activeTab === 'modules' && (
-            <footer className="relative w-full text-center py-6 px-6 flex items-center justify-center gap-2 shrink-0 z-10 mt-auto border-t border-[rgba(0,0,0,0.05)] bg-[rgba(248,250,252,0.5)] backdrop-blur-[8px]">
+            <footer className="relative w-full text-center py-5 px-6 flex items-center justify-center gap-2 shrink-0 z-10 mt-auto border-t border-[rgba(0,0,0,0.05)] bg-[rgba(248,250,252,0.5)] backdrop-blur-[8px] max-[768px]:py-3 max-[768px]:px-4">
               {/* Ambient glow dot */}
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-[radial-gradient(circle,#6366f1,#a855f7)] shadow-[0_0_8px_2px_rgba(99,102,241,0.5)] shrink-0" />
               <span className="text-[clamp(0.7rem,1.2vw,0.85rem)] font-['Poppins',sans-serif] font-medium tracking-[0.04em] bg-[linear-gradient(90deg,#0a015a_0%,#6366f1_50%,#a855f7_100%)] [-webkit-background-clip:text] [-webkit-text-fill-color:transparent] bg-clip-text">

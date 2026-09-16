@@ -346,16 +346,16 @@ export const HeroCardDeckAnimation: React.FC<HeroCardDeckAnimationProps> = ({ on
   const transition = `transform ${TRANSITION_MS}ms ${TRANSITION_EASE}, filter ${TRANSITION_MS}ms ${TRANSITION_EASE}, opacity ${TRANSITION_MS}ms ${TRANSITION_EASE}`;
 
   return (
-    <div className="group/herocascade relative w-full max-w-[720px] mx-auto select-none">
+    <div className="group/herocascade relative w-full max-w-[720px] mx-auto select-none overflow-hidden">
       <style>{KEYFRAMES}</style>
 
       <div
-        className="relative w-full aspect-[16/11]"
+        className="relative w-full aspect-[16/9] max-[1280px]:aspect-[16/10] max-[1024px]:aspect-[2/1]"
         style={{ perspective: '1500px', perspectiveOrigin: '50% 46%' }}
       >
         {/* ── 3D depth field ── */}
         <div
-          className="absolute left-1/2 top-[47%] w-[64%] aspect-[16/10]"
+          className="absolute left-1/2 top-[47%] w-[64%] aspect-[16/10] max-[1024px]:w-[72%]"
           style={{ transform: 'translate(-50%, -50%)', transformStyle: 'preserve-3d' }}
         >
           {SHOWCASE_CARDS.map((card, index) => {
