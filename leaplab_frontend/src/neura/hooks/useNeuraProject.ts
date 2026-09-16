@@ -554,7 +554,7 @@ export function useNeuraProject(
             sessionStorage.removeItem(`neura-tab-${type}`)
         } catch {}
         // Best-effort clear IDB cache for this type (no await needed)
-        import('./storage/neuraIDB').then(m => m.deleteNeuraProject(type).catch(()=>{}))
+        import('../storage/neuraIDB').then(m => m.deleteNeuraProject(type).catch(()=>{}))
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [type])
 
