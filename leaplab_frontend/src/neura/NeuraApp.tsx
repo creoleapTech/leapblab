@@ -79,6 +79,25 @@ export default function NeuraApp({ onBack }: NeuraAppProps) {
     }
 
     const handleBackToHome = useCallback(() => {
+        // If My Projects was requested (File → My Projects), delegate to App landing instead of Neura Home
+        try {
+            if (sessionStorage.getItem('landingActiveTab') === 'my-projects') {
+                const sel = sessionStorage.getItem('myProjectsSelectedMode')
+                if (sel === 'neura' || sel === null) {
+                    if (view.screen === 'workspace') {
+                        const projectType = view.type
+                        try {
+                            localStorage.removeItem(`neura-project-${projectType}`)
+                            localStorage.removeItem(`neura-annotations-${projectType}`)
+                            localStorage.removeItem(`neura-idb-marker-${projectType}`)
+                        } catch {}
+                        import('./storage/neuraIDB').then(m => m.deleteNeuraProject(projectType).catch(()=>{}))
+                        useCloudProjectStore.getState().clearPendingProject()
+                    }
+                    if (onBack) { onBack(); return }
+                }
+            }
+        } catch {}
         if (view.screen === 'workspace') {
             const projectType = view.type
             try {
@@ -91,9 +110,17 @@ export default function NeuraApp({ onBack }: NeuraAppProps) {
             useCloudProjectStore.getState().clearPendingProject()
         }
         setView({ screen: 'home' })
-    }, [view])
+    }, [view, onBack])
 
     const handleBack = useCallback((hasChanges?: boolean) => {
+        try {
+            if (sessionStorage.getItem('landingActiveTab') === 'my-projects') {
+                const sel = sessionStorage.getItem('myProjectsSelectedMode')
+                if (sel === 'neura' || sel === null) {
+                    if (onBack) { onBack(hasChanges); return }
+                }
+            }
+        } catch {}
         if (view.screen === 'workspace') {
             handleBackToHome()
         } else if (onBack) {

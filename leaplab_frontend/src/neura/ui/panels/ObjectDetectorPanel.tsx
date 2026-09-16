@@ -161,6 +161,7 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
     const [activePaletteId, setActivePaletteId] = useState<string | null>(null)
     const [datasetPos, setDatasetPos] = useState({ x: 48, y: 80 })
     const [confirmState, setConfirmState] = useState<{ title: string; message: string; confirmText: string; variant: 'danger' | 'primary' | 'warning'; icon?: string; onConfirm: () => void } | null>(null)
+    const [uploadingCount, setUploadingCount] = useState(0)
 
     const camera = useCamera({ videoConstraints: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user', frameRate: { ideal: 30 } } })
 
@@ -265,30 +266,111 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
         try {
             const start = performance.now()
             let result: { class: string; score: number; bbox: [number, number, number, number] }[] = []
+            const hasYoloCustom = yoloTrainerRef.current.getLabels().length > 0
+            const hasKnnCustom = trainerRef.current.canClassify
             if (useYolo && yoloAvailable) {
                 try {
-                    const yoloBoxes = await yoloDetect(video, 0.35, 0.45)
-                    const userClasses = mode.project?.classes || []
-                    // If YOLO COCO maps to user classes, use directly; else use KNN on YOLO boxes if trained
-                    const mapped = yoloBoxes.map(b => ({ class: mapToUserClass(b.class, userClasses), score: b.score, bbox: b.bbox })).filter(b => userClasses.length === 0 || userClasses.some(c => c.name === b.class))
-                    if (mapped.length > 0) result = mapped
-                    else if (trainerRef.current.canClassify) {
-                        const customResult = await trainerRef.current.detect(video, 20, true)
-                        result = customResult.objects.map(o => ({ class: o.label, score: o.confidence, bbox: o.bbox }))
-                    } else if (yoloBoxes.length > 0) {
-                        // Show raw YOLO even if not mapped (for debugging)
-                        result = yoloBoxes.slice(0, 8).map(b => ({ class: b.class, score: b.score, bbox: b.bbox }))
+                    // If we have a trained YOLO custom head (73% case), use it to classify YOLO proposals — this is the trained model
+                    if (hasYoloCustom) {
+                        const yoloBoxes = await yoloDetect(video, 0.35, 0.45)
+                        if (yoloBoxes.length > 0) {
+                            // Capture frame as dataURL for YOLO head crop classification
+                            const tmp = document.createElement('canvas')
+                            tmp.width = video.videoWidth; tmp.height = video.videoHeight
+                            const tctx = tmp.getContext('2d')
+                            let frameUrl: string | null = null
+                            if (tctx) { tctx.drawImage(video, 0, 0, tmp.width, tmp.height); try { frameUrl = tmp.toDataURL('image/jpeg', 0.85) } catch {} }
+                            const classified: typeof result = []
+                            for (const prop of yoloBoxes.slice(0, 8)) {
+                                const [x, y, w, h] = prop.bbox
+                                const pct = { x: (x / video.videoWidth) * 100, y: (y / video.videoHeight) * 100, width: (w / video.videoWidth) * 100, height: (h / video.videoHeight) * 100 }
+                                try {
+                                    const pred = frameUrl ? await (yoloTrainerRef.current as any).classifyProposal(frameUrl, pct) : null
+                                    if (pred && pred.confidence > 0.30) classified.push({ class: pred.label, score: pred.confidence, bbox: prop.bbox })
+                                    else if (pred && pred.confidence > 0.20) {
+                                        // low threshold fallback — still show
+                                        classified.push({ class: pred.label, score: pred.confidence, bbox: prop.bbox })
+                                    }
+                                } catch {}
+                            }
+                            if (classified.length > 0) result = classified
+                        }
+                        // If YOLO proposals yielded nothing, fallback to KNN sliding-window or YOLO+KNN
+                        if (result.length === 0 && hasKnnCustom) {
+                            const customResult = await trainerRef.current.detect(video, 20, true)
+                            result = customResult.objects.map(o => ({ class: o.label, score: o.confidence, bbox: o.bbox }))
+                        }
+                        // If still nothing but YOLO had raw boxes, try to classify raw boxes with KNN as last resort
+                        if (result.length === 0 && hasKnnCustom) {
+                            const customResult2 = await trainerRef.current.detect(video, 20, true)
+                            if (customResult2.objects.length) result = customResult2.objects.map(o => ({ class: o.label, score: o.confidence, bbox: o.bbox }))
+                        }
+                    } else {
+                        // No custom YOLO head — use COCO mapping path
+                        const yoloBoxes = await yoloDetect(video, 0.35, 0.45)
+                        const userClasses = mode.project?.classes || []
+                        const mapped = yoloBoxes.map(b => ({ class: mapToUserClass(b.class, userClasses), score: b.score, bbox: b.bbox })).filter(b => userClasses.length === 0 || userClasses.some(c => c.name === b.class))
+                        if (mapped.length > 0) result = mapped
+                        else if (hasKnnCustom) {
+                            const customResult = await trainerRef.current.detect(video, 20, true)
+                            result = customResult.objects.map(o => ({ class: o.label, score: o.confidence, bbox: o.bbox }))
+                        } else if (yoloBoxes.length > 0) {
+                            result = yoloBoxes.slice(0, 8).map(b => ({ class: b.class, score: b.score, bbox: b.bbox }))
+                        }
                     }
-                } catch (e) { console.warn('[detectFrame] YOLO fail, fallback KNN', e) }
-                if (result.length === 0 && trainerRef.current.canClassify) {
+                } catch (e) { console.warn('[detectFrame] YOLO fail, fallback', e) }
+                if (result.length === 0 && hasKnnCustom) {
                     const customResult = await trainerRef.current.detect(video, 20, true)
                     result = customResult.objects.map(o => ({ class: o.label, score: o.confidence, bbox: o.bbox }))
                 }
-            } else if (trainerRef.current.canClassify) {
+                // Final fallback: if custom model exists but we still have 0, try KNN or YOLO custom directly (covers 73% trained case where proposals were empty)
+                if (result.length === 0 && (hasYoloCustom || hasKnnCustom)) {
+                    if (hasKnnCustom) {
+                        try {
+                            const cr = await trainerRef.current.detect(video, 20, true)
+                            if (cr.objects.length) result = cr.objects.map(o => ({ class: o.label, score: o.confidence, bbox: o.bbox }))
+                        } catch {}
+                    }
+                }
+            } else if (hasKnnCustom) {
                 const customResult = await trainerRef.current.detect(video, 20, true)
                 result = customResult.objects.map(o => ({ class: o.label, score: o.confidence, bbox: o.bbox }))
+            } else if (hasYoloCustom) {
+                // KNN not available but YOLO custom is — try YOLO proposals + classify
+                try {
+                    const yoloBoxes = await yoloDetect(video, 0.35, 0.45)
+                    if (yoloBoxes.length) {
+                        const tmp = document.createElement('canvas')
+                        tmp.width = video.videoWidth; tmp.height = video.videoHeight
+                        const tctx = tmp.getContext('2d'); let frameUrl: string | null = null
+                        if (tctx) { tctx.drawImage(video, 0, 0, tmp.width, tmp.height); try { frameUrl = tmp.toDataURL('image/jpeg', 0.85)} catch{} }
+                        const classified: typeof result = []
+                        for (const prop of yoloBoxes.slice(0,8)) {
+                            const [x,y,w,h]=prop.bbox
+                            const pct={x:(x/video.videoWidth)*100,y:(y/video.videoHeight)*100,width:(w/video.videoWidth)*100,height:(h/video.videoHeight)*100}
+                            try{ const pred=frameUrl?await (yoloTrainerRef.current as any).classifyProposal(frameUrl,pct):null; if(pred&&pred.confidence>0.30) classified.push({class:pred.label,score:pred.confidence,bbox:prop.bbox})}catch{}
+                        }
+                        if (classified.length) result=classified
+                    }
+                } catch {}
+                if (result.length===0 && hasKnnCustom) {
+                    const cr=await trainerRef.current.detect(video,20,true); result=cr.objects.map(o=>({class:o.label,score:o.confidence,bbox:o.bbox}))
+                }
             } else if (useCustomModel && customModelTrained) {
-                result = []
+                // Custom flagged but canClassify false — try both heads anyway
+                if (hasYoloCustom || hasKnnCustom) {
+                    try {
+                        if (hasYoloCustom) {
+                            const yoloBoxes=await yoloDetect(video,0.35,0.45)
+                            if(yoloBoxes.length){
+                                const tmp=document.createElement('canvas');tmp.width=video.videoWidth;tmp.height=video.videoHeight;const c=tmp.getContext('2d');let fu:string|null=null;if(c){c.drawImage(video,0,0,tmp.width,tmp.height);try{fu=tmp.toDataURL('image/jpeg',0.85)}catch{}}
+                                const cl:typeof result=[];for(const p of yoloBoxes.slice(0,8)){const[x,y,w,h]=p.bbox;const pct={x:(x/video.videoWidth)*100,y:(y/video.videoHeight)*100,width:(w/video.videoWidth)*100,height:(h/video.videoHeight)*100};try{const pr=fu?await (yoloTrainerRef.current as any).classifyProposal(fu,pct):null;if(pr&&pr.confidence>0.30) cl.push({class:pr.label,score:pr.confidence,bbox:p.bbox})}catch{}}
+                                if(cl.length) result=cl
+                            }
+                        }
+                        if(result.length===0 && hasKnnCustom){const cr=await trainerRef.current.detect(video,20,true);result=cr.objects.map(o=>({class:o.label,score:o.confidence,bbox:o.bbox}))}
+                    }catch{}
+                } else result=[]
             } else {
                 const cocoResult = await detectorRef.current.detect(video)
                 const userClasses = mode.project?.classes || []
@@ -451,11 +533,12 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
                         // For YOLO mode, use YOLO boxes directly but re-score with trained classifier if needed
                         // YOLO COCO classes mapped to user classes
                         const userClasses = mode.project?.classes || []
+                        const hasYoloHead = yoloTrainerRef.current.getLabels().length > 0
                         result = yoloProps.map(p => ({ class: mapToUserClass(p.class, userClasses), score: p.score, bbox: p.bbox }))
                             .filter(p => userClasses.length === 0 || userClasses.some(c => c.name === p.class))
-                        // If no user mapping (custom cat/dog not in COCO), fallback to KNN classification on YOLO boxes
-                        if (result.length === 0 && trainerRef.current.canClassify) {
-                            console.log('[ObjectDetectorPanel] YOLO COCO no match → classify YOLO boxes with KNN/YOLO head')
+                        // If no user mapping (custom cat/dog not in COCO), fallback to YOLO custom head classification on YOLO boxes
+                        if (result.length === 0 && hasYoloHead) {
+                            console.log('[ObjectDetectorPanel] YOLO COCO no match → classify YOLO boxes with YOLO head (custom model)')
                             const fallback: typeof result = []
                             for (const prop of yoloProps.slice(0, 8)) {
                                 const [x, y, w, h] = prop.bbox
@@ -465,16 +548,35 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
                                     const emb = await (yoloTrainerRef.current as any).embedCrop ? await (yoloTrainerRef.current as any).embedCrop(imageUrl, pct) : null
                                     if (!emb) continue
                                     const pred = await yoloTrainerRef.current.predict(emb)
-                                    if (pred && pred.confidences[pred.label] > 0.38) fallback.push({ class: pred.label, score: pred.confidences[pred.label], bbox: prop.bbox })
+                                    if (pred && pred.confidences[pred.label] > 0.30) fallback.push({ class: pred.label, score: pred.confidences[pred.label], bbox: prop.bbox })
                                 } catch {}
                             }
                             if (fallback.length) result = fallback
                         }
+                        if (result.length === 0 && hasYoloHead) {
+                            // Try YOLO head on its own if still empty — maybe COCO missed custom objects entirely, fallback to KNN as last resort
+                            console.log('[ObjectDetectorPanel] YOLO custom still 0 → try KNN fallback if available')
+                            if (trainerRef.current.canClassify) {
+                                const customResult = await trainerRef.current.detect(img, 20, false)
+                                if (customResult.objects.length) result = customResult.objects.map(o => ({ class: o.label, score: o.confidence, bbox: o.bbox }))
+                            }
+                        }
                     }
-                    if (result.length === 0 && trainerRef.current.canClassify) {
-                        console.log('[ObjectDetectorPanel] YOLO gave 0 → fallback to KNN proposals (still YOLO era)')
-                        const customResult = await trainerRef.current.detect(img, 20, false)
-                        result = customResult.objects.map(o => ({ class: o.label, score: o.confidence, bbox: o.bbox }))
+                    if (result.length === 0 && (trainerRef.current.canClassify || yoloTrainerRef.current.getLabels().length > 0)) {
+                        console.log('[ObjectDetectorPanel] YOLO gave 0 → fallback to available custom model')
+                        if (trainerRef.current.canClassify) {
+                            const customResult = await trainerRef.current.detect(img, 20, false)
+                            if (customResult.objects.length) result = customResult.objects.map(o => ({ class: o.label, score: o.confidence, bbox: o.bbox }))
+                        }
+                        if (result.length === 0 && yoloTrainerRef.current.getLabels().length > 0) {
+                            // Last resort: YOLO head sliding window via KNN detector's proposals classified by YOLO head
+                            const knnRes = trainerRef.current.canClassify ? await trainerRef.current.detect(img, 20, false) : { objects: [] as any[] }
+                            // If KNN had no model, try YOLO head on YOLO proposals already tried, so just return 0
+                            if (knnRes.objects.length === 0) {
+                                // Try YOLO head directly on image crops via yoloTrainer classifyProposal for all proposals
+                                // (already tried above)
+                            }
+                        }
                     }
                 } catch (e) { console.warn('[ObjectDetectorPanel] YOLO detect failed, fallback to KNN', e) }
                 if (result.length === 0 && trainerRef.current.canClassify) {
@@ -636,18 +738,41 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
         const cls = mode.project?.classes.find(c => c.id === classId); if (!cls) return
         if (cls.samples.length >= MAX_SAMPLES_PER_CLASS) { showSaved('Maximum 20 per folder'); return }
         let added = 0
+        let skipped = 0
         const list = Array.from(files as any) as File[]
-        const imageFiles = list.filter(f => f.type.startsWith('image/'))
+        const imageFiles = list.filter(f => {
+            if (f.type && f.type.startsWith('image/')) return true
+            return /\.(png|jpe?g|gif|webp|bmp|svg|heic|heif|avif)$/i.test(f.name)
+        })
         if (imageFiles.length === 0) { showSaved('No images found'); return }
-        for (let i = 0; i < imageFiles.length; i++) {
-            const file = imageFiles[i]
+        const remaining = MAX_SAMPLES_PER_CLASS - cls.samples.length
+        const toProcess = imageFiles.slice(0, remaining)
+        if (imageFiles.length > remaining) {
+            showSaved(`Only ${remaining} of ${imageFiles.length} will be added (20 max per folder)`)
+        }
+        if (toProcess.length === 0) return
+        setUploadingCount(toProcess.length)
+        const decrementLoader = () => {
+            setUploadingCount(prev => Math.max(0, prev - 1))
+        }
+        for (let i = 0; i < toProcess.length; i++) {
+            const file = toProcess[i]
             const cur = mode.project?.classes.find(c => c.id === classId)
-            if (cur && cur.samples.length >= MAX_SAMPLES_PER_CLASS) { showSaved(`Limit reached for ${cls.name}`); break }
-            const dataUrl = await new Promise<string>(resolve => { const r = new FileReader(); r.onload = () => resolve(r.result as string); r.readAsDataURL(file) })
-            // resize
-            const img = new Image(); img.src = dataUrl
-            await new Promise<void>(resolve => { img.onload = () => resolve(); img.onerror = () => resolve(); setTimeout(() => resolve(), 3000) })
-            if (img.complete && img.naturalWidth > 0) {
+            if (cur && cur.samples.length >= MAX_SAMPLES_PER_CLASS) { showSaved(`Limit reached for ${cls.name}`); decrementLoader(); break }
+            try {
+                const dataUrl = await new Promise<string>((resolve) => {
+                    const r = new FileReader()
+                    r.onload = () => resolve(r.result as string)
+                    r.onerror = () => {
+                        console.warn('[ObjectDetector] FileReader error for', file.name, r.error)
+                        resolve('')
+                    }
+                    try { r.readAsDataURL(file) } catch (e) { console.warn(e); resolve('') }
+                })
+                if (!dataUrl || dataUrl.length < 100) { skipped++; decrementLoader(); continue }
+                const img = new Image(); img.src = dataUrl
+                await new Promise<void>(resolve => { img.onload = () => resolve(); img.onerror = () => resolve(); setTimeout(() => resolve(), 3000) })
+                if (!img.complete || img.naturalWidth === 0) { skipped++; decrementLoader(); continue }
                 const maxDim = 640
                 const scale = Math.min(maxDim / img.naturalWidth, maxDim / img.naturalHeight, 1)
                 const canvas = document.createElement('canvas')
@@ -658,51 +783,107 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
                 const resizedUrl = canvas.toDataURL('image/jpeg', 0.7)
                 const annotatedData = JSON.stringify({ imageUrl: resizedUrl, boxes: [], imageName: file.name })
                 const saved = mode.addSample(classId, { type: 'image', data: annotatedData })
-                if (saved) added++
+                if (saved) { added++; decrementLoader() }
+                else { skipped++; decrementLoader(); break }
+            } catch (e) {
+                console.warn('[ObjectDetector] process file failed', file.name, e)
+                skipped++
+                decrementLoader()
             }
         }
-        if (added > 0) showSaved(`Added ${added} image${added > 1 ? 's' : ''} to ${cls.name} — annotate them before training!`)
+        setUploadingCount(0)
+        if (added > 0) showSaved(`Added ${added} image${added > 1 ? 's' : ''} to ${cls.name} — annotate them before training!${skipped ? ` (${skipped} skipped)` : ''}`)
+        else if (skipped > 0) showSaved(`No images added — ${skipped} file${skipped>1?'s':''} could not be read`)
     }
 
-    const handleUploadClick = (classId: string) => { pendingUploadClassRef.current = classId; fileInputRef.current?.click() }
+    const handleUploadClick = (classId: string) => {
+        mode.setSelectedClassId(classId)
+        pendingUploadClassRef.current = classId
+        if (fileInputRef.current) {
+            try { (fileInputRef.current as any).dataset.targetClassId = classId } catch {}
+        }
+        fileInputRef.current?.click()
+        setTimeout(() => {
+            if (pendingUploadClassRef.current === classId && fileInputRef.current && !fileInputRef.current.files?.length) {
+                // keep pending for paste, but ensure selectedClassId is correct
+            }
+        }, 1500)
+    }
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files; if (!files || files.length === 0) return
-        const targetId = isSingleDataset ? (pendingUploadClassRef.current || activePaletteId || mode.project?.classes[0]?.id) : (pendingUploadClassRef.current || mode.selectedClassId || mode.project?.classes[0]?.id)
+        const files = e.target.files
+        const attrTarget = (e.currentTarget as any)?.dataset?.targetClassId as string | undefined
+        const targetId = attrTarget || (isSingleDataset ? (pendingUploadClassRef.current || activePaletteId || mode.project?.classes[0]?.id) : (pendingUploadClassRef.current || mode.selectedClassId || mode.project?.classes[0]?.id))
+        if (!files || files.length === 0) {
+            if (fileInputRef.current) try { delete (fileInputRef.current as any).dataset.targetClassId } catch {}
+            return
+        }
         if (!targetId) { showSaved(isSingleDataset ? 'Create a class first' : 'Create a folder first'); return }
         await processFilesForClass(files, targetId)
-        if (fileInputRef.current) fileInputRef.current.value = ''; pendingUploadClassRef.current = null
+        if (fileInputRef.current) {
+            fileInputRef.current.value = ''
+            try { delete (fileInputRef.current as any).dataset.targetClassId } catch {}
+        }
+        pendingUploadClassRef.current = null
     }
 
-    // Copy-Paste support: Paste image from clipboard (Ctrl+V) directly into selected folder
+    // Copy-Paste support: Paste image from clipboard (Ctrl+V) directly into selected folder (multi-image up to 20, sync loader compatible)
     useEffect(() => {
         const handlePaste = async (e: ClipboardEvent) => {
             const active = document.activeElement as HTMLElement | null
             if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return
             // Only handle paste when panel is visible (avoid interfering with other inputs)
             const items = e.clipboardData?.items
-            if (!items || items.length === 0) return
             const imageFiles: File[] = []
-            for (let i = 0; i < items.length; i++) {
-                const item = items[i]
-                if (item.kind === 'file' && item.type.startsWith('image/')) {
-                    const file = item.getAsFile()
-                    if (file) imageFiles.push(file)
+            if (items) {
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i]
+                    if (item.kind === 'file') {
+                        const file = item.getAsFile()
+                        if (file && (file.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|svg|heic|heif|avif)$/i.test(file.name))) {
+                            if (imageFiles.length >= 20) break
+                            imageFiles.push(file)
+                        }
+                    } else if (item.type === 'text/html') {
+                        const html = await new Promise<string>(res => item.getAsString(s => res(s || '')))
+                        const matches = [...html.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)]
+                        for (const match of matches) {
+                            if (imageFiles.length >= 20) break
+                            const src = match[1]
+                            try {
+                                if (src.startsWith('data:image')) {
+                                    const res = await fetch(src); const blob = await res.blob(); imageFiles.push(new File([blob], 'pasted.png', { type: blob.type || 'image/png' }))
+                                } else if (src.startsWith('http')) {
+                                    const res = await fetch(src, { mode: 'cors' }).catch(() => null)
+                                    if (res && res.ok) { const blob = await res.blob(); imageFiles.push(new File([blob], 'pasted.png', { type: blob.type })) }
+                                }
+                            } catch {}
+                        }
+                    } else if (item.type === 'text/plain') {
+                        const text = await new Promise<string>(res => item.getAsString(s => res(s || '')))
+                        const t = text.trim()
+                        if (t.startsWith('data:image') && t.length > 100) {
+                            try { const res = await fetch(t); const blob = await res.blob(); if (imageFiles.length < 20) imageFiles.push(new File([blob], 'pasted.png', { type: blob.type })) } catch {}
+                        }
+                    }
+                    if (imageFiles.length >= 20) break
                 }
             }
-            // Fallback: clipboardData.files (e.g., copied file from OS)
+            // Fallback: clipboardData.files (e.g., copied file from OS) — with extension fallback and 20 cap
             if (imageFiles.length === 0 && e.clipboardData?.files?.length) {
                 for (let i = 0; i < e.clipboardData.files.length; i++) {
+                    if (imageFiles.length >= 20) break
                     const f = e.clipboardData.files[i]
-                    if (f.type.startsWith('image/')) imageFiles.push(f)
+                    if (f.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|svg|heic|heif|avif)$/i.test(f.name)) imageFiles.push(f)
                 }
             }
             if (imageFiles.length === 0) return
             e.preventDefault()
+            const capped = imageFiles.slice(0, 20)
             const targetId = isSingleDataset ? (activePaletteId || mode.project?.classes[0]?.id) : (dragOverClass || pendingUploadClassRef.current || mode.selectedClassId || mode.project?.classes[0]?.id)
             if (!targetId) { showSaved(isSingleDataset ? 'Create a class first, then paste (Ctrl+V)' : 'Create a folder first, then paste (Ctrl+V)'); return }
             const targetName = mode.project?.classes.find(c => c.id === targetId)?.name || (isSingleDataset ? 'Dataset' : 'folder')
-            showSaved(`Pasting ${imageFiles.length} image${imageFiles.length>1?'s':''} to ${targetName}…`)
-            await processFilesForClass(imageFiles, targetId)
+            showSaved(`Pasting ${capped.length} image${capped.length>1?'s':''} to ${targetName}…`)
+            await processFilesForClass(capped, targetId)
         }
         window.addEventListener('paste', handlePaste as any)
         return () => window.removeEventListener('paste', handlePaste as any)
@@ -1049,7 +1230,7 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
             e.stopPropagation()
             return
         }
-        e.preventDefault()
+        if (e.cancelable) e.preventDefault()
         e.stopPropagation()
         const isPinch = e.ctrlKey || (e as any).ctrlKey
         const delta = -e.deltaY * (isPinch ? 0.008 : 0.0012)
@@ -1075,7 +1256,7 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
     }
     const handleTouchMove = (e: React.TouchEvent) => {
         if (e.touches.length === 2 && pinchRef.current) {
-            e.preventDefault()
+            if (e.cancelable) e.preventDefault()
             const dx = e.touches[0].clientX - e.touches[1].clientX
             const dy = e.touches[0].clientY - e.touches[1].clientY
             const dist = Math.hypot(dx, dy)
@@ -1146,7 +1327,7 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
                     return
                 }
             }
-            if (e.ctrlKey || Math.abs(e.deltaY) > 0) {
+            if (e.cancelable && (e.ctrlKey || Math.abs(e.deltaY) > 0)) {
                 e.preventDefault()
             }
         }
@@ -1332,7 +1513,7 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
                                             onDrop={async e => { e.preventDefault(); setDragOverClass(null); if (e.dataTransfer.files.length>0) { const tid = activePaletteId || mode.project?.classes[0]?.id; if(!tid){ showSaved('Create a class first'); return } await processFilesForClass(e.dataTransfer.files, tid) } }}
                                             className="flex-1 p-3 flex flex-col gap-3 min-h-[220px]"
                                         >
-                                            {allSamples.length>0 ? (
+                                            {(allSamples.length>0 || uploadingCount>0) ? (
                                                 <>
                                                     <div data-dataset-panel className="grid grid-cols-4 gap-2 max-h-[360px] overflow-auto pr-1 neura-scrollbar">
                                                         {allSamples.slice(0, 32).map(({s, originClassId}, idx, arr) => {
@@ -1349,6 +1530,12 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
                                                                 </div>
                                                             )
                                                         })}
+                                                        {uploadingCount > 0 && Array.from({ length: uploadingCount }).map((_, i) => (
+                                                            <div key={`uploading-${i}`} className="aspect-square rounded-lg bg-white border-2 border-violet-200 flex flex-col items-center justify-center gap-1 animate-pulse">
+                                                                <div className="w-6 h-6 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
+                                                                <span className="text-[8px] font-bold text-violet-600 tracking-wide">Loading…</span>
+                                                            </div>
+                                                        ))}
                                                     </div>
                                                     {allSamples.length>32 && <div className="text-[11px] text-slate-500 text-center">+{allSamples.length-32} more</div>}
                                                     <div className="flex gap-2">

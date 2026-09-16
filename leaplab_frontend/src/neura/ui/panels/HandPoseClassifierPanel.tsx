@@ -53,6 +53,7 @@ export default function HandPoseClassifierPanel({ mode }: HandPoseClassifierPane
     const [editingClassId, setEditingClassId] = useState<string | null>(null)
     const [editName, setEditName] = useState('')
     const [expandedClasses, setExpandedClasses] = useState<Record<string, boolean>>({})
+    const [uploadingByClass, setUploadingByClass] = useState<Record<string, number>>({})
     const [handDetected, setHandDetected] = useState(false)
 
     const [zoom, setZoom] = useState(1)
@@ -314,16 +315,43 @@ export default function HandPoseClassifierPanel({ mode }: HandPoseClassifierPane
         let added = 0
         let noHand = 0
         const list = Array.from(files as any) as File[]
-        const imageFiles = list.filter(f => f.type.startsWith('image/'))
+        const imageFiles = list.filter(f => {
+            if (f.type && f.type.startsWith('image/')) return true
+            return /\.(png|jpe?g|gif|webp|bmp|svg|heic|heif|avif)$/i.test(f.name)
+        })
         if (imageFiles.length === 0) { showSaved('No images found'); return }
-        for (let i = 0; i < imageFiles.length; i++) {
-            const file = imageFiles[i]
+        const remaining = MAX_SAMPLES_PER_CLASS - cls.samples.length
+        const toProcess = imageFiles.slice(0, remaining)
+        if (imageFiles.length > remaining) {
+            showSaved(`Only ${remaining} of ${imageFiles.length} will be added (20 max per folder)`)
+        }
+        if (toProcess.length === 0) return
+        setUploadingByClass(prev => ({ ...prev, [classId]: (prev[classId] || 0) + toProcess.length }))
+        const decrementLoader = () => {
+            setUploadingByClass(prev => {
+                const cur = (prev[classId] || 0) - 1
+                if (cur <= 0) { const { [classId]: _, ...rest } = prev as any; return rest }
+                return { ...prev, [classId]: cur }
+            })
+        }
+        for (let i = 0; i < toProcess.length; i++) {
+            const file = toProcess[i]
             const cur = mode.project?.classes.find(c => c.id === classId)
-            if (cur && cur.samples.length >= MAX_SAMPLES_PER_CLASS) { showSaved(`Limit reached for ${cls.name}`); break }
-            const dataUrl = await new Promise<string>(resolve => { const r = new FileReader(); r.onload = () => resolve(r.result as string); r.readAsDataURL(file) })
-            const img = new Image(); img.src = dataUrl
-            await new Promise<void>(resolve => { img.onload = () => resolve(); img.onerror = () => resolve(); setTimeout(() => resolve(), 3000) })
-            if (img.complete && img.naturalWidth > 0) {
+            if (cur && cur.samples.length >= MAX_SAMPLES_PER_CLASS) { showSaved(`Limit reached for ${cls.name}`); decrementLoader(); break }
+            try {
+                const dataUrl = await new Promise<string>((resolve) => {
+                    const r = new FileReader()
+                    r.onload = () => resolve(r.result as string)
+                    r.onerror = () => {
+                        console.warn('[HandPoseClassifier] FileReader error for', file.name, r.error)
+                        resolve('')
+                    }
+                    try { r.readAsDataURL(file) } catch (e) { console.warn(e); resolve('') }
+                })
+                if (!dataUrl || dataUrl.length < 100) { noHand++; decrementLoader(); continue }
+                const img = new Image(); img.src = dataUrl
+                await new Promise<void>(resolve => { img.onload = () => resolve(); img.onerror = () => resolve(); setTimeout(() => resolve(), 3000) })
+                if (!img.complete || img.naturalWidth === 0) { noHand++; decrementLoader(); continue }
                 try {
                     const tempCanvas = document.createElement('canvas')
                     tempCanvas.width = img.naturalWidth; tempCanvas.height = img.naturalHeight
@@ -334,26 +362,117 @@ export default function HandPoseClassifierPanel({ mode }: HandPoseClassifierPane
                         const features = classifierRef.current.extractFeatures(keypoints)
                         const data = JSON.stringify(Array.from(features))
                         const ok = mode.addSample(classId, { type: 'keypoints', data })
-                        if (!ok) { showSaved(`Limit reached for ${cls.name}`); break }
+                        if (!ok) { showSaved(`Limit reached for ${cls.name}`); decrementLoader(); break }
                         const targetName = mode.project?.classes.find(c => c.id === classId)?.name || cls.name
-                        if (augmentMode) await classifierRef.current.addSampleAugmented(features, targetName)
-                        else await classifierRef.current.addSample(features, targetName)
+                        try {
+                            if (augmentMode) await classifierRef.current.addSampleAugmented(features, targetName)
+                            else await classifierRef.current.addSample(features, targetName)
+                        } catch (e) { console.warn('[HandPose] classifier addSample failed', e) }
                         added++
-                    } else { noHand++ }
-                } catch (e) { console.warn('[HandPose] upload detect failed', e); noHand++ }
+                        decrementLoader()
+                    } else { noHand++; decrementLoader() }
+                } catch (e) { console.warn('[HandPose] upload detect failed', e); noHand++; decrementLoader() }
+            } catch (e) {
+                console.warn('[HandPose] process file failed', file.name, e)
+                noHand++
+                decrementLoader()
             }
         }
+        // Ensure loaders cleared (handles break case)
+        setUploadingByClass(prev => { const { [classId]: _, ...rest } = prev as any; return rest })
         if (added > 0) showSaved(`Added ${added} gesture${added > 1 ? 's' : ''} to ${cls.name} ✓`)
         if (noHand > 0) showSaved(`No hand in ${noHand} image(s)`)
     }
-    const handleUploadClick = (classId: string) => { pendingUploadClassRef.current = classId; fileInputRef.current?.click() }
+    const handleUploadClick = (classId: string) => {
+        mode.setSelectedClassId(classId)
+        pendingUploadClassRef.current = classId
+        if (fileInputRef.current) {
+            try { (fileInputRef.current as any).dataset.targetClassId = classId } catch {}
+        }
+        fileInputRef.current?.click()
+        setTimeout(() => {
+            if (pendingUploadClassRef.current === classId && fileInputRef.current && !fileInputRef.current.files?.length) {
+                // keep pending for paste, but ensure selectedClassId is correct
+            }
+        }, 1500)
+    }
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files; if (!files || files.length === 0) return
-        const targetId = pendingUploadClassRef.current || mode.selectedClassId || mode.project?.classes[0]?.id
+        const files = e.target.files
+        const attrTarget = (e.currentTarget as any)?.dataset?.targetClassId as string | undefined
+        const targetId = attrTarget || pendingUploadClassRef.current || mode.selectedClassId || mode.project?.classes[0]?.id
+        if (!files || files.length === 0) {
+            if (fileInputRef.current) try { delete (fileInputRef.current as any).dataset.targetClassId } catch {}
+            return
+        }
         if (!targetId) { showSaved('Create a folder first'); return }
         await processFilesForClass(files, targetId)
-        if (fileInputRef.current) fileInputRef.current.value = ''; pendingUploadClassRef.current = null
+        if (fileInputRef.current) {
+            fileInputRef.current.value = ''
+            try { delete (fileInputRef.current as any).dataset.targetClassId } catch {}
+        }
+        pendingUploadClassRef.current = null
     }
+    // Paste images from clipboard (Ctrl+V) — multi-image up to 20, extension fallback, sync loader compatible
+    useEffect(() => {
+        const extractImagesFromClipboard = async (e: ClipboardEvent): Promise<File[]> => {
+            const out: File[] = []
+            const items = e.clipboardData?.items
+            if (items) {
+                for (let i = 0; i < items.length; i++) {
+                    const it = items[i]
+                    if (it.kind === 'file') {
+                        const f = it.getAsFile()
+                        if (f && (f.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|svg|heic|heif|avif)$/i.test(f.name))) {
+                            if (out.length >= 20) break
+                            out.push(f)
+                        }
+                    } else if (it.type === 'text/html') {
+                        const html = await new Promise<string>(res => it.getAsString(s => res(s || '')))
+                        const matches = [...html.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)]
+                        for (const match of matches) {
+                            if (out.length >= 20) break
+                            const src = match[1]
+                            try {
+                                if (src.startsWith('data:image')) {
+                                    const res = await fetch(src); const blob = await res.blob(); out.push(new File([blob], 'pasted.png', { type: blob.type || 'image/png' }))
+                                } else if (src.startsWith('http')) {
+                                    const res = await fetch(src, { mode: 'cors' }).catch(() => null)
+                                    if (res && res.ok) { const blob = await res.blob(); out.push(new File([blob], 'pasted.png', { type: blob.type })) }
+                                }
+                            } catch {}
+                        }
+                    } else if (it.type === 'text/plain') {
+                        const text = await new Promise<string>(res => it.getAsString(s => res(s || '')))
+                        const t = text.trim()
+                        if (t.startsWith('data:image') && t.length > 100) {
+                            try { const res = await fetch(t); const blob = await res.blob(); if (out.length < 20) out.push(new File([blob], 'pasted.png', { type: blob.type })) } catch {}
+                        }
+                    }
+                    if (out.length >= 20) break
+                }
+            }
+            if (out.length === 0 && e.clipboardData?.files?.length) {
+                for (let i = 0; i < e.clipboardData.files.length; i++) {
+                    if (out.length >= 20) break
+                    const f = e.clipboardData.files[i]
+                    if (f.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|svg|heic|heif|avif)$/i.test(f.name)) out.push(f)
+                }
+            }
+            return out.slice(0, 20)
+        }
+        const handlePaste = async (e: ClipboardEvent) => {
+            const active = document.activeElement as HTMLElement | null
+            if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return
+            const imageFiles = await extractImagesFromClipboard(e)
+            if (imageFiles.length === 0) return
+            e.preventDefault()
+            const targetId = mode.selectedClassId || mode.project?.classes[0]?.id
+            if (!targetId) { showSaved('Create a folder first, then paste (Ctrl+V)'); return }
+            await processFilesForClass(imageFiles, targetId)
+        }
+        window.addEventListener('paste', handlePaste as any)
+        return () => window.removeEventListener('paste', handlePaste as any)
+    }, [mode.selectedClassId, mode.project?.classes])
     const handleTestUpload = async (e: React.ChangeEvent<HTMLInputElement> | FileList | File[]) => {
         let file: File | null = null
         if (e instanceof FileList) file = e[0] || null
@@ -503,7 +622,7 @@ export default function HandPoseClassifierPanel({ mode }: HandPoseClassifierPane
             return
         }
         // Pinch on trackpad fires ctrlKey+wheel; we hijack it for canvas zoom
-        e.preventDefault()
+        if (e.cancelable) e.preventDefault()
         e.stopPropagation()
         const isPinch = e.ctrlKey || (e as any).ctrlKey
         const delta = -e.deltaY * (isPinch ? 0.008 : 0.0012)
@@ -529,7 +648,7 @@ export default function HandPoseClassifierPanel({ mode }: HandPoseClassifierPane
     }
     const handleTouchMove = (e: React.TouchEvent) => {
         if (e.touches.length === 2 && pinchRef.current) {
-            e.preventDefault()
+            if (e.cancelable) e.preventDefault()
             const dx = e.touches[0].clientX - e.touches[1].clientX
             const dy = e.touches[0].clientY - e.touches[1].clientY
             const dist = Math.hypot(dx, dy)
@@ -599,7 +718,7 @@ export default function HandPoseClassifierPanel({ mode }: HandPoseClassifierPane
                     return
                 }
             }
-            if (e.ctrlKey || Math.abs(e.deltaY) > 0) {
+            if (e.cancelable && (e.ctrlKey || Math.abs(e.deltaY) > 0)) {
                 e.preventDefault()
             }
         }
@@ -742,7 +861,7 @@ export default function HandPoseClassifierPanel({ mode }: HandPoseClassifierPane
                                         onDrop={async e => { e.preventDefault(); setDragOverClass(null); if (e.dataTransfer.files.length > 0) await processFilesForClass(e.dataTransfer.files, cls.id) }}
                                         className="flex-1 p-3 flex flex-col gap-3 min-h-[150px]"
                                     >
-                                        {cls.samples.length > 0 ? (
+                                        {(cls.samples.length > 0 || (uploadingByClass[cls.id] || 0) > 0) ? (
                                             <>
                                                 <div data-dataset-panel className={`grid grid-cols-4 gap-2 ${expandedClasses[cls.id] ? 'max-h-[360px] overflow-auto neura-scrollbar pr-1' : ''}`}>
                                                     {(expandedClasses[cls.id] ? cls.samples : cls.samples.slice(0, 8)).map(s => (
@@ -750,6 +869,12 @@ export default function HandPoseClassifierPanel({ mode }: HandPoseClassifierPane
                                                             <span className="text-lg">✋</span>
                                                             <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 text-[8px] font-bold text-violet-700 bg-white/80 px-1 rounded">#{cls.samples.indexOf(s) + 1}</span>
                                                             <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); handleRemoveSample(cls.id, s.id) }} className="absolute top-1 right-1 w-5 h-5 rounded-md bg-white border border-slate-200 text-slate-600 flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity shadow-sm">×</button>
+                                                        </div>
+                                                    ))}
+                                                    {(uploadingByClass[cls.id] || 0) > 0 && Array.from({ length: uploadingByClass[cls.id] }).map((_, i) => (
+                                                        <div key={`uploading-${cls.id}-${i}`} className="aspect-square rounded-lg bg-white border-2 border-violet-200 flex flex-col items-center justify-center gap-1 animate-pulse">
+                                                            <div className="w-6 h-6 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
+                                                            <span className="text-[8px] font-bold text-violet-600 tracking-wide">Loading…</span>
                                                         </div>
                                                     ))}
                                                 </div>
