@@ -776,41 +776,43 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
         showSaved(`Saved ${newBoxes.length} box${newBoxes.length !== 1 ? 'es' : ''} ✓`)
     }
 
-    // Annotator navigation helpers — ordered list of all images (dataset order)
+    // Annotator navigation helpers — ordered list of all images by upload timestamp (index iteration)
     const getAnnotatorList = () => {
-        if (!mode.project) return [] as { classId: string; sampleId: string; imageUrl: string; boxes: BoundingBox[] }[]
-        const list: { classId: string; sampleId: string; imageUrl: string; boxes: BoundingBox[] }[] = []
+        if (!mode.project) return [] as { classId: string; sampleId: string; imageUrl: string; boxes: BoundingBox[]; timestamp: number }[]
+        const list: { classId: string; sampleId: string; imageUrl: string; boxes: BoundingBox[]; timestamp: number }[] = []
         for (const cls of mode.project.classes) {
             for (const s of cls.samples) {
                 const parsed = mode.parseSample(s.data)
                 if (!parsed || !parsed.imageUrl) continue
-                list.push({ classId: cls.id, sampleId: s.id, imageUrl: parsed.imageUrl, boxes: parsed.boxes })
+                list.push({ classId: cls.id, sampleId: s.id, imageUrl: parsed.imageUrl, boxes: parsed.boxes, timestamp: (s as any).timestamp || 0 })
             }
         }
+        // Sort by upload timestamp ascending — true index-based iteration as requested
+        list.sort((a, b) => a.timestamp - b.timestamp || a.sampleId.localeCompare(b.sampleId))
         return list
     }
     const handleAnnotatorSaveAndNavigate = (newBoxes: BoundingBox[], dir: 1 | -1) => {
         if (!annotatorState) return
         const { classId, sampleId, imageUrl } = annotatorState
-        // save current
+        // save current image boxes first (preserve imageName)
         const cls = mode.project?.classes.find(c => c.id === classId)
         const sample = cls?.samples.find(s => s.id === sampleId)
         let imageName = 'image'
         try { const parsed = JSON.parse(sample?.data || '{}'); if (parsed.imageName) imageName = parsed.imageName } catch {}
         const newData = JSON.stringify({ imageUrl, boxes: newBoxes, imageName })
         mode.updateSample(classId, sampleId, { type: 'image', data: newData })
-        // navigate
+        // navigate by index — recompute ordered list (sorted by upload index)
+        // Capture current list snapshot before async project update
         const list = getAnnotatorList()
         const idx = list.findIndex(e => e.sampleId === sampleId)
-        const nextIdx = idx + dir
+        // If not found (edge) treat as 0
+        const curIdx = idx >= 0 ? idx : 0
+        const nextIdx = curIdx + dir
         if (nextIdx >= 0 && nextIdx < list.length) {
             const nxt = list[nextIdx]
-            // Need fresh parsed after update? Use nxt but with updated boxes for current already saved
-            // Re-read for next to ensure latest boxes
             const nextCls = mode.project?.classes.find(c => c.id === nxt.classId)
             const nextSample = nextCls?.samples.find(s => s.id === nxt.sampleId)
             const nextParsed = nextSample ? mode.parseSample(nextSample.data) : null
-            // If we just saved, the list's boxes for current are stale, but next is independent
             setAnnotatorState({
                 classId: nxt.classId,
                 sampleId: nxt.sampleId,
@@ -1515,7 +1517,7 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
                         </div>
                     )}
                     {isSingleDataset && mode.project?.classes.length === 0 && (
-                        <div data-node style={{ left: 360, top: 220, width: 360, position: 'absolute' }} className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 flex flex-col items-center text-center">
+                        <div data-node style={{ left: datasetPos.x + 180, top: datasetPos.y + 400, width: 360, position: 'absolute' }} className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 flex flex-col items-center text-center z-20">
                             <div className="w-12 h-12 rounded-xl bg-violet-50 border border-violet-200 flex items-center justify-center text-violet-600 mb-3">🏷️</div>
                             <h3 className="text-sm font-semibold text-slate-900">No classes yet</h3>
                             <p className="text-xs text-slate-500 mt-1 max-w-[260px]">Create classes (e.g. Dog, Cat) in the palette above. Then add images to the Dataset below and click a class to annotate.</p>
@@ -1714,6 +1716,7 @@ export default function ObjectDetectorPanel({ mode }: ObjectDetectorPanelProps) 
                 const hasNext = idx >= 0 && idx < list.length - 1
                 return (
                 <ObjectAnnotatorModal
+                    key={annotatorState.sampleId}
                     imageUrl={annotatorState.imageUrl}
                     initialBoxes={annotatorState.boxes}
                     classOptions={(mode.project?.classes || []).map(c => ({ name: c.name, color: c.color }))}

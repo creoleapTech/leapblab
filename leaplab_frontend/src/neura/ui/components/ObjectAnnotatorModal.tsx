@@ -433,14 +433,19 @@ export default function ObjectAnnotatorModal({ imageUrl, initialBoxes, classOpti
                                 )}
                             </div>
                         </div>
-                        <div className="h-9 flex items-center justify-between px-3 bg-white border-t border-slate-200 shrink-0">
-                            <div className="flex items-center gap-3 text-xs">
-                                <span className="text-slate-500 font-medium">B: box • L: hide labels • Del: delete • Ctrl+Z: undo</span>
-                                <span className="text-slate-300">|</span>
-                                <span className="text-slate-600 font-bold">Double-click label to edit • labels hide when crowded</span>
+                        {/* Bottom white bar — shortcuts, connected with right Cancel/Prev/Next */}
+                        <div className="min-h-[56px] px-3 py-2 bg-white border-t border-slate-200 flex items-center justify-between gap-3 shrink-0">
+                            <div className="flex items-center gap-2 text-[11px] leading-none flex-wrap">
+                                <span className="inline-flex items-center gap-1.5 font-medium text-slate-600"><span className="inline-flex items-center justify-center w-5 h-5 rounded bg-slate-100 border border-slate-200 text-[10px] font-bold">B</span> box</span>
+                                <span className="w-px h-4 bg-slate-200 hidden sm:block"></span>
+                                <span className="inline-flex items-center gap-1.5 font-medium text-slate-600"><span className="inline-flex items-center justify-center w-5 h-5 rounded bg-slate-100 border border-slate-200 text-[10px] font-bold">L</span> hide labels</span>
+                                <span className="w-px h-4 bg-slate-200 hidden sm:block"></span>
+                                <span className="inline-flex items-center gap-1.5 font-medium text-slate-600"><span className="inline-flex items-center justify-center w-5 h-5 rounded bg-slate-100 border border-slate-200 text-[10px] font-bold">Del</span> delete</span>
+                                <span className="w-px h-4 bg-slate-200 hidden sm:block"></span>
+                                <span className="inline-flex items-center gap-1.5 font-medium text-slate-600"><span className="inline-flex items-center justify-center px-1 h-5 rounded bg-slate-100 border border-slate-200 text-[10px] font-bold">Ctrl+Z</span> undo</span>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <button onClick={()=> setShowClearConfirm(true)} className="h-7 px-3 rounded-full bg-slate-50 border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100">Clear</button>
+                            <div className="hidden lg:flex items-center gap-1.5 text-[11px] font-medium text-slate-500 shrink-0">
+                                <span className="w-1.5 h-1.5 rounded-full bg-violet-500"></span> Double-click label to edit • labels hide when crowded
                             </div>
                         </div>
                     </div>
@@ -472,7 +477,7 @@ export default function ObjectAnnotatorModal({ imageUrl, initialBoxes, classOpti
                                 </div>
                             ))}
                         </div>
-                        <div className="p-3 border-t border-slate-200 bg-white flex gap-1.5">
+                        <div className="min-h-[56px] px-3 py-2 border-t border-slate-200 bg-white flex items-center gap-1.5">
                             <button onClick={onClose} className="h-9 px-3 rounded-xl bg-white border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 shrink-0">Cancel</button>
                             {hasPrev !== undefined && (
                                 <button

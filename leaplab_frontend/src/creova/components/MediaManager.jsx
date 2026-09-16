@@ -24,6 +24,8 @@ export default function MediaManager({ appState }) {
     const audioRef = useRef(null);
     const videoRef = useRef(null);
     const dragCounterRef = useRef(0);
+    const [videoBlobUrl, setVideoBlobUrl] = useState(null);
+    const [videoError, setVideoError] = useState(null);
 
     // Register global window drag-and-drop upload handler
     useEffect(() => {
@@ -31,6 +33,7 @@ export default function MediaManager({ appState }) {
             handler: (files) => {
                 const fileList = Array.from(files);
                 fileList.forEach(file => {
+                    const normalizedType = normalizeFileType(file);
                     const reader = new FileReader();
                     reader.onload = (event) => {
                         const data = event.target.result;
@@ -40,7 +43,7 @@ export default function MediaManager({ appState }) {
                         }
                         addMedia({
                             filename: file.name,
-                            type: file.type,
+                            type: normalizedType,
                             size: file.size,
                             data: data,
                             timestamp: Date.now()
@@ -71,11 +74,34 @@ export default function MediaManager({ appState }) {
         return filename.split('.').pop().toUpperCase();
     };
 
-    // Get file category for filtering
-    const getFileCategory = (type) => {
-        if (type.startsWith('image/')) return 'image';
-        if (type.startsWith('audio/')) return 'audio';
-        if (type.startsWith('video/')) return 'video';
+    // Video helper — infer correct MIME for mp4/mov and handle empty file.type
+    const VIDEO_EXTS = ['mp4', 'mov', 'm4v', 'webm', 'avi', 'mkv', '3gp'];
+    const getExtension = (name) => (name.split('.').pop() || '').toLowerCase();
+    const isVideoByExt = (name) => VIDEO_EXTS.includes(getExtension(name));
+    const inferVideoMime = (name, originalType) => {
+        const ext = getExtension(name);
+        if (ext === 'mp4' || ext === 'mov' || ext === 'm4v') return 'video/mp4';
+        if (ext === 'webm') return 'video/webm';
+        if (ext === 'avi') return 'video/x-msvideo';
+        if (ext === 'mkv') return 'video/x-matroska';
+        if (originalType && originalType.startsWith('video/')) return originalType;
+        return 'video/mp4';
+    };
+    const normalizeFileType = (file) => {
+        if (file.type && file.type.startsWith('video/')) return file.type;
+        if (file.type && file.type.startsWith('image/')) return file.type;
+        if (file.type && file.type.startsWith('audio/')) return file.type;
+        if (isVideoByExt(file.name)) return inferVideoMime(file.name, file.type);
+        return file.type || '';
+    };
+    // Get file category for filtering — with extension fallback for mp4/mov
+    const getFileCategory = (type, filename = '') => {
+        if (type && type.startsWith('image/')) return 'image';
+        if (type && type.startsWith('audio/')) return 'audio';
+        if (type && type.startsWith('video/')) return 'video';
+        if (filename && isVideoByExt(filename)) return 'video';
+        if (filename && /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(filename)) return 'image';
+        if (filename && /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(filename)) return 'audio';
         return 'other';
     };
 
@@ -90,19 +116,20 @@ export default function MediaManager({ appState }) {
 const handleFileUpload = (e) => {
         const files = Array.from(e.target.files);
         files.forEach(file => {
+            const normalizedType = normalizeFileType(file);
             const reader = new FileReader();
             reader.onload = (event) => {
                 const data = event.target.result;
                 const commaIdx = data.indexOf(',');
                 const b64len = commaIdx >= 0 ? data.length - commaIdx - 1 : data.length;
                 const b64prefix = commaIdx >= 0 ? data.substring(0, Math.min(commaIdx, 60)) : 'none';
-                console.log('[MEDIA-UPLOAD] File:', file.name, '| size:', file.size, '| type:', file.type, '| dataLen:', data.length, '| b64Len:', b64len, '| b64Prefix:', b64prefix);
+                console.log('[MEDIA-UPLOAD] File:', file.name, '| size:', file.size, '| type:', normalizedType, '(orig:', file.type, ') | dataLen:', data.length, '| b64Len:', b64len, '| b64Prefix:', b64prefix);
                 if (file.size > 0 && (b64len < 10 || b64len < file.size * 0.1)) {
                     console.warn('[MEDIA-UPLOAD] WARNING: b64 data is suspiciously small for file size', file.name, file.size, b64len);
                 }
                 addMedia({
                     filename: file.name,
-                    type: file.type,
+                    type: normalizedType,
                     size: file.size,
                     data: data,
                     timestamp: Date.now()
@@ -148,19 +175,20 @@ e.target.value = null;
 
         const files = Array.from(e.dataTransfer.files);
         files.forEach(file => {
+            const normalizedType = normalizeFileType(file);
             const reader = new FileReader();
             reader.onload = (event) => {
                 const data = event.target.result;
                 const commaIdx = data.indexOf(',');
                 const b64len = commaIdx >= 0 ? data.length - commaIdx - 1 : data.length;
                 const b64prefix = commaIdx >= 0 ? data.substring(0, Math.min(commaIdx, 60)) : 'none';
-                console.log('[MEDIA-UPLOAD] Drop file:', file.name, '| size:', file.size, '| type:', file.type, '| dataLen:', data.length, '| b64Len:', b64len);
+                console.log('[MEDIA-UPLOAD] Drop file:', file.name, '| size:', file.size, '| type:', normalizedType, '(orig:', file.type, ') | dataLen:', data.length, '| b64Len:', b64len);
                 if (file.size > 0 && (b64len < 10 || b64len < file.size * 0.1)) {
                     console.warn('[MEDIA-UPLOAD] WARNING: b64 data is suspiciously small for file size', file.name, file.size, b64len);
                 }
                 addMedia({
                     filename: file.name,
-                    type: file.type,
+                    type: normalizedType,
                     size: file.size,
                     data: data,
                     timestamp: Date.now()
@@ -233,7 +261,7 @@ e.target.value = null;
 
     const filteredMedia = media.filter(file => {
         const matchesSearch = file.filename.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesFilter = filterType === 'all' || getFileCategory(file.type) === filterType;
+        const matchesFilter = filterType === 'all' || getFileCategory(file.type, file.filename) === filterType;
         return matchesSearch && matchesFilter;
     });
 
@@ -242,12 +270,56 @@ e.target.value = null;
         totalSize: media.reduce((acc, file) => acc + file.size, 0)
     };
 
-    // Auto-play video when preview opens (user gesture from View click allows playback)
+    // Create Blob URL for video preview — reliable for mp4/mov (base64 data URL can be large, use fetch to avoid blocking)
     useEffect(() => {
-        if (previewFile && getFileCategory(previewFile.type) === 'video' && videoRef.current) {
-            // Small delay to ensure video element is mounted and src is set
+        let objectUrl = null;
+        let cancelled = false;
+        const run = async () => {
+            if (previewFile && getFileCategory(previewFile.type, previewFile.filename) === 'video') {
+                setVideoError(null);
+                const dataUrl = previewFile.data;
+                if (!dataUrl || typeof dataUrl !== 'string') {
+                    if (!cancelled) setVideoBlobUrl(null);
+                    return;
+                }
+                if (!dataUrl.startsWith('data:')) {
+                    if (!cancelled) setVideoBlobUrl(dataUrl);
+                    return;
+                }
+                try {
+                    // Use fetch to decode base64 efficiently (handles large videos without blocking main thread)
+                    const res = await fetch(dataUrl);
+                    let blob = await res.blob();
+                    let mime = blob.type || 'video/mp4';
+                    if (previewFile.filename && getExtension(previewFile.filename) === 'mov' && mime === 'video/quicktime') {
+                        mime = 'video/mp4';
+                        blob = new Blob([blob], { type: mime });
+                    }
+                    objectUrl = URL.createObjectURL(blob);
+                    if (!cancelled) setVideoBlobUrl(objectUrl);
+                } catch (e) {
+                    console.warn('[MEDIA] Failed to create blob URL, fallback to data URL', e);
+                    if (!cancelled) setVideoBlobUrl(dataUrl);
+                }
+            } else {
+                if (!cancelled) { setVideoBlobUrl(null); setVideoError(null); }
+            }
+        };
+        run();
+        return () => {
+            cancelled = true;
+            if (objectUrl) { try { URL.revokeObjectURL(objectUrl); } catch {} }
+            // Also revoke previous blob url if state still holds it
+            // Next effect run will overwrite, but ensure old url cleared on unmount/preview change
+        };
+    }, [previewFile]);
+
+    // Auto-play video when preview opens (user gesture from View click allows playback) — uses Blob URL for mp4/mov
+    useEffect(() => {
+        if (previewFile && getFileCategory(previewFile.type, previewFile.filename) === 'video' && videoRef.current && videoBlobUrl) {
             const t = setTimeout(() => {
                 if (videoRef.current) {
+                    videoRef.current.muted = true; // muted allows autoplay without gesture block
                     videoRef.current.load();
                     const p = videoRef.current.play();
                     if (p && p.then) {
@@ -255,14 +327,16 @@ e.target.value = null;
                             console.warn('[MEDIA] Video autoplay blocked:', e?.message);
                             setIsPlaying(false);
                         });
+                    } else {
+                        setIsPlaying(true);
                     }
                 }
             }, 80);
             return () => clearTimeout(t);
-        } else {
+        } else if (!previewFile || getFileCategory(previewFile?.type, previewFile?.filename) !== 'video') {
             setIsPlaying(false);
         }
-    }, [previewFile]);
+    }, [previewFile, videoBlobUrl]);
 
     // Cleanup media on unmount or preview change
     useEffect(() => {
@@ -325,7 +399,7 @@ e.target.value = null;
                 ref={fileInputRef}
                 type="file"
                 multiple
-                accept="image/*,audio/*,video/*,.txt,.json,.csv,.xml"
+                accept="image/*,audio/*,video/*,video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm,.avi,.mkv,.txt,.json,.csv,.xml"
                 onChange={handleFileUpload}
                 className="hidden"
             />
@@ -456,7 +530,7 @@ e.target.value = null;
                                 >
                                     {/* Thumbnail container */}
                                     <div className="w-full aspect-[4/3] bg-slate-50 flex items-center justify-center overflow-hidden border-b border-slate-50 relative">
-                                        {getFileCategory(item.type) === 'image' ? (
+                                        {getFileCategory(item.type, item.filename) === 'image' ? (
                                             <img
                                                 src={item.data}
                                                 alt={item.filename}
@@ -533,7 +607,7 @@ e.target.value = null;
                                     onClick={() => setSelectedFile(item.filename)}
                                 >
                                     <div className="w-12 h-12 rounded-lg bg-slate-50 flex items-center justify-center flex-shrink-0 border border-slate-100 overflow-hidden">
-                                        {getFileCategory(item.type) === 'image' ? (
+                                        {getFileCategory(item.type, item.filename) === 'image' ? (
                                             <img src={item.data} className="w-full h-full object-cover" />
                                         ) : getFileIcon(item.type, 'h-6 w-6 text-slate-900')}
                                     </div>
@@ -623,10 +697,10 @@ e.target.value = null;
                         </div>
 
                         <div className="flex-1 min-h-0 bg-slate-950 flex items-center justify-center p-6">
-                            {getFileCategory(previewFile.type) === 'image' && (
+                            {getFileCategory(previewFile.type, previewFile.filename) === 'image' && (
                                 <img src={previewFile.data} className="max-w-full max-h-[45vh] rounded-xl shadow-lg object-contain" alt="Preview" />
                             )}
-                            {getFileCategory(previewFile.type) === 'audio' && (
+                            {getFileCategory(previewFile.type, previewFile.filename) === 'audio' && (
                                 <div className="flex flex-col items-center gap-8 w-full max-w-sm">
                                     <div className={`p-10 rounded-full bg-white shadow-xl transition-transform duration-500 ${isPlaying ? 'scale-110' : 'scale-100'}`}>
                                         <Music className={`h-16 w-16 ${isPlaying ? 'text-blue-600' : 'text-slate-900'}`} />
@@ -647,22 +721,35 @@ e.target.value = null;
                                     </div>
                                 </div>
                             )}
-                            {getFileCategory(previewFile.type) === 'video' && (
+                            {getFileCategory(previewFile.type, previewFile.filename) === 'video' && (
                                 <div className="relative rounded-xl overflow-hidden shadow-lg border border-white/10 bg-black flex flex-col items-center justify-center max-w-full w-full">
+                                    {(videoBlobUrl || previewFile.data) ? (
                                     <video
-                                        key={previewFile.filename}
+                                        key={previewFile.filename + (videoBlobUrl || '')}
                                         ref={videoRef}
-                                        src={previewFile.data}
+                                        src={videoBlobUrl || previewFile.data}
                                         controls
                                         autoPlay
+                                        muted
                                         playsInline
                                         preload="auto"
-                                        onPlay={() => setIsPlaying(true)}
+                                        onPlay={() => { setIsPlaying(true); setVideoError(null); }}
                                         onPause={() => setIsPlaying(false)}
                                         onEnded={() => setIsPlaying(false)}
-                                        onError={(e) => console.warn('[MEDIA] Video error', e)}
+                                        onError={(e) => {
+                                            const msg = e?.currentTarget?.error?.message || 'Unsupported format';
+                                            console.warn('[MEDIA] Video error', msg, e);
+                                            setVideoError(msg);
+                                            setIsPlaying(false);
+                                        }}
                                         className="max-w-full max-h-[45vh] object-contain w-full bg-black"
                                     />
+                                    ) : (
+                                        <div className="p-8 text-center text-white/70 text-sm">Preparing video…</div>
+                                    )}
+                                    {videoError && (
+                                        <div className="absolute top-3 left-3 right-3 bg-red-500/90 text-white text-xs font-bold px-3 py-2 rounded-xl text-center">⚠️ Cannot play this video ({videoError}) — try mp4 (H.264) or mov (H.264). Download to test externally.</div>
+                                    )}
                                     {/* Overlay play/pause for blocked autoplay */}
                                     <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/60 backdrop-blur px-3 py-1.5 rounded-full">
                                         <button onClick={toggleVideo} className="p-2 bg-white rounded-full text-slate-900 hover:bg-slate-100 transition-colors flex items-center justify-center">
@@ -672,7 +759,7 @@ e.target.value = null;
                                     </div>
                                 </div>
                             )}
-                            {getFileCategory(previewFile.type) === 'other' && (
+                            {getFileCategory(previewFile.type, previewFile.filename) === 'other' && (
                                 <div className="text-center">
                                     <File className="h-20 w-20 text-slate-900 mx-auto mb-4" />
                                     <p className="text-slate-900 font-medium">No visual preview available</p>
