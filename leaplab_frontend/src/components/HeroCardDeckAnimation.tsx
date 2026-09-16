@@ -125,10 +125,20 @@ const SHOWCASE_CARDS: ShowcaseCard[] = [
 
 const TOTAL = SHOWCASE_CARDS.length;
 const LAYERS = 2;
-const CYCLE_MS = 3000;
-const TRANSITION_MS = 1150;
+const CYCLE_MS = 4500;
+const TRANSITION_MS = 1250;
 const TRANSITION_EASE = 'cubic-bezier(0.16, 1, 0.3, 1)';
-const LOOP_FADE_MS = 900;
+/** Crossfade starts well before the clip runs out, so a card is never seen ending */
+const LOOP_SWAP_LEAD_MS = 1500;
+const LOOP_FADE_MS = 800;
+
+/**
+ * Chromium can serve broken media cache entries (ERR_CACHE_READ_FAILURE /
+ * ERR_CACHE_OPERATION_NOT_SUPPORTED), which shows up as black or frozen video
+ * cards. A version query keeps every fetch clean — same trick the font loader
+ * in index.html uses.
+ */
+const MEDIA_BUST = '?v=3';
 
 /**
  * Depth-field slots indexed by a card's relative position (rel) to the active card.
@@ -151,12 +161,12 @@ interface DepthSlot {
 
 const DEPTH_SLOTS: DepthSlot[] = [
   { x: 0, y: 0, z: 0, scale: 1, blur: 0, dim: 1, opacity: 1, rotY: 0, rotZ: 0, zIndex: 40 },
-  { x: 36, y: 36, z: -220, scale: 0.85, blur: 1.8, dim: 1, opacity: 0.99, rotY: -7, rotZ: 1.5, zIndex: 30 },
-  { x: 2, y: 12, z: -600, scale: 0.62, blur: 6, dim: 0.95, opacity: 0.12, rotY: 0, rotZ: 0, zIndex: 6 },
-  { x: -50, y: 36, z: -430, scale: 0.68, blur: 4, dim: 0.98, opacity: 0.78, rotY: 9, rotZ: -2.5, zIndex: 10 },
-  { x: -52, y: -36, z: -380, scale: 0.72, blur: 3.5, dim: 0.99, opacity: 0.82, rotY: 10, rotZ: -2, zIndex: 14 },
-  { x: 48, y: -36, z: -330, scale: 0.78, blur: 2.8, dim: 1, opacity: 0.88, rotY: -9, rotZ: 2, zIndex: 16 },
-  { x: 6, y: -48, z: -280, scale: 0.82, blur: 2, dim: 1, opacity: 0.94, rotY: -4, rotZ: -1, zIndex: 20 }
+  { x: 44, y: 40, z: -240, scale: 0.78, blur: 1.8, dim: 1, opacity: 0.98, rotY: -8, rotZ: 2, zIndex: 30 },
+  { x: 0, y: 30, z: -640, scale: 0.5, blur: 6, dim: 0.95, opacity: 0.1, rotY: 0, rotZ: 0, zIndex: 6 },
+  { x: -54, y: 34, z: -450, scale: 0.6, blur: 4, dim: 0.98, opacity: 0.76, rotY: 10, rotZ: -3, zIndex: 10 },
+  { x: -56, y: -34, z: -400, scale: 0.64, blur: 3.5, dim: 0.99, opacity: 0.8, rotY: 11, rotZ: -2.5, zIndex: 14 },
+  { x: 54, y: -34, z: -350, scale: 0.66, blur: 2.8, dim: 1, opacity: 0.86, rotY: -10, rotZ: 2.5, zIndex: 16 },
+  { x: 12, y: -56, z: -300, scale: 0.7, blur: 2, dim: 1, opacity: 0.92, rotY: -5, rotZ: -1.5, zIndex: 20 }
 ];
 
 const KEYFRAMES = `
@@ -165,6 +175,11 @@ const KEYFRAMES = `
   10%  { opacity: 0.55; }
   26%  { transform: translateX(180%) rotate(8deg); opacity: 0; }
   100% { transform: translateX(180%) rotate(8deg); opacity: 0; }
+}
+@keyframes hero-card-drift {
+  0%   { transform: translate3d(0, 0, 0); }
+  50%  { transform: translate3d(0, -9px, 0); }
+  100% { transform: translate3d(0, 0, 0); }
 }
 `;
 
@@ -289,7 +304,8 @@ export const HeroCardDeckAnimation: React.FC<HeroCardDeckAnimationProps> = ({ on
   /**
    * Watchdog: whatever happens (blocked autoplay attempt, aborted load, seek
    * hiccup), the card in the spotlight always ends up playing. Runs gently so
-   * it never fights an in-flight crossfade.
+   * it never fights an in-flight crossfade. It also kicks off the loop swap
+   * for any clip approaching its end, so a card is never seen running out.
    */
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -299,11 +315,23 @@ export const HeroCardDeckAnimation: React.FC<HeroCardDeckAnimationProps> = ({ on
         const onStage = rel <= 1 || rel === TOTAL - 1;
         if (!onStage || swapGuard.current[index]) return;
         const front = layers[frontLayerRef.current[index]];
-        if (front && front.paused) void front.play().catch(() => undefined);
+        if (!front) return;
+
+        if (front.ended) {
+          handleLoopSwap(index);
+          return;
+        }
+        if (front.paused) void front.play().catch(() => undefined);
+        if (
+          front.duration &&
+          front.duration - front.currentTime <= LOOP_SWAP_LEAD_MS / 1000
+        ) {
+          handleLoopSwap(index);
+        }
       });
-    }, 900);
+    }, 500);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [handleLoopSwap]);
 
   useEffect(() => {
     const swaps = swapTimers.current;
@@ -318,16 +346,16 @@ export const HeroCardDeckAnimation: React.FC<HeroCardDeckAnimationProps> = ({ on
   const transition = `transform ${TRANSITION_MS}ms ${TRANSITION_EASE}, filter ${TRANSITION_MS}ms ${TRANSITION_EASE}, opacity ${TRANSITION_MS}ms ${TRANSITION_EASE}`;
 
   return (
-    <div className="group/herocascade relative w-full max-w-[680px] mx-auto select-none">
+    <div className="group/herocascade relative w-full max-w-[720px] mx-auto select-none">
       <style>{KEYFRAMES}</style>
 
       <div
-        className="relative w-full aspect-[16/11.5]"
+        className="relative w-full aspect-[16/11]"
         style={{ perspective: '1500px', perspectiveOrigin: '50% 46%' }}
       >
         {/* ── 3D depth field ── */}
         <div
-          className="absolute left-1/2 top-[47%] w-[70%] aspect-[16/10]"
+          className="absolute left-1/2 top-[47%] w-[64%] aspect-[16/10]"
           style={{ transform: 'translate(-50%, -50%)', transformStyle: 'preserve-3d' }}
         >
           {SHOWCASE_CARDS.map((card, index) => {
@@ -366,14 +394,23 @@ export const HeroCardDeckAnimation: React.FC<HeroCardDeckAnimationProps> = ({ on
                   pointerEvents: slot.opacity < 0.3 ? 'none' : 'auto'
                 }}
               >
-                {/* Accent bloom on the focused card */}
+                {/* Idle drift keeps the depth field alive without touching the cascade transform */}
                 <div
-                  className="absolute -inset-6 rounded-[40px] blur-2xl pointer-events-none transition-opacity duration-1000"
-                  style={{
-                    background: `radial-gradient(ellipse at center, ${card.accent}66 0%, transparent 70%)`,
-                    opacity: isActive ? 1 : 0
-                  }}
-                />
+                  className="w-full h-full"
+                  style={
+                    rel >= 2 && !reducedMotion
+                      ? { animation: `hero-card-drift ${9 + (index % 3)}s ease-in-out ${(index % 5) * -1.6}s infinite` }
+                      : undefined
+                  }
+                >
+                  {/* Accent bloom on the focused card */}
+                  <div
+                    className="absolute -inset-6 rounded-[40px] blur-2xl pointer-events-none transition-opacity duration-1000"
+                    style={{
+                      background: `radial-gradient(ellipse at center, ${card.accent}66 0%, transparent 70%)`,
+                      opacity: isActive ? 1 : 0
+                    }}
+                  />
 
                 {/* Glass card shell — 28px radius */}
                 <div className="relative w-full h-full rounded-[28px] overflow-hidden bg-[#e9eef6] shadow-[0_1px_0_rgba(255,255,255,0.5)_inset,0_30px_55px_-25px_rgba(2,6,23,0.5)]">
@@ -390,12 +427,23 @@ export const HeroCardDeckAnimation: React.FC<HeroCardDeckAnimationProps> = ({ on
                             el.defaultMuted = true;
                           }
                         }}
-                        src={card.video}
-                        poster={card.poster}
+                        src={`${card.video}${MEDIA_BUST}`}
+                        poster={`${card.poster}${MEDIA_BUST}`}
                         muted
                         playsInline
                         preload="auto"
                         disablePictureInPicture
+                        onError={(event) => {
+                          const video = event.currentTarget;
+                          if (video.dataset.cacheRetry === '1') return;
+                          video.dataset.cacheRetry = '1';
+                          video.src = `${card.video}?v=${Date.now()}`;
+                          video.load();
+                          const layers = videoRefs.current[index];
+                          if (video === layers[frontLayerRef.current[index]]) {
+                            void video.play().catch(() => undefined);
+                          }
+                        }}
                         onLoadedMetadata={(event) => {
                           const video = event.currentTarget;
                           if (loopStart && Math.abs(video.currentTime - loopStart) > 0.4) {
@@ -405,7 +453,7 @@ export const HeroCardDeckAnimation: React.FC<HeroCardDeckAnimationProps> = ({ on
                         onTimeUpdate={(event) => {
                           const video = event.currentTarget;
                           if (!isFront || swapGuard.current[index] || !video.duration) return;
-                          if (video.duration - video.currentTime <= LOOP_FADE_MS / 1000 + 0.1) {
+                          if (video.duration - video.currentTime <= LOOP_SWAP_LEAD_MS / 1000) {
                             handleLoopSwap(index);
                           }
                         }}
@@ -478,6 +526,7 @@ export const HeroCardDeckAnimation: React.FC<HeroCardDeckAnimationProps> = ({ on
                       )}
                     </div>
                   )}
+                </div>
                 </div>
               </div>
             );
