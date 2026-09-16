@@ -339,8 +339,9 @@ export default function DrawingCanvasPanel({ mode }: DrawingCanvasPanelProps) {
         }
     }
     const handleViewportMouseUp = () => { setIsPanning(false); viewportPanStartRef.current = null; if (draggingId) setDraggingId(null) }
+    // Wheel handled via native passive:false below; React handler only zooms
     const handleWheel = (e: React.WheelEvent) => {
-        if (e.cancelable) e.preventDefault(); e.stopPropagation()
+        e.stopPropagation()
         const isPinch = e.ctrlKey || (e as any).ctrlKey
         const delta = -e.deltaY * (isPinch ? 0.008 : 0.0012)
         const newZoom = Math.min(1.4, Math.max(0.6, zoom + delta))
@@ -365,7 +366,6 @@ export default function DrawingCanvasPanel({ mode }: DrawingCanvasPanelProps) {
     }
     const handleTouchMove = (e: React.TouchEvent) => {
         if (e.touches.length === 2 && pinchRef.current) {
-            if (e.cancelable) e.preventDefault()
             const dx = e.touches[0].clientX - e.touches[1].clientX
             const dy = e.touches[0].clientY - e.touches[1].clientY
             const dist = Math.hypot(dx, dy)
@@ -415,9 +415,11 @@ export default function DrawingCanvasPanel({ mode }: DrawingCanvasPanelProps) {
 
     useEffect(() => {
         const el = viewportRef.current; if (!el) return
-        const onWheelNative = (e: WheelEvent) => { if (e.cancelable && (e.ctrlKey || Math.abs(e.deltaY) > 0)) e.preventDefault() }
+        const onWheelNative = (e: WheelEvent) => { if (e.cancelable) e.preventDefault() }
+        const onTouchMoveNative = (e: TouchEvent) => { if (e.touches.length===2 && e.cancelable) e.preventDefault() }
         el.addEventListener('wheel', onWheelNative, { passive: false })
-        return () => el.removeEventListener('wheel', onWheelNative)
+        el.addEventListener('touchmove', onTouchMoveNative, { passive: false })
+        return () => { el.removeEventListener('wheel', onWheelNative); el.removeEventListener('touchmove', onTouchMoveNative) }
     }, [])
 
     // Run detection loop whenever camera is on

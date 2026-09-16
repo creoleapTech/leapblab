@@ -91,7 +91,7 @@ export default function FingerCounterPanel({ mode }: FingerCounterPanelProps) {
     const audioContextRef = useRef<AudioContext | null>(null)
     const lastSoundCountRef = useRef(0)
 
-    const [isCapturing, setIsCapturing] = useState(false)
+    const [isCapturing, setIsCapturing] = useState<string | null>(null)
     const [captureFps] = useState(15)
     const burstIntervalRef = useRef<NodeJS.Timeout | null>(null)
     const handleCaptureRef = useRef<(() => Promise<void>) | null>(null)
@@ -210,7 +210,7 @@ export default function FingerCounterPanel({ mode }: FingerCounterPanelProps) {
 
     useEffect(() => {
         if (!mode.project?.id) return
-        setExpandedClasses({}); setZoom(1); setPan({ x: 32, y: 24 }); setIsCapturing(false); setDragOverClass(null); setIsTestDragging(false); setIsTraining(false); setTrainingError(null); setPrediction(null); setIsProcessing(false); setHandDetected(false); setInferenceTime(0); setSavedMessage(null); setCurrentCount(0); setCountHistory([]); setTestImage(null); setFingerFlags([0,0,0,0,0]); if (savedTimeoutRef.current) clearTimeout(savedTimeoutRef.current)
+        setExpandedClasses({}); setZoom(1); setPan({ x: 32, y: 24 }); setIsCapturing(null); setDragOverClass(null); setIsTestDragging(false); setIsTraining(false); setTrainingError(null); setPrediction(null); setIsProcessing(false); setHandDetected(false); setInferenceTime(0); setSavedMessage(null); setCurrentCount(0); setCountHistory([]); setTestImage(null); setFingerFlags([0,0,0,0,0]); if (savedTimeoutRef.current) clearTimeout(savedTimeoutRef.current)
         classifierRef.current.clear()
         if (burstIntervalRef.current) { clearInterval(burstIntervalRef.current); burstIntervalRef.current=null }
         if (overlayCanvasRef.current) { const ctx=overlayCanvasRef.current.getContext('2d'); ctx?.clearRect(0,0,overlayCanvasRef.current.width,overlayCanvasRef.current.height) }
@@ -417,7 +417,7 @@ export default function FingerCounterPanel({ mode }: FingerCounterPanelProps) {
         }
         const cls = mode.project?.classes.find(c => c.id === classId)
         if (cls && cls.samples.length >= MAX_SAMPLES_PER_CLASS) { showSaved('Maximum 20 per folder'); return }
-        setIsCapturing(true); setCaptureStatus('detecting')
+        setIsCapturing(classId); setCaptureStatus('detecting')
         try {
             const tempCanvas = document.createElement('canvas'); tempCanvas.width = video.videoWidth || 640; tempCanvas.height = video.videoHeight || 480
             const ctx = tempCanvas.getContext('2d')!; ctx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height)
@@ -430,13 +430,13 @@ export default function FingerCounterPanel({ mode }: FingerCounterPanelProps) {
                 const added = mode.addSample(classId, { type: 'image', data: enriched } as any)
                 let finalAdded = added
                 if (!added) { const payload = JSON.stringify({ image: thumb, thumb, original: full, keypoints: Array.from(features) }); finalAdded=mode.addSample(classId,{type:'keypoints', data:payload} as any) }
-                if (!finalAdded) { showSaved('Folder full (20 max)'); setCaptureStatus('idle'); setIsCapturing(false); return }
+                if (!finalAdded) { showSaved('Folder full (20 max)'); setCaptureStatus('idle'); setIsCapturing(null); return }
                 const targetName = cls?.name || mode.project?.classes.find(c=>c.id===classId)?.name || ''
                 if (augmentMode) classifierRef.current.addSampleAugmented(features, targetName).catch(e=>console.warn('[FingerCounter][capture] embedding failed', e))
                 else classifierRef.current.addSample(features, targetName).catch(()=>{})
                 setCaptureStatus('success'); showSaved(`📸 Captured for ${cls?.name || 'folder'} ✓`)
             } else { setCaptureStatus('no-hand'); showSaved('No hand detected — show your hand clearly') }
-        } catch (err) { console.warn('[capture] failed', err); showSaved('Capture failed — see console') } finally { setIsCapturing(false); setTimeout(()=>setCaptureStatus('idle'), 1200) }
+        } catch (err) { console.warn('[capture] failed', err); showSaved('Capture failed — see console') } finally { setIsCapturing(null); setTimeout(()=>setCaptureStatus('idle'), 1200) }
     }, [camera, mode, showSaved, augmentMode])
 
     const handleCapture = useCallback(async () => {
@@ -481,7 +481,7 @@ export default function FingerCounterPanel({ mode }: FingerCounterPanelProps) {
                 const img=new Image(); img.src=dataUrl
                 await new Promise<void>(r=>{ img.onload=()=>r(); img.onerror=()=>r(); setTimeout(()=>r(),3000)})
                 if(!img.complete||img.naturalWidth===0){ noHand++; decrementLoader(); continue }
-                setIsCapturing(true); setCaptureStatus('detecting')
+                setIsCapturing(classId); setCaptureStatus('detecting')
                 try{
                     const tempCanvas=document.createElement('canvas'); tempCanvas.width=img.naturalWidth; tempCanvas.height=img.naturalHeight
                     const ctx=tempCanvas.getContext('2d')!; ctx.drawImage(img,0,0)
@@ -499,7 +499,7 @@ export default function FingerCounterPanel({ mode }: FingerCounterPanelProps) {
                         added++; decrementLoader(); setCaptureStatus('success')
                     }else{ noHand++; decrementLoader(); setCaptureStatus('no-hand')}
                 }catch(e){ console.warn('[FingerCounter] upload detect failed',e); noHand++; decrementLoader(); setCaptureStatus('error')}
-                finally{ setIsCapturing(false); setTimeout(()=>setCaptureStatus('idle'),400) }
+                finally{ setIsCapturing(null); setTimeout(()=>setCaptureStatus('idle'),400) }
             }catch(e){ console.warn('[FingerCounter] process file failed',file.name,e); noHand++; decrementLoader()}
         }
         setUploadingByClass(prev=>{ const{[classId]:_,...rest}=prev as any; return rest })
@@ -621,9 +621,11 @@ export default function FingerCounterPanel({ mode }: FingerCounterPanelProps) {
         }
     }
     const handleViewportMouseUp=()=>{ setIsPanning(false); panStartRef.current=null; if(draggingId) setDraggingId(null) }
+    // Wheel/pinch handled via native passive:false listener below to avoid React passive warning.
+    // This React handler only updates canvas zoom; preventDefault is handled by native listener.
     const handleWheel=(e:React.WheelEvent)=>{
         if(isWheelOverDatasetPanel(e.target)){ e.stopPropagation(); return }
-        if(e.cancelable) e.preventDefault(); e.stopPropagation()
+        e.stopPropagation()
         const isPinch=e.ctrlKey||(e as any).ctrlKey
         const delta=-e.deltaY*(isPinch?0.008:0.0012)
         const newZoom=Math.min(1.4,Math.max(0.6,zoom+delta))
@@ -632,7 +634,7 @@ export default function FingerCounterPanel({ mode }: FingerCounterPanelProps) {
         setZoom(newZoom)
     }
     const handleTouchStart=(e:React.TouchEvent)=>{ if(e.touches.length===2){ const dx=e.touches[0].clientX-e.touches[1].clientX; const dy=e.touches[0].clientY-e.touches[1].clientY; const dist=Math.hypot(dx,dy); const cx=(e.touches[0].clientX+e.touches[1].clientX)/2, cy=(e.touches[0].clientY+e.touches[1].clientY)/2; pinchRef.current={startDist:dist,startZoom:zoom,startPan:{...pan},center:{x:cx,y:cy}} } }
-    const handleTouchMove=(e:React.TouchEvent)=>{ if(e.touches.length===2&&pinchRef.current){ if(e.cancelable) e.preventDefault(); const dx=e.touches[0].clientX-e.touches[1].clientX; const dy=e.touches[0].clientY-e.touches[1].clientY; const dist=Math.hypot(dx,dy); const scale=dist/pinchRef.current.startDist; const newZoom=Math.min(1.4,Math.max(0.6,pinchRef.current.startZoom*scale)); const rect=viewportRef.current?.getBoundingClientRect(); if(rect){ const mx=pinchRef.current.center.x-rect.left; const my=pinchRef.current.center.y-rect.top; const wx=(mx-pinchRef.current.startPan.x)/pinchRef.current.startZoom; const wy=(my-pinchRef.current.startPan.y)/pinchRef.current.startZoom; const nx=mx-wx*newZoom, ny=my-wy*newZoom; setPan({x:nx,y:ny}) } setZoom(newZoom) } }
+    const handleTouchMove=(e:React.TouchEvent)=>{ if(e.touches.length===2&&pinchRef.current){ const dx=e.touches[0].clientX-e.touches[1].clientX; const dy=e.touches[0].clientY-e.touches[1].clientY; const dist=Math.hypot(dx,dy); const scale=dist/pinchRef.current.startDist; const newZoom=Math.min(1.4,Math.max(0.6,pinchRef.current.startZoom*scale)); const rect=viewportRef.current?.getBoundingClientRect(); if(rect){ const mx=pinchRef.current.center.x-rect.left; const my=pinchRef.current.center.y-rect.top; const wx=(mx-pinchRef.current.startPan.x)/pinchRef.current.startZoom; const wy=(my-pinchRef.current.startPan.y)/pinchRef.current.startZoom; const nx=mx-wx*newZoom, ny=my-wy*newZoom; setPan({x:nx,y:ny}) } setZoom(newZoom) } }
     const handleTouchEnd=()=>{ if(pinchRef.current) pinchRef.current=null }
     const startNodeDrag=(e:React.PointerEvent|React.MouseEvent,id:string,orig:{x:number,y:number})=>{ e.stopPropagation(); if('preventDefault' in e) (e as any).preventDefault?.(); const p=getCanvasPoint((e as any).clientX,(e as any).clientY); dragStartRef.current={id,startX:p.x,startY:p.y,origX:orig.x,origY:orig.y}; setDraggingId(id); if('pointerId' in e && typeof (e as any).pointerId==='number'){ try{(e.target as HTMLElement).setPointerCapture?.((e as any).pointerId)}catch{}} }
     const zoomIn=()=>setZoom(z=>Math.min(1.4,+(z+0.1).toFixed(2)))
@@ -661,10 +663,16 @@ export default function FingerCounterPanel({ mode }: FingerCounterPanelProps) {
         const onWheelNative=(e:WheelEvent)=>{
             const target=e.target as HTMLElement | null
             if(target?.closest('[data-dataset-panel]')){ const de=target.closest('[data-dataset-panel]') as HTMLElement; if(de && de.scrollHeight>de.clientHeight) return }
-            if(e.cancelable && (e.ctrlKey || Math.abs(e.deltaY)>0)) e.preventDefault()
+            if(e.cancelable) e.preventDefault()
+        }
+        const onTouchMoveNative=(e:TouchEvent)=>{
+            if(e.touches.length===2){
+                if(e.cancelable) e.preventDefault()
+            }
         }
         el.addEventListener('wheel',onWheelNative,{passive:false})
-        return()=>el.removeEventListener('wheel',onWheelNative)
+        el.addEventListener('touchmove',onTouchMoveNative,{passive:false})
+        return()=>{ el.removeEventListener('wheel',onWheelNative); el.removeEventListener('touchmove',onTouchMoveNative) }
     },[])
 
     const handleTrain = async (epochs=50)=>{
@@ -854,7 +862,7 @@ export default function FingerCounterPanel({ mode }: FingerCounterPanelProps) {
                                             </div>
                                         )}
                                         <div className="flex gap-2 pt-2 border-t border-slate-100 mt-auto">
-                                            <button onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation(); mode.setSelectedClassId(cls.id); handleCaptureForClass(cls.id)}} disabled={atLimit||isTraining} className={`flex-1 inline-flex items-center justify-center gap-1.5 h-11 rounded-full text-sm font-bold border ${atLimit?'bg-slate-50 text-slate-400 border-slate-200': isCapturing?'bg-emerald-500 text-white border-emerald-500':'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-violet-200'}`}>{isCapturing?'✓ Captured':'✋ Snap'}</button>
+                                            <button onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation(); mode.setSelectedClassId(cls.id); handleCaptureForClass(cls.id)}} disabled={atLimit||isTraining} className={`flex-1 inline-flex items-center justify-center gap-1.5 h-11 rounded-full text-sm font-bold border ${atLimit?'bg-slate-50 text-slate-400 border-slate-200': isCapturing===cls.id?'bg-emerald-500 text-white border-emerald-500':'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-violet-200'}`}>{isCapturing===cls.id?'✓ Captured':'✋ Snap'}</button>
                                             <button onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation(); handleUploadClick(cls.id)}} disabled={atLimit} className={`flex-1 inline-flex items-center justify-center gap-1.5 h-11 rounded-full text-sm font-bold border ${atLimit?'bg-slate-50 text-slate-400 border-slate-200':'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-violet-200'}`}>📂 Browse</button>
                                         </div>
                                     </div>
