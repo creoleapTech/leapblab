@@ -56,18 +56,37 @@ export default function ElectraWorkspace({
     // Capture any pending cloud/shared project at render time so we can decide
     // whether to clear the workspace after child effects have finished loading.
     const pendingProjectRef = useRef(pendingProject);
+    // Set once a project load is inbound (or has landed) during this mount.
+    // ForgeElectra consumes pendingProject and then clears it from the store;
+    // without this flag the effect below would re-fire on that clear and wipe
+    // the just-loaded canvas (nodes/edges) while local code state survives —
+    // i.e. "code is there but components are gone".
+    const loadedProjectRef = useRef(!!pendingProject || !!redirectProjectData);
 
     // Clear workspace when component mounts only if we are not about to load a
     // shared/cloud project. Otherwise the clear would wipe the loaded nodes.
     useEffect(() => {
-        if (redirectProjectData) return;
+        pendingProjectRef.current = pendingProject;
+        if (redirectProjectData) {
+            loadedProjectRef.current = true;
+            return;
+        }
 
         const params = new URLSearchParams(window.location.search);
         const hasExternalProject = params.has('share') || params.has('project') || params.has('projectUrl');
         const hasPendingProject = !!pendingProject;
 
         if (hasExternalProject || hasPendingProject) {
+            loadedProjectRef.current = true;
             console.log('[ELECTRA WORKSPACE] Skipping workspace clear — project load in progress');
+            return;
+        }
+
+        // The child consumes pendingProject and clears it after loading. That
+        // store change re-fires this effect with pendingProject === null — it
+        // must NOT wipe the canvas that was just populated.
+        if (loadedProjectRef.current) {
+            console.log('[ELECTRA WORKSPACE] Skipping workspace clear — project already loaded this session');
             return;
         }
 

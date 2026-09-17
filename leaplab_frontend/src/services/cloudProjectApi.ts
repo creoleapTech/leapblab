@@ -150,7 +150,20 @@ export async function fetchCloudProjectContent(fileUrl: string): Promise<any> {
         }
 
         const text = await response.text();
-        return JSON.parse(text);
+        // Mirror the dashboard preview: some stored files are pako-packed
+        // ('___LBC' magic). Plain JSON.parse would throw on those.
+        const { isPacked, unpack } = await import('../Electra/Client/utils/compress');
+        try {
+            return isPacked(text) ? unpack<any>(text) : JSON.parse(text);
+        } catch (parseErr) {
+            // Fall back to packed-decoding in case the magic check missed
+            // (e.g. leading whitespace/BOM on the stored file).
+            try {
+                return unpack<any>(text.trim());
+            } catch {
+                throw parseErr;
+            }
+        }
     } catch (e: any) {
         if (e?.message?.includes('Failed to fetch') || e?.name === 'TypeError') {
             throw new Error('Network error. Please check your internet connection and try again.');

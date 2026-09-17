@@ -281,6 +281,11 @@ export default function ForgeElectra({
     const loadedCode = data.code || '';
     const loadedLibs = data.libraries || [];
 
+    console.log(`[FORGE ELECTRA] loadProjectData: ${loadedNodes.length} nodes, ${loadedEdges.length} edges, code=${loadedCode.length} chars, board=${data.board || '?'}`);
+    if (loadedNodes.length === 0 && loadedCode) {
+      console.warn('[FORGE ELECTRA] Project has code but no circuit nodes — check saved file shape:', Object.keys(data || {}));
+    }
+
     setNodes(loadedNodes);
     setEdges(loadedEdges);
     setCode(loadedCode);
