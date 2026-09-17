@@ -174,7 +174,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
         </div>
       )}
 
-      <div className="font-sans bg-[#f0f4ff] text-[#0F172A] min-h-screen flex flex-col relative">
+      <div className="font-sans bg-[#f0f4ff] text-[#0F172A] h-screen flex flex-col relative overflow-hidden">
         {/* Image 1 – PREMIUM – dark gradients with light green/pink/blue – VISIBLE */}
         <div className="absolute inset-0 -z-10 pointer-events-none overflow-hidden">
           {/* Base premium tint – not white */}
@@ -322,7 +322,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
           <div className="h-[2px] w-full bg-[linear-gradient(90deg,rgba(249,115,22,0.5),rgba(20,184,166,0.5),rgba(59,130,246,0.5),rgba(168,85,247,0.5),rgba(34,197,94,0.5),rgba(236,72,153,0.5))] opacity-60"></div>
         </div>
 
-        <div className="relative z-10 flex flex-col flex-1 overflow-hidden">
+        <div className="relative z-10 flex flex-col flex-1 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-thin scroll-smooth">
 
           {activeTab === 'my-projects' && (
             <MyProjectsDashboard onOpenProject={(mode) => onSelect(mode)} />
@@ -331,7 +331,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
           {activeTab === 'modules' && (
             <>
               {/* HERO */}
-              <div className="grid grid-cols-[1.1fr_0.9fr] items-center w-full max-w-[1600px] mx-auto py-3 px-10 gap-8 flex-none min-h-[clamp(200px,32vh,440px)] max-[1280px]:py-2 max-[1280px]:gap-6 max-[1024px]:grid-cols-1 max-[1024px]:text-center max-[1024px]:gap-4 max-[1024px]:p-5 max-[1024px]:min-h-0 max-[1024px]:flex-none max-[768px]:py-3 max-[768px]:px-4 max-[768px]:gap-4 max-[640px]:py-3 max-[640px]:px-4 max-[640px]:gap-3 max-[480px]:py-3 max-[480px]:px-3 max-[480px]:gap-3">
+              <div className="grid grid-cols-[1.1fr_0.9fr] items-center w-full max-w-[1600px] mx-auto py-3 px-10 gap-8 flex-1 max-h-[720px] min-h-[clamp(200px,32vh,440px)] max-[1280px]:py-2 max-[1280px]:gap-6 max-[1024px]:grid-cols-1 max-[1024px]:text-center max-[1024px]:gap-4 max-[1024px]:p-5 max-[1024px]:min-h-0 max-[1024px]:flex-none max-[1024px]:max-h-none max-[768px]:py-3 max-[768px]:px-4 max-[768px]:gap-4 max-[640px]:py-3 max-[640px]:px-4 max-[640px]:gap-3 max-[480px]:py-3 max-[480px]:px-3 max-[480px]:gap-3">
                 <div className="max-[1024px]:flex max-[1024px]:flex-col max-[1024px]:items-center">
                   <div className="inline-block text-[10px] font-extrabold text-black uppercase tracking-[0.25em] mb-2 px-3 py-1 bg-[#BEF264] border-2 border-black shadow-[2px_2px_0px_#000] -rotate-1 max-[480px]:text-[10px] max-[480px]:px-2.5 max-[480px]:py-1 max-[480px]:mb-2 animate-hero-reveal">Curiosity - Creativity - Critical Thinking</div>
                   <h1 className="headline text-[clamp(2.2rem,3.8vw,3.9rem)] font-black leading-[1.12] tracking-[-0.04em] mb-3 text-[#0a0a18] font-['Poppins','Inter',sans-serif] max-[768px]:text-[2rem] max-[768px]:leading-[1.1] max-[768px]:mb-2 max-[640px]:text-[2.6rem] max-[480px]:text-[2.2rem] animate-hero-reveal [animation-delay:0.1s] overflow-visible pr-2 pb-1">
@@ -367,7 +367,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
                 </div>
 
                 {/* RIGHT: Cinematic 3D video card cascade (Meta AI / keynote style) */}
-                <div className="flex items-center justify-center relative w-full animate-hero-reveal [animation-delay:0.4s] max-[1280px]:max-h-[340px] max-[1024px]:max-h-[300px] max-[768px]:max-h-[260px]">
+                <div className="flex items-center justify-center relative w-full animate-hero-reveal [animation-delay:0.4s]">
                   <Suspense fallback={
                     <div className="w-full flex items-center justify-center min-h-[340px]">
                       <div className="w-10 h-10 border-3 border-[rgba(99,102,241,0.15)] border-t-[#6366F1] rounded-full animate-hero3d-spin" />
@@ -379,7 +379,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
               </div>
 
               {/* 8 TRACK CARDS — premium light pastel, responsive */}
-              <div className="cards-wrap w-full mx-auto py-3 px-6 pb-2 shrink-0 flex items-center justify-center overflow-hidden max-[768px]:py-2 max-[768px]:px-4 max-[768px]:pb-1">
+              <div className="cards-wrap w-full mx-auto py-3 px-6 pb-2 shrink-0 flex items-center justify-center max-[768px]:py-2 max-[768px]:px-4 max-[768px]:pb-1">
                 <div className={`grid w-full max-w-[1600px] grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8 min-h-0 ${highlightCards ? 'highlight-active' : ''} ${scanIndex >= 0 ? 'is-scanning' : ''}`}>
 
                   {/* 1 IGNITE — orange/amber */}
