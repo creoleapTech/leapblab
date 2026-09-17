@@ -20,6 +20,8 @@ import { log, debug, error } from './utils/logger';
 import { serializeGeometry } from './utils/geometry';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { ToolbarSection } from './components/ToolbarSection';
+import { useLeapLabAuthStore } from '../auth/leaplabAuthStore';
+import { showToast } from '../leapignite/client/components/Toast';
 
 const Vision3DApp = ({ onBack }) => {
   const [projectName, setProjectName] = useState('My Project');
@@ -150,6 +152,15 @@ const Vision3DApp = ({ onBack }) => {
   useKeyboardShortcuts({ onOpenProject: handleOpenProject });
 
   const handleSave = async () => {
+    const authState = useLeapLabAuthStore.getState();
+    if (!authState.isAuthenticated || !authState.token) {
+      showToast('Please sign in to save projects. Use Download to save locally.', 'info');
+      return;
+    }
+    if (authState.role === 'trainer') {
+      showToast('Trainers cannot save to cloud. Use Download to save locally.', 'info');
+      return;
+    }
     log('Vision3DApp: save triggered');
     autoSaveProject();
     try {
@@ -158,8 +169,35 @@ const Vision3DApp = ({ onBack }) => {
         setCloudProjectId(result.id);
         useCloudProjectStore.getState().setActiveProjectId(result.id);
       }
+      showToast('Project saved successfully!', 'success');
     } catch (err) {
       log('Cloud save failed (offline mode):', err);
+      showToast(err?.message || 'Failed to save project.', 'error');
+    }
+  };
+
+  const handleSaveAs = async () => {
+    const authState = useLeapLabAuthStore.getState();
+    if (!authState.isAuthenticated || !authState.token) {
+      showToast('Please sign in to save projects. Use Download to save locally.', 'info');
+      return;
+    }
+    if (authState.role === 'trainer') {
+      showToast('Trainers cannot save to cloud. Use Download to save locally.', 'info');
+      return;
+    }
+    log('Vision3DApp: save as triggered');
+    autoSaveProject();
+    try {
+      const result = await saveVision3DProject(projectName, shapes, use3DStore.getState().project, cloudProjectId);
+      if (result?.id && !cloudProjectId) {
+        setCloudProjectId(result.id);
+        useCloudProjectStore.getState().setActiveProjectId(result.id);
+      }
+      showToast('Project saved successfully!', 'success');
+    } catch (err) {
+      log('Cloud save failed (offline mode):', err);
+      showToast(err?.message || 'Failed to save project.', 'error');
     }
   };
 
@@ -220,6 +258,7 @@ const Vision3DApp = ({ onBack }) => {
         title={projectName}
         onTitleChange={setProjectName}
         onSave={handleSave}
+        onSaveAs={handleSaveAs}
         onOpenProject={handleOpenProject}
         onDownload={handleDownload}
         canUndo={canUndo}

@@ -15,6 +15,8 @@ import { normalizeVariableMonitor } from '../../types/intermediateTypes';
 import type { CompiledScript } from '../../vm/AnimationVM';
 import { fileService } from '../../Electra/Client/Src/services/FileService';
 import { showAlert } from '../../utils/dialogStore';
+import { useLeapLabAuthStore } from '../../auth/leaplabAuthStore';
+import { showToast } from '../../leapignite/client/components/Toast';
 
 export function useProjectOperations(
     sprites: Sprite[],
@@ -158,17 +160,46 @@ export function useProjectOperations(
     }, [sprites, variableMonitors, listMonitors, tableMonitors, sensingMonitors, spriteWorkspacesRef, workspaceRef, activeSpriteIdRef, installedExtensionsRef, editorMode]);
 
     const handleSaveProject = useCallback(async (isSilent = false) => {
+        const authState = useLeapLabAuthStore.getState();
+        if (!authState.isAuthenticated || !authState.token) {
+            showToast("Please sign in to save projects. Use Download to save locally.", "info");
+            return;
+        }
+        if (authState.role === 'trainer') {
+            showToast("Trainers cannot save to cloud. Use Download to save locally.", "info");
+            return;
+        }
         const payload = buildProjectPayload();
         try {
             await fileService.saveProject(projectName, 'intermediate', payload);
             addLog(`Project saved: ${projectName}`);
             if (!isSilent) {
-                const { showToast } = await import('../../leapignite/client/components/Toast');
                 showToast("Project saved successfully!", "success");
             }
         } catch (err: any) {
             console.error('[IntermediateApp] Failed to save project:', err);
             showAlert(err?.message || 'Failed to save project. Please make sure you are signed in.', 'Save Error');
+        }
+    }, [projectName, buildProjectPayload, addLog]);
+
+    const handleSaveAsProject = useCallback(async () => {
+        const authState = useLeapLabAuthStore.getState();
+        if (!authState.isAuthenticated || !authState.token) {
+            showToast("Please sign in to save projects. Use Download to save locally.", "info");
+            return;
+        }
+        if (authState.role === 'trainer') {
+            showToast("Trainers cannot save to cloud. Use Download to save locally.", "info");
+            return;
+        }
+        const payload = buildProjectPayload();
+        try {
+            await fileService.saveProject(projectName, 'intermediate', payload);
+            addLog(`Project saved: ${projectName}`);
+            showToast("Project saved successfully!", "success");
+        } catch (err: any) {
+            console.error('[IntermediateApp] Failed to save project (Save As):', err);
+            showToast(err?.message || 'Failed to save project.', 'error');
         }
     }, [projectName, buildProjectPayload, addLog]);
 
@@ -463,6 +494,7 @@ export function useProjectOperations(
         executeNewProject,
         buildProjectPayload,
         handleSaveProject,
+        handleSaveAsProject,
         handleDownloadProject,
         loadProjectFromData,
         executeOpenProject,

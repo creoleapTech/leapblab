@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import Blockly from "@blockly-runtime";
 import { fileService } from "../../../Electra/Client/Src/services/FileService";
 import { showToast } from "../components/Toast";
+import { useLeapLabAuthStore } from "../../../auth/leaplabAuthStore";
 
 interface SpriteData {
     id: string;
@@ -153,6 +154,15 @@ export function useJuniorProject({
     });
 
     const handleSaveProject = async (isSilent = false): Promise<void> => {
+        const authState = useLeapLabAuthStore.getState();
+        if (!authState.isAuthenticated || !authState.token) {
+            showToast("Please sign in to save projects. Use Download to save locally.", "info");
+            return;
+        }
+        if (authState.role === 'trainer') {
+            showToast("Trainers cannot save to cloud. Use Download to save locally.", "info");
+            return;
+        }
         saveCurrentWorkspace();
         setTimeout(async () => {
             const payload = buildProjectPayload();
@@ -165,6 +175,30 @@ export function useJuniorProject({
             } catch (err: any) {
                 console.error('[JuniorApp] Failed to save project:', err);
                 alert(err?.message || 'Failed to save project. Please make sure you are signed in.');
+            }
+        }, 50);
+    };
+
+    const handleSaveAsProject = async (): Promise<void> => {
+        const authState = useLeapLabAuthStore.getState();
+        if (!authState.isAuthenticated || !authState.token) {
+            showToast("Please sign in to save projects. Use Download to save locally.", "info");
+            return;
+        }
+        if (authState.role === 'trainer') {
+            showToast("Trainers cannot save to cloud. Use Download to save locally.", "info");
+            return;
+        }
+        saveCurrentWorkspace();
+        setTimeout(async () => {
+            const payload = buildProjectPayload();
+            try {
+                await fileService.saveProject(projectName, 'junior', payload);
+                console.log(`[JuniorApp] Project saved (Save As): ${projectName}`);
+                showToast("Project saved successfully!", "success");
+            } catch (err: any) {
+                console.error('[JuniorApp] Failed to save project (Save As):', err);
+                showToast(err?.message || 'Failed to save project.', 'error');
             }
         }, 50);
     };
@@ -329,6 +363,7 @@ export function useJuniorProject({
         setShowUnsavedModal,
         handleNewProject,
         handleSaveProject,
+        handleSaveAsProject,
         handleDownloadProject,
         handleShareProject,
         handleOpenProject,

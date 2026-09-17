@@ -1196,20 +1196,50 @@ const WireDraftOverlayImpl: React.FC<WireDraftOverlayProps> = ({ wireDraft, onRe
     return null;
   }, [wireDraft]);
 
+  // Magnetic snapping – when wire end is near a valid target pin, snap to it for user-friendly connection
+  // Threshold 28px desktop / 36px touch, excludes source pin
+  const snappedEndPos = useMemo(() => {
+    if (!wireDraft || !mousePos || !srcPinPos) return mousePos || srcPinPos;
+    const mouseScreenX = mousePos.x * viewport.zoom + viewport.x;
+    const mouseScreenY = mousePos.y * viewport.zoom + viewport.y;
+    const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || (navigator as unknown as { maxTouchPoints?: number }).maxTouchPoints! > 0);
+    let minDist = isTouch ? 36 : 28;
+    let closest: { x: number; y: number } | null = null;
+    document.querySelectorAll('.leap-pin-dot').forEach((el) => {
+      const rect = (el as HTMLElement).getBoundingClientRect();
+      // Skip hidden or zero-size pins
+      if (rect.width === 0 && rect.height === 0) return;
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const dist = Math.hypot(cx - mouseScreenX, cy - mouseScreenY);
+      if (dist < minDist) {
+        const flowX = (cx - viewport.x) / viewport.zoom;
+        const flowY = (cy - viewport.y) / viewport.zoom;
+        // Exclude source pin itself (distance to srcPinPos < 8 flow units)
+        if (Math.hypot(flowX - srcPinPos.x, flowY - srcPinPos.y) < 8) return;
+        minDist = dist;
+        closest = { x: flowX, y: flowY };
+      }
+    });
+    return closest || mousePos;
+  }, [mousePos, viewport, wireDraft, srcPinPos]);
+
   // Build the SVG path. Use reactive viewport (useViewport) so wire stays
   // attached to source pin during zoom/pan – fixes "disconnected/broken during zoom" bug.
   // Previously used getViewport() inside useMemo with stale closure (getViewport ref doesn't change on zoom).
+  // Also keep wire visible even before first mouse move (mousePos null) – fixes "disappears before completed"
   const draftWirePath = useMemo(() => {
-    if (!wireDraft || !mousePos || !srcPinPos) return '';
+    if (!wireDraft || !srcPinPos) return '';
     const vp = viewport;
-    const allPoints = [srcPinPos, ...wireDraft.waypoints, mousePos];
+    const endPos = snappedEndPos || mousePos || srcPinPos;
+    const allPoints = [srcPinPos, ...wireDraft.waypoints, endPos];
     const screenPoints = allPoints.map(p => ({
       x: p.x * vp.zoom + vp.x,
       y: p.y * vp.zoom + vp.y,
     }));
     // Straight line between each consecutive point (no 90° L-bends)
     return screenPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-  }, [wireDraft, mousePos, srcPinPos, viewport]);
+  }, [wireDraft, mousePos, srcPinPos, viewport, snappedEndPos]);
 
   // Cached viewport for waypoint dot rendering – now reactive to viewport
   const waypointDots = useMemo(() => {
@@ -1224,22 +1254,46 @@ const WireDraftOverlayImpl: React.FC<WireDraftOverlayProps> = ({ wireDraft, onRe
 
   if (!wireDraft || !draftWirePath) return null;
 
+  const vp2 = viewport;
+  const srcScreen = { x: srcPinPos.x * vp2.zoom + vp2.x, y: srcPinPos.y * vp2.zoom + vp2.y };
+  const isSnapped = !!(snappedEndPos && mousePos && (snappedEndPos.x !== mousePos.x || snappedEndPos.y !== mousePos.y));
+  const endScreen = snappedEndPos ? { x: snappedEndPos.x * vp2.zoom + vp2.x, y: snappedEndPos.y * vp2.zoom + vp2.y } : null;
+
   return (
     <svg
       className="absolute top-0 left-0 w-full h-full pointer-events-none z-[1001]"
     >
+      {/* Start point – green pulsing, optimized for user-friendly pointing */}
+      <circle cx={srcScreen.x} cy={srcScreen.y} r={8} fill="none" stroke="#22c55e" strokeWidth={2} opacity={0.9} strokeDasharray="2 2" />
+      <circle cx={srcScreen.x} cy={srcScreen.y} r={4} fill="#22c55e" stroke="white" strokeWidth={1.5} />
       <path
         d={draftWirePath}
-        stroke="#22c55e"
+        stroke="white"
+        strokeWidth={7}
+        fill="none"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        opacity={0.9}
+      />
+      <path
+        d={draftWirePath}
+        stroke={isSnapped ? "#16a34a" : "#22c55e"}
         strokeWidth={5}
         fill="none"
         strokeLinejoin="round"
         strokeLinecap="round"
-        className="drop-shadow-[0_0_3px_rgba(34,197,94,0.5)]"
+        className="drop-shadow-[0_0_4px_rgba(34,197,94,0.6)]"
       />
       {waypointDots?.map((dot: { key: number; sx: number; sy: number }) => (
-        <circle key={dot.key} cx={dot.sx} cy={dot.sy} r={3} fill="#22c55e" stroke="#09090b" strokeWidth={1} />
+        <circle key={dot.key} cx={dot.sx} cy={dot.sy} r={4} fill="#22c55e" stroke="white" strokeWidth={2} />
       ))}
+      {/* End point – snaps to pin, grows when magnetically attached */}
+      {endScreen && (
+        <>
+          <circle cx={endScreen.x} cy={endScreen.y} r={isSnapped ? 10 : 6} fill="none" stroke={isSnapped ? "#16a34a" : "#22c55e"} strokeWidth={2} opacity={0.85} strokeDasharray={isSnapped ? "0" : "3 3"} />
+          <circle cx={endScreen.x} cy={endScreen.y} r={isSnapped ? 5 : 3.5} fill={isSnapped ? "#16a34a" : "white"} stroke={isSnapped ? "white" : "#22c55e"} strokeWidth={1.5} />
+        </>
+      )}
     </svg>
   );
 };

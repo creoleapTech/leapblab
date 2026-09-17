@@ -966,12 +966,12 @@ export const LeapNode = memo(({ id, data, selected }: NodeProps) => {
             pinGlow = '0 0 8px #22c55e, 0 0 14px rgba(34, 197, 94, 0.55)';
           }
 
-          // Larger hit area + larger visible pin when in a draft, Tinkercad-style
+          // Larger hit area + larger visible pin when in a draft, Tinkercad-style — optimized for user-friendly targeting
           const isDraftRelevant =
             isDraftSourcePin || isDraftTarget || isDraftActive || isPendingSourcePin;
           const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
-          const basePinSize = isTouchDevice ? 14 : (isDraftRelevant ? 8 : (isConnected ? 6 : 4));
-          const pinSize = isDraftRelevant ? (isTouchDevice ? 18 : 8) : basePinSize;
+          const basePinSize = isTouchDevice ? 14 : (isDraftRelevant ? 14 : (isConnected ? 6 : 4));
+          const pinSize = isDraftRelevant ? (isTouchDevice ? 24 : 16) : basePinSize;
           const halfSize = pinSize / 2;
           const handleStyle: React.CSSProperties = {
             left: `${pin.x}%`,

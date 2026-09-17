@@ -9,6 +9,7 @@ import DiscardConfirmModal from './components/DiscardConfirmModal'
 import { useCloudProjectStore } from '../../store/cloudProjectStore'
 import { useKeyboardShortcuts } from '../../creova/hooks/useKeyboardShortcuts'
 import { showToast } from '../../leapignite/client/components/Toast'
+import { useLeapLabAuthStore } from '../../auth/leaplabAuthStore'
 
 interface ProjectWorkspaceProps {
     type: ProjectType
@@ -104,6 +105,15 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
 
     const handleSave = useCallback(async () => {
         if (!mode.project) return
+        const authState = useLeapLabAuthStore.getState()
+        if (!authState.isAuthenticated || !authState.token) {
+            showToast('Please sign in to save projects. Use Download to save locally.', 'info')
+            return
+        }
+        if (authState.role === 'trainer') {
+            showToast('Trainers cannot save to cloud. Use Download to save locally.', 'info')
+            return
+        }
         if (isSaving) return
         setIsSaving(true)
         if (isCurriculumCopy) {
@@ -134,6 +144,15 @@ export default function ProjectWorkspace({ type, onBack, template, children }: P
 
     const handleSaveAs = useCallback(async () => {
         if (!mode.project) return
+        const authState = useLeapLabAuthStore.getState()
+        if (!authState.isAuthenticated || !authState.token) {
+            showToast('Please sign in to save projects. Use Download to save locally.', 'info')
+            return
+        }
+        if (authState.role === 'trainer') {
+            showToast('Trainers cannot save to cloud. Use Download to save locally.', 'info')
+            return
+        }
         const win = window as any;
         // Electron: native dialog
         if (win.electronAPI?.saveProject) {

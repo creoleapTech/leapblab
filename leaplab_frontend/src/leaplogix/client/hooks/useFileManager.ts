@@ -6,6 +6,7 @@
 import { useState, useCallback, useEffect } from "react"
 import { fileService } from "../../../Electra/Client/Src/services/FileService"
 import { useCloudProjectStore } from "../../../store/cloudProjectStore"
+import { useLeapLabAuthStore } from "../../../auth/leaplabAuthStore"
 import { getUniqueFileName, getFallbackActiveFile } from "../utils/fileUtils"
 import { showToast } from "../../../leapignite/client/components/Toast"
 import type { SpriteState } from "../../../stage/Sprite"
@@ -68,12 +69,43 @@ export function useFileManager({ addLog, sprites, backdrop, setSprites, setSelec
   }), [workflowMode, projectFiles, activeFile, sprites, backdrop])
 
   const handleSaveProject = useCallback(async () => {
+    const authState = useLeapLabAuthStore.getState()
+    if (!authState.isAuthenticated || !authState.token) {
+      showToast("Please sign in to save projects. Use Download to save locally.", "info")
+      return
+    }
+    if (authState.role === 'trainer') {
+      showToast("Trainers cannot save to cloud. Use Download to save locally.", "info")
+      return
+    }
     const payload = buildPayload()
     try {
       await fileService.saveProject(projectName, "python", payload)
       showToast("Project saved successfully!", "success")
     } catch (err) {
       console.error('[useFileManager] Failed to save project:', err)
+      const msg = (err as { message?: string })?.message || 'Failed to save project. Please make sure you are signed in.'
+      if (openAlert) openAlert({ title: "Save failed", message: msg, variant: "danger" })
+      else alert(msg)
+    }
+  }, [projectName, buildPayload, openAlert])
+
+  const handleSaveAsProject = useCallback(async () => {
+    const authState = useLeapLabAuthStore.getState()
+    if (!authState.isAuthenticated || !authState.token) {
+      showToast("Please sign in to save projects. Use Download to save locally.", "info")
+      return
+    }
+    if (authState.role === 'trainer') {
+      showToast("Trainers cannot save to cloud. Use Download to save locally.", "info")
+      return
+    }
+    const payload = buildPayload()
+    try {
+      await fileService.saveProject(projectName, "python", payload)
+      showToast("Project saved successfully!", "success")
+    } catch (err) {
+      console.error('[useFileManager] Failed to save project (Save As):', err)
       const msg = (err as { message?: string })?.message || 'Failed to save project. Please make sure you are signed in.'
       if (openAlert) openAlert({ title: "Save failed", message: msg, variant: "danger" })
       else alert(msg)
@@ -362,6 +394,7 @@ export function useFileManager({ addLog, sprites, backdrop, setSprites, setSelec
     setProjectFiles,
     handleNewProject,
     handleSaveProject,
+    handleSaveAsProject,
     handleDownloadProject,
     handleOpenProject,
     handleShareProject,

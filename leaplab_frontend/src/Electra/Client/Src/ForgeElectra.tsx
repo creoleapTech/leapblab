@@ -27,6 +27,7 @@ import * as LibraryService from './services/LibraryService';
 import { pack, unpack, isPacked } from '../utils/compress';
 import { fileService } from './services/FileService';
 import { useCloudProjectStore } from '../../../store/cloudProjectStore';
+import { useLeapLabAuthStore } from '../../../auth/leaplabAuthStore';
 import { showToast } from '../../../leapignite/client/components/Toast';
 
 // Hooks and Extracted Components
@@ -562,23 +563,33 @@ export default function ForgeElectra({
 
   const handleSaveProject = async () => {
     if (isSaving) return;
+    const authState = useLeapLabAuthStore.getState();
+    const isGuest = !authState.isAuthenticated || !authState.token;
+    // Restrict Save to signed-in users – guests must use Download, per UX requirement
+    if (isGuest) {
+      showToast('Please sign in to save projects. Use Download to save locally.', 'info');
+      return;
+    }
+    if (authState.role === 'trainer') {
+      showToast('Trainers cannot save to cloud. Use Download to save locally.', 'info');
+      return;
+    }
+    const projectData = {
+      nodes,
+      edges,
+      code,
+      board,
+      mode: 'electra' as const,
+    };
     setIsSaving(true);
-    showToast("Saving project...", "info", 30000);
+    showToast('Saving project to cloud...', 'info', 30000);
     try {
-      const projectData = {
-        nodes,
-        edges,
-        code,
-        board,
-        mode: 'electra' as const,
-      };
       await fileService.saveProject(projectName || 'project', 'electra', projectData);
       if (!projectPath) {
         setProjectPath(uuidv4());
       }
-      showToast("Project saved successfully!", "success");
+      showToast('Project saved successfully!', 'success');
     } catch (err: any) {
-      console.error('[FORGE] Failed to save project:', err);
       showToast(err?.message || 'Failed to save project.', 'error');
     } finally {
       setIsSaving(false);
@@ -597,6 +608,15 @@ export default function ForgeElectra({
   };
 
   const handleSaveAsProject = async () => {
+    const authStateAs = useLeapLabAuthStore.getState();
+    if (!authStateAs.isAuthenticated || !authStateAs.token) {
+      showToast('Please sign in to save projects. Use Download to save locally.', 'info');
+      return;
+    }
+    if (authStateAs.role === 'trainer') {
+      showToast('Trainers cannot save to cloud. Use Download to save locally.', 'info');
+      return;
+    }
     const projectData = {
       nodes,
       edges,

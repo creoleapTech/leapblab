@@ -15,6 +15,8 @@ import { SkulptEngine } from "../leapignite/server/engine/SkulptEngine";
 import Logo, { CreoleapLogo } from "../components/Logo";
 import LeapLabAuthButton from "../auth/LeapLabAuthButton";
 import { fileService } from "../Electra/Client/Src/services/FileService";
+import { showToast } from "../leapignite/client/components/Toast";
+import { useLeapLabAuthStore } from "../auth/leaplabAuthStore";
 
 
 // ─── Default Notebook Cells ───────────────────────────────────────────────────

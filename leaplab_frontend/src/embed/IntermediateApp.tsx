@@ -1051,6 +1051,7 @@ const IntermediateApp: React.FC<{ onBack: () => void; onOpenPython?: () => void;
         executeNewProject,
         buildProjectPayload,
         handleSaveProject,
+        handleSaveAsProject,
         handleDownloadProject,
         loadProjectFromData,
         executeOpenProject,
@@ -3370,7 +3371,9 @@ const IntermediateApp: React.FC<{ onBack: () => void; onOpenPython?: () => void;
 
                     if (action === 'new') handleNewProject();
 
-                    if (action === 'save' || action === 'save_as') handleSaveProject();
+                    if (action === 'save') handleSaveProject();
+
+                    if (action === 'save_as') handleSaveAsProject();
 
                     if (action === 'open') handleOpenProject();
 

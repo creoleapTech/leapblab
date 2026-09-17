@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import { fileService } from '../../Electra/Client/Src/services/FileService';
 import { showToast } from '../../leapignite/client/components/Toast';
+import { useLeapLabAuthStore } from '../../auth/leaplabAuthStore';
 
 export interface UseProjectActionsOptions {
   projectPath?: string | null;
@@ -92,6 +93,15 @@ export function useProjectActions(
   }, [appState, setProjectPath, onRedirectToElectra]);
 
   const handleSaveProject = useCallback(async (): Promise<void> => {
+    const authState = useLeapLabAuthStore.getState();
+    if (!authState.isAuthenticated || !authState.token) {
+      showToast('Please sign in to save projects. Use Download to save locally.', 'info');
+      return;
+    }
+    if (authState.role === 'trainer') {
+      showToast('Trainers cannot save to cloud. Use Download to save locally.', 'info');
+      return;
+    }
     try {
       const payload = appState.getSerializedState();
       const liveBlockXml = typeof window !== 'undefined' ? (window as any).__LEAP_BLOCK_XML__ : null;
@@ -116,6 +126,15 @@ export function useProjectActions(
   }, [appState]);
 
   const handleSaveAsProject = useCallback(async (): Promise<void> => {
+    const authState = useLeapLabAuthStore.getState();
+    if (!authState.isAuthenticated || !authState.token) {
+      showToast('Please sign in to save projects. Use Download to save locally.', 'info');
+      return;
+    }
+    if (authState.role === 'trainer') {
+      showToast('Trainers cannot save to cloud. Use Download to save locally.', 'info');
+      return;
+    }
     const payload = appState.getSerializedState();
     const liveBlockXml = typeof window !== 'undefined' ? (window as any).__LEAP_BLOCK_XML__ : null;
     if (typeof liveBlockXml === 'string' && liveBlockXml.trim()) {

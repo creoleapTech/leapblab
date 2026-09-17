@@ -52,6 +52,7 @@ import ProjectNameInput from "../components/common/ProjectNameInput";
 import ModeSwitcher from "../components/common/ModeSwitcher";
 import ActionButton from "../components/common/ActionButton";
 import { showToast } from "../leapignite/client/components/Toast";
+import { useLeapLabAuthStore } from "../auth/leaplabAuthStore";
 import { SkulptEngine } from "../leapignite/server/engine/SkulptEngine";
 import { FULL_CATALOG } from "../components/SpriteLibrary";
 import SerialMonitor from "../components/SerialMonitor";
@@ -709,6 +710,15 @@ function PythonApp({ onBack, onSwitchToNotebook, onSwitchToBlocks, onSwitchToCos
     };
 
     const handleSaveProject = async () => {
+        const authState = useLeapLabAuthStore.getState();
+        if (!authState.isAuthenticated || !authState.token) {
+            showToast("Please sign in to save projects. Use Download to save locally.", "info");
+            return;
+        }
+        if (authState.role === 'trainer') {
+            showToast("Trainers cannot save to cloud. Use Download to save locally.", "info");
+            return;
+        }
         const payload = {
             projectFiles,
             activeFile,
@@ -720,6 +730,31 @@ function PythonApp({ onBack, onSwitchToNotebook, onSwitchToBlocks, onSwitchToCos
             showToast("Project saved successfully!", "success");
         } catch (err) {
             console.error('[PythonApp] Failed to save project:', err);
+            alert(err?.message || 'Failed to save project. Please make sure you are signed in.');
+        }
+    };
+
+    const handleSaveAsProject = async () => {
+        const authState = useLeapLabAuthStore.getState();
+        if (!authState.isAuthenticated || !authState.token) {
+            showToast("Please sign in to save projects. Use Download to save locally.", "info");
+            return;
+        }
+        if (authState.role === 'trainer') {
+            showToast("Trainers cannot save to cloud. Use Download to save locally.", "info");
+            return;
+        }
+        const payload = {
+            projectFiles,
+            activeFile,
+            sprites,
+            backdrop,
+        };
+        try {
+            await fileService.saveProject(projectName, "python", payload);
+            showToast("Project saved successfully!", "success");
+        } catch (err) {
+            console.error('[PythonApp] Failed to save project (Save As):', err);
             alert(err?.message || 'Failed to save project. Please make sure you are signed in.');
         }
     };

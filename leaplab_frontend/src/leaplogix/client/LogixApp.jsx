@@ -118,7 +118,7 @@ function LogixAppInner({ onBack, onSwitchToNotebook, onSwitchToBlocks, onSwitchT
     const {
         projectName, setProjectName, activeFile, setActiveFile,
         projectFiles, setProjectFiles,
-        handleNewProject, handleSaveProject, handleDownloadProject, handleOpenProject, handleShareProject,
+        handleNewProject, handleSaveProject, handleSaveAsProject, handleDownloadProject, handleOpenProject, handleShareProject,
         handleDeleteFile, handleCreateNewFile, handleCreateNewTextFile,
         handleRenameFile, handleOpenPythonFile,
         handleAddPythonFiles, handleAddImageFiles, handleAddTextFiles, handleAddCsvFiles,
@@ -509,7 +509,7 @@ function LogixAppInner({ onBack, onSwitchToNotebook, onSwitchToBlocks, onSwitchT
         packages, pipFilter, setPipFilter, handleInstall,
         terminalOutput, setTerminalOutput, terminalEndRef, addLog, clearTerminal,
         handleRun: handleRunWithReset, handleStop, handleClear: clearTerminal,
-        handleNewProject, handleSaveProject, handleDownloadProject, handleOpenProject, handleShareProject,
+        handleNewProject, handleSaveProject, handleSaveAsProject, handleDownloadProject, handleOpenProject, handleShareProject,
         handleDeleteFile, handleCreateNewFile, handleCreateNewTextFile,
         handleRenameFile, handleOpenPythonFile,
         handleAddPythonFiles, handleAddImageFiles, handleAddTextFiles, handleAddCsvFiles,
