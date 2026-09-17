@@ -16,7 +16,7 @@ import type { MarqueeSlice } from './marqueeSlice'
 import { createMarqueeSlice } from './marqueeSlice'
 import { serializeGeometry, deserializeGeometry } from '../utils/geometry'
 import { autoSave, saveProject, loadProject } from '../utils/indexedDB'
-import { performCSG, isCSGValid } from '../engine/CSGEngine'
+import { performCSG, performMultiCSG, isCSGValid } from '../engine/CSGEngine'
 import * as THREE from 'three'
 import { log, debug, warn, error } from '../utils/logger'
 
@@ -101,6 +101,7 @@ interface MainStoreState {
   isProjectDirty: boolean
   lastDuplicateTransform: LastDuplicateTransform | null
   tempWorkplane: Workplane | null
+  clipboard: Shape[] | null
 }
 
 interface MainStoreActions {
@@ -145,6 +146,8 @@ interface MainStoreActions {
   distributeShapes: (ids: string[], axis: string) => void
   setRotationSnap: (deg: number) => void
   importShape: (shapeData: ShapeDataImport) => string
+  copyShapes: (ids: string[]) => void
+  pasteShapes: () => string[]
 }
 
 type StoreState = MainStoreState & RulerSlice & EditModeSlice & CameraSlice & MarqueeSlice
@@ -155,11 +158,11 @@ type FullStore = StoreState & StoreActions
 
 type StoreCreator = StateCreator<FullStore, [], [], FullStore>
 
-export const use3DStore = create<FullStore>()((set, get) => ({
-  ...createRulerSlice(set as never, get as never),
-  ...createEditModeSlice(set as never, get as never),
-  ...createCameraSlice(set as never, get as never),
-  ...createMarqueeSlice(set as never, get as never),
+export const use3DStore = create<FullStore>()((set, get, store) => ({
+  ...createRulerSlice(set as never, get as never, store as never),
+  ...createEditModeSlice(set as never, get as never, store as never),
+  ...createCameraSlice(set as never, get as never, store as never),
+  ...createMarqueeSlice(set as never, get as never, store as never),
 
   shapes: [],
   selectedIds: [],
@@ -176,6 +179,7 @@ export const use3DStore = create<FullStore>()((set, get) => ({
   isProjectDirty: false,
   lastDuplicateTransform: null,
   tempWorkplane: null,
+  clipboard: null,
 
   addShape: (type, position = [0, 1, 0]) => {
     const state = get()
@@ -566,10 +570,10 @@ export const use3DStore = create<FullStore>()((set, get) => ({
       const restoredShapes: Shape[] = JSON.parse(JSON.stringify(state.history[newIndex]))
       for (const sh of restoredShapes) {
         if (sh._customGeometry && (sh._customGeometry as Record<string, unknown>).attributes) {
-          sh._customGeometry = deserializeGeometry(sh._customGeometry as Record<string, unknown>)!
+          sh._customGeometry = deserializeGeometry(sh._customGeometry as never)! as never
         }
         if (sh._csgGeometry && (sh._csgGeometry as Record<string, unknown>).attributes) {
-          sh._csgGeometry = deserializeGeometry(sh._csgGeometry as Record<string, unknown>)!
+          sh._csgGeometry = deserializeGeometry(sh._csgGeometry as never)! as never
         }
       }
       const restoredIds = new Set(restoredShapes.map((s) => s.id))
@@ -591,10 +595,10 @@ export const use3DStore = create<FullStore>()((set, get) => ({
       const restoredShapes: Shape[] = JSON.parse(JSON.stringify(state.history[newIndex]))
       for (const sh of restoredShapes) {
         if (sh._customGeometry && (sh._customGeometry as Record<string, unknown>).attributes) {
-          sh._customGeometry = deserializeGeometry(sh._customGeometry as Record<string, unknown>)!
+          sh._customGeometry = deserializeGeometry(sh._customGeometry as never)! as never
         }
         if (sh._csgGeometry && (sh._csgGeometry as Record<string, unknown>).attributes) {
-          sh._csgGeometry = deserializeGeometry(sh._csgGeometry as Record<string, unknown>)!
+          sh._csgGeometry = deserializeGeometry(sh._csgGeometry as never)! as never
         }
       }
       const restoredIds = new Set(restoredShapes.map((s) => s.id))
@@ -641,10 +645,10 @@ export const use3DStore = create<FullStore>()((set, get) => ({
     log('setShapes:', shapes.length, 'shapes')
     const deserialized = shapes.map((sh) => {
       if (sh._customGeometry && !(sh._customGeometry as THREE.BufferGeometry).isBufferGeometry) {
-        sh._customGeometry = deserializeGeometry(sh._customGeometry as Record<string, unknown>)
+        sh._customGeometry = (deserializeGeometry(sh._customGeometry as never) as never) ?? undefined
       }
       if (sh._csgGeometry && !(sh._csgGeometry as THREE.BufferGeometry).isBufferGeometry) {
-        sh._csgGeometry = deserializeGeometry(sh._csgGeometry as Record<string, unknown>)
+        sh._csgGeometry = (deserializeGeometry(sh._csgGeometry as never) as never) ?? undefined
       }
       return sh
     })
@@ -698,9 +702,19 @@ export const use3DStore = create<FullStore>()((set, get) => ({
     }
 
     log('CSG:', operation, 'on', ids.length, 'shapes')
-    const result = performCSG(shapes[0], shapes[1], operation as 'union' | 'subtract' | 'intersect')
+    // Fix: use performMultiCSG so selecting >2 shapes (e.g., car body + 4 torus wheels) merges all at once instead of deleting the extras
+    const op = operation as 'union' | 'subtract' | 'intersect'
+    const result = ids.length === 2
+      ? performCSG(shapes[0], shapes[1], op)
+      : performMultiCSG(shapes, op)
     if (!result) {
-      error('CSG: operation failed')
+      error('CSG: operation failed – keeping original shapes')
+      return
+    }
+    // Safety: three-bvh-csg can return a geometry with 0 vertices for non-manifold/disjoint cases (e.g., torus) – treat as failure so structure is not "deleted"
+    const vertCount = (result._csgGeometry as THREE.BufferGeometry)?.attributes?.position?.count ?? 0
+    if (vertCount === 0) {
+      error('CSG: result geometry is empty (0 vertices) – operation produced no visible mesh, keeping originals')
       return
     }
 
@@ -713,6 +727,7 @@ export const use3DStore = create<FullStore>()((set, get) => ({
       isProjectDirty: true,
     }))
 
+    get().pushHistory()
     setTimeout(() => get().autoSaveProject(), 100)
   },
 
@@ -847,10 +862,10 @@ export const use3DStore = create<FullStore>()((set, get) => ({
     }
 
     if (newShape._customGeometry && !(newShape._customGeometry as THREE.BufferGeometry).isBufferGeometry) {
-      newShape._customGeometry = deserializeGeometry(newShape._customGeometry as Record<string, unknown>)
+      newShape._customGeometry = (deserializeGeometry(newShape._customGeometry as never) as never) ?? undefined
     }
     if (newShape._csgGeometry && !(newShape._csgGeometry as THREE.BufferGeometry).isBufferGeometry) {
-      newShape._csgGeometry = deserializeGeometry(newShape._csgGeometry as Record<string, unknown>)
+      newShape._csgGeometry = (deserializeGeometry(newShape._csgGeometry as never) as never) ?? undefined
     }
 
     log('importShape:', newShape.type, newShape.name)
@@ -862,4 +877,53 @@ export const use3DStore = create<FullStore>()((set, get) => ({
     setTimeout(() => get().autoSaveProject(), 100)
     return newShape.id
   },
-}) as unknown as StoreCreator)
+
+  copyShapes: (ids) => {
+    const state = get()
+    const toCopy = state.shapes.filter((s) => ids.includes(s.id))
+    if (toCopy.length === 0) {
+      warn('copyShapes: nothing to copy')
+      return
+    }
+    // Deep clone via JSON to capture serialized geometry safely
+    try {
+      const cloned: Shape[] = JSON.parse(JSON.stringify(toCopy))
+      set({ clipboard: cloned })
+      log('copyShapes: copied', cloned.length, 'shapes')
+    } catch (err) {
+      error('copyShapes failed', err)
+    }
+  },
+
+  pasteShapes: () => {
+    const state = get()
+    const clip = state.clipboard
+    if (!clip || (clip as Shape[]).length === 0) {
+      warn('pasteShapes: clipboard empty')
+      return []
+    }
+    const newShapes: Shape[] = (clip as Shape[]).map((s) => {
+      const clone = cloneShape(s as unknown as Record<string, unknown>) as unknown as Shape
+      const origPos = (s as Shape).position as number[]
+      clone.position = [origPos[0] + 1.5, origPos[1], origPos[2] + 1.5]
+      // Ensure deserialized geometry if clipboard held serialized form
+      if (clone._customGeometry && !(clone._customGeometry as THREE.BufferGeometry).isBufferGeometry) {
+        clone._customGeometry = (deserializeGeometry(clone._customGeometry as never) as never) ?? undefined
+      }
+      if (clone._csgGeometry && !(clone._csgGeometry as THREE.BufferGeometry).isBufferGeometry) {
+        clone._csgGeometry = (deserializeGeometry(clone._csgGeometry as never) as never) ?? undefined
+      }
+      return clone
+    })
+    const newIds = newShapes.map((s) => s.id)
+    set((s) => ({
+      shapes: [...s.shapes, ...newShapes],
+      selectedIds: newIds,
+      isProjectDirty: true,
+    }))
+    get().pushHistory()
+    setTimeout(() => get().autoSaveProject(), 100)
+    log('pasteShapes: pasted', newShapes.length, 'shapes')
+    return newIds
+  },
+}))

@@ -53,6 +53,27 @@ export function useKeyboardShortcuts({ onOpenProject }: KeyboardShortcutOptions 
         }
       }
 
+      if (e.ctrlKey && key === 'c' && !e.shiftKey) {
+        e.preventDefault()
+        if (ids.length > 0) {
+          log('Keyboard: Ctrl+C (copy) ' + ids.length + ' shapes')
+          state.copyShapes(ids)
+        } else {
+          log('Keyboard: Ctrl+C (copy) – nothing selected')
+        }
+      }
+
+      if (e.ctrlKey && (key === 'v' || key === 'p') && !e.shiftKey) {
+        e.preventDefault()
+        if (key === 'p') {
+          // Prevent browser print dialog for Ctrl+P paste alias
+          log('Keyboard: Ctrl+P (paste alias)')
+        } else {
+          log('Keyboard: Ctrl+V (paste)')
+        }
+        state.pasteShapes()
+      }
+
       if (e.ctrlKey && key === 'o') {
         e.preventDefault()
         log('Keyboard: Ctrl+O (open project)')

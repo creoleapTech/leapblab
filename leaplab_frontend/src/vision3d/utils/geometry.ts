@@ -124,6 +124,14 @@ export function deserializeGeometry(
   if (data.index) {
     geo.setIndex(new THREE.BufferAttribute(new Uint32Array(data.index.array), 1))
   }
+  // Ensure bounds exist for frustum culling (fixes "Cannot read properties of undefined (reading 'center')" after undo)
+  if (geo.attributes.position) {
+    try { geo.computeBoundingBox(); } catch {}
+    try { geo.computeBoundingSphere(); } catch {}
+    if (!geo.attributes.normal) {
+      try { geo.computeVertexNormals(); } catch {}
+    }
+  }
   return geo
 }
 
