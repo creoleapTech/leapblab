@@ -337,15 +337,17 @@ const ForgeCanvasInner: React.FC<ForgeCanvasProps> = ({
         if (touch) {
           const dx = touch.clientX - downPos.x;
           const dy = touch.clientY - downPos.y;
-          const moved = Math.hypot(dx, dy) > 5;
+          const moved = Math.hypot(dx, dy) > 10;
           downPos = null;
           if (moved) {
-            cancelWireDraft();
-            wireOverlayUpdateRef.current?.(null);
+            if (pendingSource && !wireDraft) {
+              cancelWireDraft();
+              wireOverlayUpdateRef.current?.(null);
+            }
             return;
           }
         }
-        if (pendingSource) {
+        if (pendingSource && !wireDraft) {
           setPendingSource(null);
         }
       } else if (pendingSource && !wireDraft) {
