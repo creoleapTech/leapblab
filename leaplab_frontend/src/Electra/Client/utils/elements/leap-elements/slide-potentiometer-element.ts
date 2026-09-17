@@ -30,6 +30,7 @@ export class SlidePotentiometerElement extends LitElement {
   private isPressed = false;
   private zoom = 1;
   private pageToLocalTransformationMatrix: DOMMatrix | null = null;
+  private lastTapTime = 0;
 
   static get styles() {
     return css`
@@ -62,7 +63,6 @@ export class SlidePotentiometerElement extends LitElement {
     const tipOffsetX = tipMovementX + tipBaseOffsetX;
 
     return html`<svg
-      class="nodrag nopan"
       width="${travelLength + 25}mm"
       height="29mm"
       version="1.1"
@@ -210,6 +210,16 @@ export class SlidePotentiometerElement extends LitElement {
   }
 
   private down = (e?: Event): void => {
+    const ev = e as MouseEvent & TouchEvent & { detail?: number };
+    const isDblClick = ev && (ev as MouseEvent).detail === 2;
+    const now = Date.now();
+    const isTouch = ev?.type?.startsWith('touch');
+    if (isTouch && now - this.lastTapTime < 350) {
+      this.lastTapTime = 0;
+      return;
+    }
+    if (isTouch) this.lastTapTime = now;
+    if (isDblClick) return;
     if (e) {
       e.stopPropagation();
     }

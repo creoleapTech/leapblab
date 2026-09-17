@@ -23,6 +23,7 @@ export class PotentiometerElement extends LitElement {
 
   private pressed = false;
   private pageToKnobMatrix: SVGMatrix | null = null;
+  private lastTapTime = 0;
 
   readonly pinInfo: ElementPin[] = [
     { name: 'GND', x: 29, y: 68.5, number: 1, signals: [{ type: 'power', signal: 'GND' }] },
@@ -72,7 +73,6 @@ export class PotentiometerElement extends LitElement {
 
     return html`<svg
       role="slider"
-      class="nodrag nopan"
       width="20mm"
       height="20mm"
       version="1.1"
@@ -167,13 +167,28 @@ export class PotentiometerElement extends LitElement {
   }
 
   private down(event: MouseEvent) {
-    event.stopPropagation();
     const target = event.target as SVGElement | null;
     const isKnob = target && (target.id === 'knob' || target.id === 'knob-cap' || target.id === 'rotating');
 
     if (!isKnob) {
       return;
     }
+
+    // Double-click / double-tap on knob: allow node dragging instead of value adjust (user requested)
+    if ((event as MouseEvent).detail === 2) {
+      return;
+    }
+    const now = Date.now();
+    const isTouch = (event as TouchEvent).type?.startsWith('touch');
+    if (isTouch) {
+      if (now - this.lastTapTime < 350) {
+        this.lastTapTime = 0;
+        return;
+      }
+      this.lastTapTime = now;
+    }
+
+    event.stopPropagation();
 
     if (event.button === 0 || window.navigator.maxTouchPoints) {
       this.pressed = true;

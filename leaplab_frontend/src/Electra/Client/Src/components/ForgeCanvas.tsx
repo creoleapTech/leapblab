@@ -298,14 +298,19 @@ const ForgeCanvasInner: React.FC<ForgeCanvasProps> = ({
       if (downPos) {
         const dx = e.clientX - downPos.x;
         const dy = e.clientY - downPos.y;
-        const moved = Math.hypot(dx, dy) > 5;
+        // Increased threshold + don't cancel active wireDraft on drag — fixes "wire disappears while drawing"
+        // Previously >5px drag on empty space cancelled the in-progress wire, making it vanish if hand jittered
+        // when trying to add a waypoint. Now only pendingSource (armed pin) drag cancels; wireDraft stays.
+        const moved = Math.hypot(dx, dy) > 10;
         downPos = null;
         if (moved) {
-          cancelWireDraft();
-          wireOverlayUpdateRef.current?.(null);
+          if (pendingSource && !wireDraft) {
+            cancelWireDraft();
+            wireOverlayUpdateRef.current?.(null);
+          }
           return;
         }
-        if (pendingSource) {
+        if (pendingSource && !wireDraft) {
           setPendingSource(null);
         }
       } else if (pendingSource && !wireDraft) {
@@ -1171,7 +1176,7 @@ interface WireDraftOverlayProps {
 }
 const WireDraftOverlayImpl: React.FC<WireDraftOverlayProps> = ({ wireDraft, onRequestUpdate }) => {
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
-  const { getViewport } = useReactFlow();
+  const viewport = useViewport();
 
   // Expose our setMousePos to the parent via a stable callback registration.
   // The parent calls it on every throttled mouse move. This avoids the parent
@@ -1189,12 +1194,12 @@ const WireDraftOverlayImpl: React.FC<WireDraftOverlayProps> = ({ wireDraft, onRe
     return null;
   }, [wireDraft]);
 
-  // Build the SVG path. The screen-coordinate math uses the live viewport
-  // (read once via getViewport()) so we don't allocate a new object on every
-  // frame. Straight line construction is O(n) where n = waypoints + 2.
+  // Build the SVG path. Use reactive viewport (useViewport) so wire stays
+  // attached to source pin during zoom/pan – fixes "disconnected/broken during zoom" bug.
+  // Previously used getViewport() inside useMemo with stale closure (getViewport ref doesn't change on zoom).
   const draftWirePath = useMemo(() => {
     if (!wireDraft || !mousePos || !srcPinPos) return '';
-    const vp = getViewport();
+    const vp = viewport;
     const allPoints = [srcPinPos, ...wireDraft.waypoints, mousePos];
     const screenPoints = allPoints.map(p => ({
       x: p.x * vp.zoom + vp.x,
@@ -1202,19 +1207,18 @@ const WireDraftOverlayImpl: React.FC<WireDraftOverlayProps> = ({ wireDraft, onRe
     }));
     // Straight line between each consecutive point (no 90° L-bends)
     return screenPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-  }, [wireDraft, mousePos, srcPinPos, getViewport]);
+  }, [wireDraft, mousePos, srcPinPos, viewport]);
 
-  // Cached viewport for waypoint dot rendering (avoid calling getViewport
-  // inside the map callback, which would re-execute on every frame).
+  // Cached viewport for waypoint dot rendering – now reactive to viewport
   const waypointDots = useMemo(() => {
     if (!wireDraft) return null;
-    const vp = getViewport();
+    const vp = viewport;
     return wireDraft.waypoints.map((pt: { x: number; y: number }, i: number) => {
       const sx = pt.x * vp.zoom + vp.x;
       const sy = pt.y * vp.zoom + vp.y;
       return { key: i, sx, sy };
     });
-  }, [wireDraft, mousePos, getViewport]);
+  }, [wireDraft, viewport]);
 
   if (!wireDraft || !draftWirePath) return null;
 
