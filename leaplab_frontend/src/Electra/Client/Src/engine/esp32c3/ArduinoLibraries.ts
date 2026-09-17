@@ -1011,12 +1011,13 @@ export function createIRremoteClass(runtime: any) {
         private getIrNode(): any {
             try {
                 const { nodes } = useForgeStore.getState();
-                return nodes.find(n =>
-                    n.data?.type === 'ir-receiver' ||
-                    n.data?.type === 'ir-remote' ||
-                    n.data?.type === 'ir-obstacle-sensor' ||
-                    n.data?.type === 'ir-sensor'
-                );
+                // Prefer a real receiver so a stray ir-remote node never shadows the code
+                return nodes.find(n => n.data?.type === 'ir-receiver')
+                    ?? nodes.find(n =>
+                        n.data?.type === 'ir-remote' ||
+                        n.data?.type === 'ir-obstacle-sensor' ||
+                        n.data?.type === 'ir-sensor'
+                    );
             } catch (e) {
                 return null;
             }
@@ -1032,6 +1033,21 @@ export function createIRremoteClass(runtime: any) {
 
             this.lastReadHex = currentHex;
             const val = parseInt(currentHex.replace(/^0x/i, ''), 16) || 0;
+
+            // Consume a real remote press so one click = one decode().
+            // (Obstacle fallback has no press event, so leave it for repeat reads.)
+            // resume() clears lastReadHex; without consuming here a single click
+            // would re-trigger every loop() until button release.
+            try {
+                if (sv?.lastIrCode) {
+                    const { updateNodeData } = useForgeStore.getState();
+                    updateNodeData(node.id, {
+                        sensorValues: { ...sv, lastIrCode: null, lastIrCommand: null },
+                    });
+                }
+            } catch (e) {
+                // store unavailable (unit tests) — ignore
+            }
 
             if (results) {
                 results.value = val;

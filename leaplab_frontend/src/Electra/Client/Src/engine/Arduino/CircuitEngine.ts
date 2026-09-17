@@ -3779,6 +3779,7 @@ class CircuitEngine {
    */
   public pushIRRemoteButton(remoteNodeId: string, irCode: number, pressed: boolean) {
     const { nodes, edges } = useForgeStore.getState();
+    const { updateNodeData } = useForgeStore.getState();
 
     // Find all IR receivers in the circuit
     const irReceivers = nodes.filter(n => n.data?.type === 'ir-receiver');
@@ -3788,19 +3789,42 @@ class CircuitEngine {
       return;
     }
 
+    // Build full NEC 32-bit hex for TranspiledJS / ESP32 path:
+    // frame = [addr 0x00][~addr 0xFF][cmd][~cmd], e.g. cmd 0x30 -> 0x00FF30CF
+    const cmdByte = irCode & 0xFF;
+    const invByte = (~cmdByte) & 0xFF;
+    const fullHex = `0x00FF${cmdByte.toString(16).padStart(2, '0').toUpperCase()}${invByte.toString(16).padStart(2, '0').toUpperCase()}`;
+
     // Send the IR signal to all receivers (simulating broadcast nature of IR)
     irReceivers.forEach(receiverNode => {
+      if (pressed) {
+        // ── TranspiledJS / ESP32 path: store code where IRrecv.decode() reads it ──
+        const prevSv = receiverNode.data?.sensorValues || {};
+        updateNodeData(receiverNode.id, {
+          sensorValues: { ...prevSv, lastIrCode: fullHex, lastIrCommand: cmdByte },
+        });
+      } else {
+        // Clear on release so next decode() blocks until next press
+        const prevSv = useForgeStore.getState().nodes.find(n => n.id === receiverNode.id)?.data?.sensorValues || {};
+        updateNodeData(receiverNode.id, {
+          sensorValues: { ...prevSv, lastIrCode: null, lastIrCommand: null },
+        });
+      }
+
       const emulator = this.irReceiverEmulators.get(receiverNode.id);
       if (emulator) {
         if (pressed) {
           // NEC protocol: address byte is typically 0x00 for generic remotes
           const address = 0x00;
           emulator.transmit(address, irCode, false);
-          console.log(`[IR REMOTE] Button pressed: code=0x${irCode.toString(16).padStart(2, '0')} → receiver ${receiverNode.id}`);
+          console.log(`[IR REMOTE] Button pressed: code=0x${irCode.toString(16).padStart(2, '0')} (${fullHex}) → receiver ${receiverNode.id}`);
         } else {
           emulator.release();
           console.log(`[IR REMOTE] Button released → receiver ${receiverNode.id}`);
         }
+      } else if (pressed) {
+        // No AVR emulator yet (e.g. ESP32-only circuit) — TranspiledJS path above still delivers the code
+        console.log(`[IR REMOTE] Button pressed: code=0x${irCode.toString(16).padStart(2, '0')} (${fullHex}) → receiver ${receiverNode.id} (transpiled path)`);
       }
     });
   }
