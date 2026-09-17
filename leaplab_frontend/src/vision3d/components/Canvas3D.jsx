@@ -63,7 +63,9 @@ const DropHandler = () => {
 
     const handleDrop = (e) => {
       e.preventDefault();
-      const shapeType = e.dataTransfer?.getData('shapeType');
+      // Robust: some browsers clear custom type, fallback to text/plain
+      let shapeType = e.dataTransfer?.getData('shapeType')
+      if (!shapeType) shapeType = e.dataTransfer?.getData('text/plain')
       if (!shapeType) return;
       log('Canvas3D DropHandler: drop shapeType=' + shapeType);
 
@@ -76,15 +78,22 @@ const DropHandler = () => {
 
       const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
       const intersection = new THREE.Vector3();
-      raycaster.ray.intersectPlane(plane, intersection);
+      const hasHit = raycaster.ray.intersectPlane(plane, intersection);
 
-      if (intersection) {
-        const snappedPos = snapPositionToGrid(
-          [intersection.x, 1, intersection.z],
-          gridSnap
-        );
-        addShape(shapeType, snappedPos);
+      // Fix: if ray is parallel or outside workplane, fallback to center jitter so shape never "disappears"
+      let dropX, dropZ
+      if (hasHit && Number.isFinite(intersection.x) && Number.isFinite(intersection.z)) {
+        // Clamp to visible workplane (-9 to 9) so shape always appears in view instead of far off-screen
+        dropX = Math.max(-9, Math.min(9, intersection.x))
+        dropZ = Math.max(-9, Math.min(9, intersection.z))
+      } else {
+        dropX = (Math.random() - 0.5) * 4
+        dropZ = (Math.random() - 0.5) * 4
       }
+      const snappedPos = snapPositionToGrid([dropX, 1, dropZ], gridSnap)
+      // Final safety: if snap produced NaN (gridSnap 0 edge), use unclamped
+      const finalPos = snappedPos.every((v) => Number.isFinite(v)) ? snappedPos : [dropX, 1, dropZ]
+      addShape(shapeType, finalPos);
     };
 
     canvas.addEventListener('dragover', handleDragOver);

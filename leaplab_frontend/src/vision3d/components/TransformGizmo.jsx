@@ -300,6 +300,7 @@ const TransformGizmo = () => {
       const onUp = () => {
         window.removeEventListener('pointermove', onMove);
         window.removeEventListener('pointerup', onUp);
+        const d = dragRef.current;
         dragRef.current.active = false;
         setDragInfo(null);
         window.__gizmoActive = false;

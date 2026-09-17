@@ -22,9 +22,14 @@ export const ShapeRenderer = ({ shape }) => {
   const isEdited = editMode !== 'object' && editShapeId === shape.id;
 
   const geometry = useMemo(() => {
-    if (shape._csgGeometry) return shape._csgGeometry;
-    if (shape._customGeometry) return shape._customGeometry;
-    return createGeometry(shape);
+    // Use createGeometry so serialized (_csgGeometry as Record) is deserialized and cloned safely
+    // Directly returning shape._csgGeometry when it's a Record causes "dispose is not a function" and missing bounding volumes
+    const geo = createGeometry(shape);
+    // Ensure frustum culling has required bounds (fixes "Cannot read properties of undefined (reading 'center')" after undo/CSG)
+    if (geo && !geo.boundingSphere) geo.computeBoundingSphere();
+    if (geo && !geo.boundingBox) geo.computeBoundingBox();
+    if (geo && geo.attributes && !geo.attributes.normal) geo.computeVertexNormals();
+    return geo;
   }, [
     shape._customGeometry, shape._csgGeometry,
     shape.type, shape.width, shape.height, shape.depth, shape.cornerRadius,
@@ -60,7 +65,15 @@ export const ShapeRenderer = ({ shape }) => {
     });
   }, [shape.color, shape.isHole, shape.metalness, shape.roughness, shape.opacity, shape.type, shape._csgGeometry]);
 
-  useEffect(() => () => { geometry.dispose(); material.dispose(); }, [geometry, material]);
+  useEffect(() => {
+    return () => {
+      // Only dispose if it's a real BufferGeometry with dispose (cloned geo from createGeometry)
+      if (geometry && typeof geometry.dispose === 'function') {
+        geometry.dispose();
+      }
+      material.dispose();
+    };
+  }, [geometry, material]);
 
   if (!shape.visible) return null;
 

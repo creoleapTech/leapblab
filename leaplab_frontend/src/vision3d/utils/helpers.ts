@@ -195,19 +195,26 @@ export function getShapesCenter(
 }
 
 export function snapToGrid(value: number, gridSize: number): number {
+  if (!gridSize || gridSize === 0) return value
   const result = Math.round(value / gridSize) * gridSize
   if (Math.abs(result - value) > 0.001) {
     debug('snapToGrid:', value.toFixed(3), '->', result.toFixed(3), `(grid: ${gridSize})`)
   }
+  // Guard against NaN/Infinity from bad gridSize
+  if (!Number.isFinite(result)) return value
   return result
 }
 
 export function snapPositionToGrid(position: number[], gridSize: number): number[] {
-  return [
+  if (!gridSize || gridSize === 0) return [...position]
+  const snapped = [
     snapToGrid(position[0], gridSize),
     snapToGrid(position[1], gridSize),
     snapToGrid(position[2], gridSize),
   ]
+  // If any became non-finite, return original
+  if (snapped.some((v) => !Number.isFinite(v))) return [...position]
+  return snapped
 }
 
 export function validateShape(shape: Record<string, unknown>): string[] {

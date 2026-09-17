@@ -16,18 +16,19 @@ interface ShapeData {
   id: string
   type: string
   name: string
-  position: [number, number, number]
-  rotation?: [number, number, number]
-  scale?: [number, number, number]
+  position: [number, number, number] | number[]
+  rotation?: [number, number, number] | number[]
+  scale?: [number, number, number] | number[]
   color?: string
   metalness?: number
   roughness?: number
   opacity?: number
   visible: boolean
-  locked: boolean
+  locked?: boolean
   isHole?: boolean
   parentId?: string
-  _csgGeometry?: THREE.BufferGeometry
+  _csgGeometry?: THREE.BufferGeometry | Record<string, unknown>
+  _customGeometry?: THREE.BufferGeometry | Record<string, unknown>
   [key: string]: unknown
 }
 
@@ -45,16 +46,15 @@ function createBrush(shape: ShapeData): Brush {
   const geometry = buildGeometry(shape)
   const matrix = new THREE.Matrix4()
 
+  const pos = shape.position as number[]
+  const scl = (shape.scale as number[] | undefined) || [1, 1, 1]
+  const rot = (shape.rotation as number[] | undefined) || [0, 0, 0]
   matrix.compose(
-    new THREE.Vector3(...shape.position),
+    new THREE.Vector3(pos[0], pos[1], pos[2]),
     new THREE.Quaternion().setFromEuler(
-      new THREE.Euler(
-        shape.rotation?.[0] || 0,
-        shape.rotation?.[1] || 0,
-        shape.rotation?.[2] || 0
-      )
+      new THREE.Euler(rot[0] || 0, rot[1] || 0, rot[2] || 0)
     ),
-    new THREE.Vector3(...(shape.scale || [1, 1, 1]))
+    new THREE.Vector3(scl[0], scl[1], scl[2])
   )
 
   geometry.applyMatrix4(matrix)
@@ -99,11 +99,21 @@ export function performCSG(
     }
 
     const finalGeometry = result.geometry.toNonIndexed()
+    // Validate: three-bvh-csg can silently return empty geometry for disjoint torus/box or non-manifold cases – treat as failure so caller keeps original structure instead of "deleting" it
+    const posCount = (finalGeometry.attributes.position as THREE.BufferAttribute | undefined)?.count ?? 0
+    if (posCount === 0) {
+      error('CSG: result has 0 vertices – likely disjoint or non-manifold (e.g., torus), treating as failure')
+      return null
+    }
     finalGeometry.computeVertexNormals()
     finalGeometry.computeBoundingBox()
     finalGeometry.computeBoundingSphere()
 
     const bbox = finalGeometry.boundingBox!
+    if (!bbox) {
+      error('CSG: no bounding box on result')
+      return null
+    }
     const center = new THREE.Vector3()
     bbox.getCenter(center)
 
