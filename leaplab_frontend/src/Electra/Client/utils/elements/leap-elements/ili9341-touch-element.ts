@@ -53,6 +53,7 @@ export class ILI9341TouchElement extends LitElement {
   private _canvas: HTMLCanvasElement | null | undefined = undefined;
   private _ctx: CanvasCtx = null;
   private _isTouched = false;
+  private _canvasCTM: DOMMatrix | null = null;
 
   // 11-pin layout: 9 display SPI + 2 touch I2C (2.54mm pitch)
   readonly pinInfo: ElementPin[] = [
@@ -139,6 +140,23 @@ export class ILI9341TouchElement extends LitElement {
     this._ctx    = this._canvas?.getContext('2d') ?? null;
   }
 
+  private _updateCanvasCTM(): void {
+    if (!this._canvas) {
+      this._canvasCTM = null;
+      return;
+    }
+    try {
+      // Use getScreenCTM for accurate mapping that accounts for wrapper scale(0.75) and rotate()
+      const ctm = (this._canvas as unknown as SVGGraphicsElement).getScreenCTM?.() || (this._canvas as any).getScreenCTM?.();
+      if (ctm) {
+        this._canvasCTM = (ctm as unknown as DOMMatrix).inverse();
+        return;
+      }
+    } catch {}
+    // Fallback: will use getBoundingClientRect in _handlePointerEvent
+    this._canvasCTM = null;
+  }
+
   override firstUpdated(): void {
     this._initContext();
     this.redraw();
@@ -166,6 +184,7 @@ export class ILI9341TouchElement extends LitElement {
     e.preventDefault();
     e.stopPropagation();
     this._isTouched = true;
+    this._updateCanvasCTM();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     this._handlePointerEvent(e, true);
   }
@@ -197,13 +216,47 @@ export class ILI9341TouchElement extends LitElement {
       return;
     }
 
-    const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
-    const offsetX = e.clientX - rect.left;
-    const offsetY = e.clientY - rect.top;
+    // Refresh CTM on every move so pan/zoom/rotate during touch stays accurate
+    if (isTouched) this._updateCanvasCTM();
+
+    let offsetX: number, offsetY: number, w: number, h: number;
+    if (this._canvasCTM) {
+      try {
+        const pt = new DOMPoint(e.clientX, e.clientY).matrixTransform(this._canvasCTM as unknown as DOMMatrix);
+        offsetX = pt.x;
+        offsetY = pt.y;
+        w = SCREEN_W;
+        h = SCREEN_H;
+      } catch {
+        const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
+        offsetX = e.clientX - rect.left;
+        offsetY = e.clientY - rect.top;
+        w = rect.width;
+        h = rect.height;
+      }
+    } else {
+      const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
+      offsetX = e.clientX - rect.left;
+      offsetY = e.clientY - rect.top;
+      w = rect.width;
+      h = rect.height;
+    }
 
     // Scale coordinates — FT6206 origin is at bottom-right (Wokwi convention)
-    let nativeX = (offsetX / rect.width) * NATIVE_W;
-    let nativeY = (offsetY / rect.height) * NATIVE_H;
+    let nativeX = (offsetX / w) * NATIVE_W;
+    let nativeY = (offsetY / h) * NATIVE_H;
+
+    // Account for display flip/rotation so touch matches rendered image
+    if (this.flipHorizontal) nativeX = NATIVE_W - 1 - nativeX;
+    if (this.flipVertical) nativeY = NATIVE_H - 1 - nativeY;
+    const rot = ((this.rotation % 360) + 360) % 360;
+    if (rot === 90) {
+      const tmp = nativeX; nativeX = nativeY; nativeY = NATIVE_W - 1 - tmp;
+    } else if (rot === 180) {
+      nativeX = NATIVE_W - 1 - nativeX; nativeY = NATIVE_H - 1 - nativeY;
+    } else if (rot === 270) {
+      const tmp = nativeX; nativeX = NATIVE_H - 1 - nativeY; nativeY = tmp;
+    }
 
     nativeX = Math.max(0, Math.min(NATIVE_W - 1, Math.floor(nativeX)));
     nativeY = Math.max(0, Math.min(NATIVE_H - 1, Math.floor(nativeY)));

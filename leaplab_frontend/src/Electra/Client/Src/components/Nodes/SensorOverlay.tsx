@@ -72,13 +72,14 @@ const SliderRow: React.FC<SliderRowProps> = ({ label, unit, min, max, step = 1, 
   const labelColor = isLightTheme ? '#475569' : '#94a3b8';
 
   const sendUpdate = (val: number) => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
     lastValueRef.current = val;
-    onChange(val);
-    lastUpdatedRef.current = Date.now();
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    // Debounce store update to 60ms to avoid re-render flicker while dragging slider
+    timeoutRef.current = setTimeout(() => {
+      onChange(val);
+      lastUpdatedRef.current = Date.now();
+      timeoutRef.current = null;
+    }, 60);
   };
 
   // Flush any pending value immediately (e.g. when the pointer is released)
@@ -87,8 +88,11 @@ const SliderRow: React.FC<SliderRowProps> = ({ label, unit, min, max, step = 1, 
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
-    onChange(lastValueRef.current);
-    lastUpdatedRef.current = Date.now();
+    // Only flush if value actually changed since last committed
+    if (lastValueRef.current !== value) {
+      onChange(lastValueRef.current);
+      lastUpdatedRef.current = Date.now();
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -185,7 +189,11 @@ const CompactCard: React.FC<CompactCardProps> = ({ borderColor, children }) => {
       onPointerUp={e => e.stopPropagation()}
       onMouseDown={e => e.stopPropagation()}
       onClick={e => e.stopPropagation()}
-      className={`nodrag nopan w-[250px] backdrop-blur-md rounded-lg py-1.5 px-3.5 z-[9999] flex flex-col gap-1 select-none pointer-events-auto ${
+      onMouseEnter={e => e.stopPropagation()}
+      onMouseLeave={e => e.stopPropagation()}
+      onPointerEnter={e => e.stopPropagation()}
+      onPointerLeave={e => e.stopPropagation()}
+      className={`nodrag nopan w-[250px] backdrop-blur-md rounded-lg py-1.5 px-3.5 z-[9999] flex flex-col gap-1 select-none pointer-events-auto cursor-default ${
         isLightTheme ? 'bg-white/92 shadow-sm' : 'bg-slate-900/92 shadow-xl'
       }`}
       style={{
@@ -195,6 +203,7 @@ const CompactCard: React.FC<CompactCardProps> = ({ borderColor, children }) => {
         transform: `translate(-50%, -100%) rotate(${-rotation}deg)`,
         transformOrigin: 'bottom center',
         border: `1px solid ${defaultBorder}`,
+        cursor: 'default',
       }}
     >
       {children}
