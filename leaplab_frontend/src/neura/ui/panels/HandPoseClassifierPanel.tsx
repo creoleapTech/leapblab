@@ -615,14 +615,12 @@ export default function HandPoseClassifierPanel({ mode }: HandPoseClassifierPane
         }
     }
     const handleViewportMouseUp = () => { setIsPanning(false); panStartRef.current = null; if (draggingId) setDraggingId(null) }
+    // Wheel handled via native passive:false listener below; React handler only does zoom to avoid passive warning
     const handleWheel = (e: React.WheelEvent) => {
-        // Context-aware: if wheel is over dataset panel, let it scroll; don't zoom canvas
         if (isWheelOverDatasetPanel(e.target)) {
             e.stopPropagation()
             return
         }
-        // Pinch on trackpad fires ctrlKey+wheel; we hijack it for canvas zoom
-        if (e.cancelable) e.preventDefault()
         e.stopPropagation()
         const isPinch = e.ctrlKey || (e as any).ctrlKey
         const delta = -e.deltaY * (isPinch ? 0.008 : 0.0012)
@@ -648,7 +646,6 @@ export default function HandPoseClassifierPanel({ mode }: HandPoseClassifierPane
     }
     const handleTouchMove = (e: React.TouchEvent) => {
         if (e.touches.length === 2 && pinchRef.current) {
-            if (e.cancelable) e.preventDefault()
             const dx = e.touches[0].clientX - e.touches[1].clientX
             const dy = e.touches[0].clientY - e.touches[1].clientY
             const dist = Math.hypot(dx, dy)
@@ -718,12 +715,12 @@ export default function HandPoseClassifierPanel({ mode }: HandPoseClassifierPane
                     return
                 }
             }
-            if (e.cancelable && (e.ctrlKey || Math.abs(e.deltaY) > 0)) {
-                e.preventDefault()
-            }
+            if (e.cancelable) e.preventDefault()
         }
+        const onTouchMoveNative = (e: TouchEvent) => { if (e.touches.length===2 && e.cancelable) e.preventDefault() }
         el.addEventListener('wheel', onWheelNative, { passive: false })
-        return () => el.removeEventListener('wheel', onWheelNative)
+        el.addEventListener('touchmove', onTouchMoveNative, { passive: false })
+        return () => { el.removeEventListener('wheel', onWheelNative); el.removeEventListener('touchmove', onTouchMoveNative) }
     }, [])
 
     const lastClassId = mode.project?.classes[mode.project.classes.length - 1]?.id
