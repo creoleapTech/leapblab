@@ -277,10 +277,11 @@ export default function ForgeElectra({
   }, [code, saveToHistory]);
 
   const loadProjectData = useCallback((data: any, rProjectName?: string | null, rProjectPath?: string | null) => {
-    const loadedNodes = (data.nodes || data.circuit?.nodes || []) as Node[];
-    const loadedEdges = (data.edges || data.circuit?.edges || []) as Edge[];
-    const loadedCode = data.code || '';
-    const loadedLibs = data.libraries || [];
+    const loadedNodes = (data.nodes || data.circuit?.nodes || data.payload?.nodes || []) as Node[];
+    const loadedEdges = (data.edges || data.circuit?.edges || data.payload?.edges || []) as Edge[];
+    const loadedCode = data.code ?? data.payload?.code ?? '';
+    const loadedLibs = data.libraries || data.payload?.libraries || [];
+    const loadedBoard = data.board || data.metadata?.board || data.payload?.board || data.circuit?.board;
 
     console.log(`[FORGE ELECTRA] loadProjectData: ${loadedNodes.length} nodes, ${loadedEdges.length} edges, code=${loadedCode.length} chars, board=${data.board || '?'}`);
     if (loadedNodes.length === 0 && loadedCode) {
@@ -293,8 +294,15 @@ export default function ForgeElectra({
     setImportedLibraries(loadedLibs);
     autoInstallLibraries(loadedLibs);
 
-    if (data.board === 'arduino-uno' || data.board === 'esp32-c3') {
-      setBoard(data.board);
+    if (loadedBoard === 'arduino-uno' || loadedBoard === 'esp32-c3') {
+      setBoard(loadedBoard);
+    } else if (loadedNodes.length > 0) {
+      // Fallback: detect board from nodes if board field missing (old saves)
+      const boardNode = (loadedNodes as any[]).find((n: any) => n?.data?.type === 'arduino-uno' || n?.data?.type === 'esp32-c3');
+      if (boardNode) {
+        const t = boardNode.data.type as string;
+        if (t === 'arduino-uno' || t === 'esp32-c3') setBoard(t);
+      }
     }
 
     if (rProjectPath) {

@@ -1166,7 +1166,24 @@ export default function MyProjectsDashboard({ onOpenProject }: MyProjectsDashboa
                 ? fullProject.fileUrl
                 : `${LMS_API_BASE}${fullProject.fileUrl}`;
 
-            const content = await fetchCloudProjectContent(fileUrl);
+            let content = await fetchCloudProjectContent(fileUrl);
+            // Enrich Electra content: ensure board/nodes/edges/code are at top level even if saved under payload/circuit/metadata (fixes empty canvas for esp32/arduino where board was only in metadata)
+            try {
+              let metaBoard: string | undefined;
+              if ((fullProject as any).metadata) {
+                const rawMeta = (fullProject as any).metadata;
+                const metaObj = typeof rawMeta === 'string' ? JSON.parse(rawMeta) : rawMeta;
+                metaBoard = metaObj?.board;
+              }
+              content = {
+                ...content,
+                board: (content as any).board || (content as any).metadata?.board || metaBoard || (content as any).payload?.board || (content as any).circuit?.board,
+                nodes: (content as any).nodes || (content as any).circuit?.nodes || (content as any).payload?.nodes || (content as any).circuit?.nodes || [],
+                edges: (content as any).edges || (content as any).circuit?.edges || (content as any).payload?.edges || [],
+                code: (content as any).code ?? (content as any).payload?.code ?? '',
+                libraries: (content as any).libraries || (content as any).payload?.libraries || [],
+              } as any;
+            } catch {}
 
             // Curriculum protection: if this project is not owned by current user, treat as read-only curriculum
             // Student edits must be saved as a separate copy, not overwrite the LMS master.

@@ -19,10 +19,21 @@ interface ElectraWorkspaceProps {
 
 function detectBoardFromPendingProject(pendingProject: any): 'arduino-uno' | 'esp32-c3' | null {
     if (pendingProject?.mode === 'electra') {
-        const board = pendingProject.data?.board;
+        const d = pendingProject.data || {};
+        const board = d.board || d.metadata?.board || d.payload?.board || d.circuit?.board;
         if (board === 'arduino-uno' || board === 'esp32-c3') {
             console.log('[ELECTRA WORKSPACE] Board auto-detected from pending project:', board);
             return board;
+        }
+        // Fallback: detect board node inside nodes
+        const nodes = d.nodes || d.circuit?.nodes || d.payload?.nodes || [];
+        if (Array.isArray(nodes)) {
+            const boardNode = (nodes as any[]).find((n: any) => n?.data?.type === 'arduino-uno' || n?.data?.type === 'esp32-c3' || n?.type === 'arduino-uno' || n?.type === 'esp32-c3');
+            const t = (boardNode?.data?.type || boardNode?.type) as string | undefined;
+            if (t === 'arduino-uno' || t === 'esp32-c3') {
+                console.log('[ELECTRA WORKSPACE] Board auto-detected from nodes:', t);
+                return t as 'arduino-uno' | 'esp32-c3';
+            }
         }
     }
     return null;
