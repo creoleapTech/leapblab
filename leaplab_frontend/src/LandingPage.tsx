@@ -77,11 +77,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
       if (highlightCards) {
         stateClasses = 'shadow-[0_0_0_2px_rgba(99,102,241,0.35),0_8px_20px_rgba(99,102,241,0.08)]';
       } else {
-        stateClasses = 'shadow-sm';
+        stateClasses = 'shadow-[0_2px_10px_rgba(15,23,42,0.06),0_8px_24px_rgba(15,23,42,0.04)]';
       }
     }
 
-    return `group relative flex flex-1 flex-col rounded-[20px] border border-slate-100/80 p-4 cursor-pointer overflow-hidden shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:border-slate-200/80 max-[1440px]:p-3.5 max-[1440px]:rounded-[18px] max-[1366px]:p-3 max-[1366px]:rounded-[16px] max-[768px]:p-3 max-[768px]:rounded-[14px] ${themeClasses} ${stateClasses}`;
+    return `group relative flex flex-1 flex-col rounded-[20px] border-2 p-4 cursor-pointer overflow-hidden transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_12px_32px_rgba(15,23,42,0.12),0_4px_12px_rgba(15,23,42,0.08)] max-[1440px]:p-3.5 max-[1440px]:rounded-[18px] max-[1366px]:p-3 max-[1366px]:rounded-[16px] max-[768px]:p-3 max-[768px]:rounded-[14px] ${themeClasses} ${stateClasses}`;
   };
 
   /* ── Cleanup scan on unmount ── */
@@ -400,100 +400,108 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelect }) => {
               <div className="cards-wrap w-full mx-auto py-4 px-6 pb-4 shrink-0 flex items-start justify-center max-[1440px]:px-5 max-[1366px]:py-3 max-[1366px]:px-4 max-[1366px]:pb-3 max-[768px]:py-2 max-[768px]:px-4 max-[768px]:pb-1">
                 <div className={`grid w-full max-w-[1600px] grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8 max-[1366px]:gap-2 min-h-0 ${highlightCards ? 'highlight-active' : ''} ${scanIndex >= 0 ? 'is-scanning' : ''}`}>
 
-                  {/* 1 IGNITE — orange/amber */}
-                  <div className={getCardClasses(0, 'bg-gradient-to-br from-orange-100 via-amber-50 to-orange-100')} onClick={() => handleCardClick(() => onSelect('junior'))}>
-                    <div className="flex flex-1 flex-col">
+                  {/* 1 IGNITE — softer saturation */}
+                  <div className={getCardClasses(0, 'bg-gradient-to-br from-orange-100 via-amber-50 to-orange-200 border-orange-200 shadow-[0_3px_14px_rgba(251,146,60,0.12)] hover:border-orange-300 hover:shadow-[0_8px_22px_rgba(251,146,60,0.18)]')} onClick={() => handleCardClick(() => onSelect('junior'))}>
+                    <div className="absolute inset-0 bg-gradient-to-br from-orange-500/[0.03] via-transparent to-amber-500/[0.04] pointer-events-none" />
+                    <div className="flex flex-1 flex-col relative">
                       <div className="mb-4 flex h-24 items-center justify-center max-[1366px]:mb-2.5 max-[1366px]:h-[68px] max-[768px]:mb-3 max-[768px]:h-16">
-                        <img src="assets/ignite_icon.png" alt="Ignite" className="h-20 w-20 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110 max-[1366px]:h-14 max-[1366px]:w-14 max-[768px]:h-14 max-[768px]:w-14" />
+                        <img src="assets/ignite_icon.png" alt="Ignite" className="h-[74px] w-[74px] max-[1366px]:h-[58px] max-[1366px]:w-[58px] object-contain drop-shadow-[0_3px_8px_rgba(251,146,60,0.18)] transition-transform duration-300 group-hover:scale-110" />
                       </div>
-                      <h3 className="text-[20px] font-extrabold tracking-tight text-orange-700 uppercase max-[1366px]:text-[15px]">IGNITE</h3>
-                      <p className="mt-1 max-w-[170px] text-[14px] font-medium leading-5 text-slate-600 max-[1366px]:text-[12px] max-[1366px]:leading-4">Learn coding<br/>with fun visual blocks</p>
+                      <h3 className="text-[20px] font-black tracking-tight text-orange-700 uppercase max-[1366px]:text-[15px]">IGNITE</h3>
+                      <p className="mt-1 max-w-[170px] text-[13.5px] font-semibold leading-[18px] text-slate-600 max-[1366px]:text-[11.5px] max-[1366px]:leading-[15px]">Learn coding<br/>with fun visual blocks</p>
                     </div>
-                    <div className="absolute bottom-0 left-0 h-1 w-0 bg-orange-500 transition-all duration-300 group-hover:w-full"></div>
+                    <div className="absolute bottom-0 left-0 h-[3px] w-0 bg-gradient-to-r from-orange-500 via-orange-400 to-amber-400 transition-all duration-300 group-hover:w-full rounded-b-[18px]"></div>
                   </div>
 
-                  {/* 2 EMBED — cyan/blue */}
-                  <div className={getCardClasses(1, 'bg-gradient-to-br from-cyan-100 via-sky-50 to-blue-100')} onClick={() => handleCardClick(() => onSelect('intermediate'))}>
-                    <div className="flex flex-1 flex-col">
+                  {/* 2 EMBED — softer */}
+                  <div className={getCardClasses(1, 'bg-gradient-to-br from-cyan-100 via-sky-50 to-blue-100 border-cyan-200 shadow-[0_3px_14px_rgba(6,182,212,0.10)] hover:border-cyan-300 hover:shadow-[0_8px_22px_rgba(6,182,212,0.15)]')} onClick={() => handleCardClick(() => onSelect('intermediate'))}>
+                    <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/[0.03] via-transparent to-blue-500/[0.04] pointer-events-none" />
+                    <div className="flex flex-1 flex-col relative">
                       <div className="mb-4 flex h-24 items-center justify-center max-[1366px]:mb-2.5 max-[1366px]:h-[68px] max-[768px]:mb-3 max-[768px]:h-16">
-                        <img src="assets/arduino_icon.png" alt="Embed" className="h-20 w-20 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110 max-[1366px]:h-14 max-[1366px]:w-14 max-[768px]:h-14 max-[768px]:w-14" />
+                        <img src="assets/arduino_icon.png" alt="Embed" className="h-[74px] w-[74px] max-[1366px]:h-[58px] max-[1366px]:w-[58px] object-contain drop-shadow-[0_3px_8px_rgba(6,182,212,0.16)] transition-transform duration-300 group-hover:scale-110" />
                       </div>
-                      <h3 className="text-[20px] font-extrabold tracking-tight text-cyan-600 uppercase max-[1366px]:text-[15px]">EMBED</h3>
-                      <p className="mt-1 max-w-[170px] text-[14px] font-medium leading-5 text-slate-600 max-[1366px]:text-[12px] max-[1366px]:leading-4">Build with<br/>Arduino, sensors & IoT</p>
+                      <h3 className="text-[20px] font-black tracking-tight text-cyan-700 uppercase max-[1366px]:text-[15px]">EMBED</h3>
+                      <p className="mt-1 max-w-[170px] text-[13.5px] font-semibold leading-[18px] text-slate-600 max-[1366px]:text-[11.5px] max-[1366px]:leading-[15px]">Build with<br/>Arduino, sensors & IoT</p>
                     </div>
-                    <div className="absolute bottom-0 left-0 h-1 w-0 bg-cyan-500 transition-all duration-300 group-hover:w-full"></div>
+                    <div className="absolute bottom-0 left-0 h-[3px] w-0 bg-gradient-to-r from-cyan-500 via-sky-400 to-blue-500 transition-all duration-300 group-hover:w-full rounded-b-[18px]"></div>
                   </div>
 
-                  {/* 3 LOGIX — blue/indigo */}
-                  <div className={getCardClasses(2, 'bg-gradient-to-br from-blue-100 via-indigo-50 to-blue-100')} onClick={() => handleCardClick(() => onSelect('python'))}>
-                    <div className="flex flex-1 flex-col">
+                  {/* 3 LOGIX — softer */}
+                  <div className={getCardClasses(2, 'bg-gradient-to-br from-blue-100 via-indigo-50 to-blue-200 border-blue-200 shadow-[0_3px_14px_rgba(59,130,246,0.10)] hover:border-blue-300 hover:shadow-[0_8px_22px_rgba(59,130,246,0.15)]')} onClick={() => handleCardClick(() => onSelect('python'))}>
+                    <div className="absolute inset-0 bg-gradient-to-br from-blue-500/[0.03] via-transparent to-indigo-500/[0.04] pointer-events-none" />
+                    <div className="flex flex-1 flex-col relative">
                       <div className="mb-4 flex h-24 items-center justify-center max-[1366px]:mb-2.5 max-[1366px]:h-[68px] max-[768px]:mb-3 max-[768px]:h-16">
-                        <img src="assets/python_icon.png" alt="Logix" className="h-20 w-20 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110 max-[1366px]:h-14 max-[1366px]:w-14 max-[768px]:h-14 max-[768px]:w-14" />
+                        <img src="assets/python_icon.png" alt="Logix" className="h-[74px] w-[74px] max-[1366px]:h-[58px] max-[1366px]:w-[58px] object-contain drop-shadow-[0_3px_8px_rgba(59,130,246,0.16)] transition-transform duration-300 group-hover:scale-110" />
                       </div>
-                      <h3 className="text-[20px] font-extrabold tracking-tight text-blue-600 uppercase max-[1366px]:text-[15px]">LOGIX</h3>
-                      <p className="mt-1 max-w-[170px] text-[14px] font-medium leading-5 text-slate-600 max-[1366px]:text-[12px] max-[1366px]:leading-4">Learn Python &<br/>programming logic</p>
+                      <h3 className="text-[20px] font-black tracking-tight text-blue-700 uppercase max-[1366px]:text-[15px]">LOGIX</h3>
+                      <p className="mt-1 max-w-[170px] text-[13.5px] font-semibold leading-[18px] text-slate-600 max-[1366px]:text-[11.5px] max-[1366px]:leading-[15px]">Learn Python &<br/>programming logic</p>
                     </div>
-                    <div className="absolute bottom-0 left-0 h-1 w-0 bg-blue-500 transition-all duration-300 group-hover:w-full"></div>
+                    <div className="absolute bottom-0 left-0 h-[3px] w-0 bg-gradient-to-r from-blue-600 via-blue-500 to-indigo-500 transition-all duration-300 group-hover:w-full rounded-b-[18px]"></div>
                   </div>
 
-                  {/* 4 NEURA — violet/purple */}
-                  <div className={getCardClasses(3, 'bg-gradient-to-br from-violet-100 via-purple-50 to-violet-100')} onClick={() => handleCardClick(() => onSelect('neura'))}>
-                    <div className="flex flex-1 flex-col">
+                  {/* 4 NEURA — softer */}
+                  <div className={getCardClasses(3, 'bg-gradient-to-br from-violet-100 via-purple-50 to-fuchsia-100 border-violet-200 shadow-[0_3px_14px_rgba(139,92,246,0.10)] hover:border-violet-300 hover:shadow-[0_8px_22px_rgba(139,92,246,0.15)]')} onClick={() => handleCardClick(() => onSelect('neura'))}>
+                    <div className="absolute inset-0 bg-gradient-to-br from-violet-500/[0.03] via-transparent to-fuchsia-500/[0.04] pointer-events-none" />
+                    <div className="flex flex-1 flex-col relative">
                       <div className="mb-4 flex h-24 items-center justify-center max-[1366px]:mb-2.5 max-[1366px]:h-[68px] max-[768px]:mb-3 max-[768px]:h-16">
-                        <img src="assets/ml_brain_icon.png" alt="Neura" className="h-20 w-20 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110 max-[1366px]:h-14 max-[1366px]:w-14 max-[768px]:h-14 max-[768px]:w-14" />
+                        <img src="assets/ml_brain_icon.png" alt="Neura" className="h-[74px] w-[74px] max-[1366px]:h-[58px] max-[1366px]:w-[58px] object-contain drop-shadow-[0_3px_8px_rgba(139,92,246,0.16)] transition-transform duration-300 group-hover:scale-110" />
                       </div>
-                      <h3 className="text-[20px] font-extrabold tracking-tight text-violet-600 uppercase max-[1366px]:text-[15px]">NEURA</h3>
-                      <p className="mt-1 max-w-[170px] text-[14px] font-medium leading-5 text-slate-600 max-[1366px]:text-[12px] max-[1366px]:leading-4">Explore AI, logic<br/>& intelligent systems</p>
+                      <h3 className="text-[20px] font-black tracking-tight text-violet-700 uppercase max-[1366px]:text-[15px]">NEURA</h3>
+                      <p className="mt-1 max-w-[170px] text-[13.5px] font-semibold leading-[18px] text-slate-600 max-[1366px]:text-[11.5px] max-[1366px]:leading-[15px]">Explore AI, logic<br/>& intelligent systems</p>
                     </div>
-                    <div className="absolute bottom-0 left-0 h-1 w-0 bg-violet-500 transition-all duration-300 group-hover:w-full"></div>
+                    <div className="absolute bottom-0 left-0 h-[3px] w-0 bg-gradient-to-r from-violet-600 via-purple-500 to-fuchsia-500 transition-all duration-300 group-hover:w-full rounded-b-[18px]"></div>
                   </div>
 
-                  {/* 5 ELECTRA — green/emerald */}
-                  <div className={getCardClasses(4, 'bg-gradient-to-br from-green-100 via-emerald-50 to-green-100')} onClick={() => handleCardClick(() => onSelect('electra'))}>
-                    <div className="flex flex-1 flex-col">
+                  {/* 5 ELECTRA — softer */}
+                  <div className={getCardClasses(4, 'bg-gradient-to-br from-green-100 via-emerald-50 to-green-200 border-green-200 shadow-[0_3px_14px_rgba(34,197,94,0.10)] hover:border-green-300 hover:shadow-[0_8px_22px_rgba(34,197,94,0.15)]')} onClick={() => handleCardClick(() => onSelect('electra'))}>
+                    <div className="absolute inset-0 bg-gradient-to-br from-green-500/[0.03] via-transparent to-emerald-500/[0.04] pointer-events-none" />
+                    <div className="flex flex-1 flex-col relative">
                       <div className="mb-4 flex h-24 items-center justify-center max-[1366px]:mb-2.5 max-[1366px]:h-[68px] max-[768px]:mb-3 max-[768px]:h-16">
-                        <img src="assets/creocad_icon.png" alt="Electra" className="h-20 w-20 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110 max-[1366px]:h-14 max-[1366px]:w-14 max-[768px]:h-14 max-[768px]:w-14" />
+                        <img src="assets/creocad_icon.png" alt="Electra" className="h-[74px] w-[74px] max-[1366px]:h-[58px] max-[1366px]:w-[58px] object-contain drop-shadow-[0_3px_8px_rgba(34,197,94,0.16)] transition-transform duration-300 group-hover:scale-110" />
                       </div>
-                      <h3 className="text-[20px] font-extrabold tracking-tight text-green-600 uppercase max-[1366px]:text-[15px]">ELECTRA</h3>
-                      <p className="mt-1 max-w-[170px] text-[14px] font-medium leading-5 text-slate-600 max-[1366px]:text-[12px] max-[1366px]:leading-4">Design circuits &<br/>simulate electronics</p>
+                      <h3 className="text-[20px] font-black tracking-tight text-green-700 uppercase max-[1366px]:text-[15px]">ELECTRA</h3>
+                      <p className="mt-1 max-w-[170px] text-[13.5px] font-semibold leading-[18px] text-slate-600 max-[1366px]:text-[11.5px] max-[1366px]:leading-[15px]">Design circuits &<br/>simulate electronics</p>
                     </div>
-                    <div className="absolute bottom-0 left-0 h-1 w-0 bg-green-500 transition-all duration-300 group-hover:w-full"></div>
+                    <div className="absolute bottom-0 left-0 h-[3px] w-0 bg-gradient-to-r from-green-600 via-green-500 to-emerald-500 transition-all duration-300 group-hover:w-full rounded-b-[18px]"></div>
                   </div>
 
-                  {/* 6 VISION3D — sky/cyan */}
-                  <div className={getCardClasses(5, 'bg-gradient-to-br from-sky-100 via-cyan-50 to-sky-100')} onClick={() => handleCardClick(() => onSelect('vision3d'))}>
-                    <div className="flex flex-1 flex-col">
+                  {/* 6 VISION3D — softer */}
+                  <div className={getCardClasses(5, 'bg-gradient-to-br from-sky-100 via-blue-50 to-cyan-100 border-sky-200 shadow-[0_3px_14px_rgba(14,165,233,0.10)] hover:border-sky-300 hover:shadow-[0_8px_22px_rgba(14,165,233,0.15)]')} onClick={() => handleCardClick(() => onSelect('vision3d'))}>
+                    <div className="absolute inset-0 bg-gradient-to-br from-sky-500/[0.03] via-transparent to-cyan-500/[0.04] pointer-events-none" />
+                    <div className="flex flex-1 flex-col relative">
                       <div className="mb-4 flex h-24 items-center justify-center max-[1366px]:mb-2.5 max-[1366px]:h-[68px] max-[768px]:mb-3 max-[768px]:h-16">
-                        <img src="assets/vision3d_icon.png" alt="Vision3D" className="h-20 w-20 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110 max-[1366px]:h-14 max-[1366px]:w-14 max-[768px]:h-14 max-[768px]:w-14" />
+                        <img src="assets/vision3d_icon.png" alt="Vision3D" className="h-[74px] w-[74px] max-[1366px]:h-[58px] max-[1366px]:w-[58px] object-contain drop-shadow-[0_3px_8px_rgba(14,165,233,0.16)] transition-transform duration-300 group-hover:scale-110" />
                       </div>
-                      <h3 className="text-[20px] font-extrabold tracking-tight text-sky-600 uppercase max-[1366px]:text-[15px]">VISION3D</h3>
-                      <p className="mt-1 max-w-[170px] text-[14px] font-medium leading-5 text-slate-600 max-[1366px]:text-[12px] max-[1366px]:leading-4">Create 3D models<br/>& digital designs</p>
+                      <h3 className="text-[20px] font-black tracking-tight text-sky-700 uppercase max-[1366px]:text-[15px]">VISION3D</h3>
+                      <p className="mt-1 max-w-[170px] text-[13.5px] font-semibold leading-[18px] text-slate-600 max-[1366px]:text-[11.5px] max-[1366px]:leading-[15px]">Create 3D models<br/>& digital designs</p>
                     </div>
-                    <div className="absolute bottom-0 left-0 h-1 w-0 bg-sky-500 transition-all duration-300 group-hover:w-full"></div>
+                    <div className="absolute bottom-0 left-0 h-[3px] w-0 bg-gradient-to-r from-sky-500 via-blue-400 to-cyan-500 transition-all duration-300 group-hover:w-full rounded-b-[18px]"></div>
                   </div>
 
-                  {/* 7 CREOVA — pink/rose */}
-                  <div className={getCardClasses(6, 'bg-gradient-to-br from-pink-100 via-rose-50 to-pink-100')} onClick={() => handleCardClick(() => onSelect('creova'))}>
-                    <div className="flex flex-1 flex-col">
+                  {/* 7 CREOVA — softer */}
+                  <div className={getCardClasses(6, 'bg-gradient-to-br from-pink-100 via-rose-50 to-pink-200 border-pink-200 shadow-[0_3px_14px_rgba(236,72,153,0.10)] hover:border-pink-300 hover:shadow-[0_8px_22px_rgba(236,72,153,0.15)]')} onClick={() => handleCardClick(() => onSelect('creova'))}>
+                    <div className="absolute inset-0 bg-gradient-to-br from-pink-500/[0.03] via-transparent to-rose-500/[0.04] pointer-events-none" />
+                    <div className="flex flex-1 flex-col relative">
                       <div className="mb-4 flex h-24 items-center justify-center max-[1366px]:mb-2.5 max-[1366px]:h-[68px] max-[768px]:mb-3 max-[768px]:h-16">
-                        <img src="assets/app_game_dev_icon.png" alt="Creova" className="h-20 w-20 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110 max-[1366px]:h-14 max-[1366px]:w-14 max-[768px]:h-14 max-[768px]:w-14" />
+                        <img src="assets/app_game_dev_icon.png" alt="Creova" className="h-[74px] w-[74px] max-[1366px]:h-[58px] max-[1366px]:w-[58px] object-contain drop-shadow-[0_3px_8px_rgba(236,72,153,0.16)] transition-transform duration-300 group-hover:scale-110" />
                       </div>
-                      <h3 className="text-[20px] font-extrabold tracking-tight text-pink-600 uppercase max-[1366px]:text-[15px]">CREOVA</h3>
-                      <p className="mt-1 max-w-[170px] text-[14px] font-medium leading-5 text-slate-600 max-[1366px]:text-[12px] max-[1366px]:leading-4">Build apps, games<br/>& interactive projects</p>
+                      <h3 className="text-[20px] font-black tracking-tight text-pink-700 uppercase max-[1366px]:text-[15px]">CREOVA</h3>
+                      <p className="mt-1 max-w-[170px] text-[13.5px] font-semibold leading-[18px] text-slate-600 max-[1366px]:text-[11.5px] max-[1366px]:leading-[15px]">Build apps, games<br/>& interactive projects</p>
                     </div>
-                    <div className="absolute bottom-0 left-0 h-1 w-0 bg-pink-500 transition-all duration-300 group-hover:w-full"></div>
+                    <div className="absolute bottom-0 left-0 h-[3px] w-0 bg-gradient-to-r from-pink-500 via-pink-400 to-rose-400 transition-all duration-300 group-hover:w-full rounded-b-[18px]"></div>
                   </div>
 
-                  {/* 8 PULSE — emerald/green */}
-                  <div className={getCardClasses(7, 'bg-gradient-to-br from-emerald-100 via-green-50 to-emerald-100')} onClick={() => handleCardClick(() => onSelect('pulse'))}>
-                    <div className="flex flex-1 flex-col">
+                  {/* 8 PULSE — softer */}
+                  <div className={getCardClasses(7, 'bg-gradient-to-br from-emerald-100 via-teal-50 to-emerald-200 border-emerald-200 shadow-[0_3px_14px_rgba(16,185,129,0.10)] hover:border-emerald-300 hover:shadow-[0_8px_22px_rgba(16,185,129,0.15)]')} onClick={() => handleCardClick(() => onSelect('pulse'))}>
+                    <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/[0.03] via-transparent to-teal-500/[0.04] pointer-events-none" />
+                    <div className="flex flex-1 flex-col relative">
                       <div className="mb-4 flex h-24 items-center justify-center max-[1366px]:mb-2.5 max-[1366px]:h-[68px] max-[768px]:mb-3 max-[768px]:h-16">
-                        <img src="assets/quiz_icon.png" alt="Pulse" className="h-20 w-20 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-110 max-[1366px]:h-14 max-[1366px]:w-14 max-[768px]:h-14 max-[768px]:w-14" />
+                        <img src="assets/quiz_icon.png" alt="Pulse" className="h-[74px] w-[74px] max-[1366px]:h-[58px] max-[1366px]:w-[58px] object-contain drop-shadow-[0_3px_8px_rgba(16,185,129,0.16)] transition-transform duration-300 group-hover:scale-110" />
                       </div>
-                      <h3 className="text-[20px] font-extrabold tracking-tight text-emerald-600 uppercase max-[1366px]:text-[15px]">PULSE</h3>
-                      <p className="mt-1 max-w-[170px] text-[14px] font-medium leading-5 text-slate-600 max-[1366px]:text-[12px] max-[1366px]:leading-4">Create quizzes &<br/>assess learning</p>
+                      <h3 className="text-[20px] font-black tracking-tight text-emerald-700 uppercase max-[1366px]:text-[15px]">PULSE</h3>
+                      <p className="mt-1 max-w-[170px] text-[13.5px] font-semibold leading-[18px] text-slate-600 max-[1366px]:text-[11.5px] max-[1366px]:leading-[15px]">Create quizzes &<br/>assess learning</p>
                     </div>
-                    <div className="absolute bottom-0 left-0 h-1 w-0 bg-emerald-500 transition-all duration-300 group-hover:w-full"></div>
+                    <div className="absolute bottom-0 left-0 h-[3px] w-0 bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-400 transition-all duration-300 group-hover:w-full rounded-b-[18px]"></div>
                   </div>
 
                 </div>
