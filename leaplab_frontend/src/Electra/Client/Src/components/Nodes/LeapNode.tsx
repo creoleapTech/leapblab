@@ -32,6 +32,7 @@ export const LeapNode = memo(({ id, data, selected }: NodeProps) => {
   const isSimulating = useForgeStore((state) => state.isSimulating);
   const wireDraft = useForgeStore((state) => state.wireDraft);
   const pendingSource = useForgeStore((state) => state.pendingSource);
+  const draftTargetPin = useForgeStore((state) => state.draftTargetPin);
   const setPendingSource = useForgeStore((state) => state.setPendingSource);
   const startWireDraft = useForgeStore((state) => state.startWireDraft);
   const completeWireDraft = useForgeStore((state) => state.completeWireDraft);
@@ -41,6 +42,10 @@ export const LeapNode = memo(({ id, data, selected }: NodeProps) => {
   // Tinkercad-style: track which pin the cursor is hovering over during a wire draft.
   // This powers the red-square target indicator shown on valid drop targets.
   const [hoveredPinName, setHoveredPinName] = useState<string | null>(null);
+
+  // Measured unscaled size of the component container — used to size the invisible
+  // pin hit-boxes (pins are stored as percentages, so we need pixels to compare gaps).
+  const [containerSize, setContainerSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
 
   // The pin that is currently the source of an in-progress wire (where the drag started)
   const isDraftSource = wireDraft?.source === id;
@@ -88,6 +93,47 @@ export const LeapNode = memo(({ id, data, selected }: NodeProps) => {
       : data.type;
   const Tag = `leap-${elementType}` as any;
   const pins = getComponentPins(data.type);
+
+  const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+
+  // ── Enlarged invisible hit-boxes around every pin ──
+  // Pin dots are only a few pixels wide (the component container is scaled to 0.75),
+  // which makes wires very hard to attach. Each pin gets a transparent hit-box
+  // centered on the dot. The box grows as far as the gap to the nearest neighbour
+  // allows, so dense pin headers don't steal each other's clicks while isolated
+  // pins get a comfortable target.
+  const pinHitBoxes = useMemo(() => {
+    const boxes = new Map<string, { w: number; h: number }>();
+    const { w: containerW, h: containerH } = containerSize;
+    if (!containerW || !containerH) return boxes;
+
+    const MAX_HALF = isTouchDevice ? 20 : 14; // local px (rendered at 0.75 scale)
+    const NEIGHBOUR_GUARD = 12;               // only pins sharing a row/column constrain the box
+    const GAP = 0;                            // boxes may tile up to the midpoint between neighbours
+
+    const points = getComponentPins(data.type).map((pin) => ({
+      name: pin.name,
+      x: (pin.x / 100) * containerW,
+      y: (pin.y / 100) * containerH,
+    }));
+
+    points.forEach((point, i) => {
+      let halfW = MAX_HALF;
+      let halfH = MAX_HALF;
+      for (let j = 0; j < points.length; j++) {
+        if (i === j) continue;
+        const dx = Math.abs(points[j].x - point.x);
+        const dy = Math.abs(points[j].y - point.y);
+        if (dy <= NEIGHBOUR_GUARD) halfW = Math.min(halfW, dx / 2 - GAP);
+        if (dx <= NEIGHBOUR_GUARD) halfH = Math.min(halfH, dy / 2 - GAP);
+      }
+      boxes.set(point.name, {
+        w: Math.max(4, halfW * 2),
+        h: Math.max(4, halfH * 2),
+      });
+    });
+    return boxes;
+  }, [data.type, containerSize, isTouchDevice]);
 
   // Custom styling for the node container.
   // The wrapper is intentionally invisible — no border, no border-radius, no
@@ -371,6 +417,9 @@ export const LeapNode = memo(({ id, data, selected }: NodeProps) => {
       if (unscaledWidth === 0 || unscaledHeight === 0) return;
       wrapper.style.width = `${unscaledWidth * 0.75}px`;
       wrapper.style.height = `${unscaledHeight * 0.75}px`;
+      setContainerSize((prev) =>
+        prev.w === unscaledWidth && prev.h === unscaledHeight ? prev : { w: unscaledWidth, h: unscaledHeight }
+      );
     };
 
     const ro = new ResizeObserver(syncSize);
@@ -925,8 +974,11 @@ export const LeapNode = memo(({ id, data, selected }: NodeProps) => {
           const isDraftActive = wireDraft !== null;
           const isPendingSourcePin = isPendingSource && pendingSourcePin === pin.name;
           const isDraftSourcePin = isDraftSource && draftSourcePin === pin.name;
+          // Magnetic snap: the canvas picks the nearest pin within a generous radius
+          // while drawing, so the user does not have to land exactly on the dot.
+          const isSnappedTarget = draftTargetPin?.nodeId === id && draftTargetPin?.pinName === pin.name;
           const isDraftTarget =
-            isDraftActive && !isDraftSourcePin && hoveredPinName === pin.name;
+            isDraftActive && !isDraftSourcePin && (hoveredPinName === pin.name || isSnappedTarget);
 
           // Pin color matches wire color when connected; turns red/cyan during a draft
           let pinColor = '#475569';
@@ -939,6 +991,15 @@ export const LeapNode = memo(({ id, data, selected }: NodeProps) => {
             pinOpacity = 1.0;
             pinGlow = `0 0 6px ${wireColor}`;
             borderColor = wireColor;
+          }
+
+          // Hovering anywhere inside the enlarged hit-box reveals the pin dot so the
+          // user can see exactly which terminal the wire will attach to.
+          const isHoveredPin = hoveredPinName === pin.name;
+          if (isHoveredPin && !isDraftSourcePin && !isPendingSourcePin) {
+            pinOpacity = 1.0;
+            borderColor = '#94a3b8';
+            pinGlow = '0 0 6px rgba(148, 163, 184, 0.8)';
           }
 
           // Tinkercad-style: red square glow on hovered pin (the signature connection indicator)
@@ -969,8 +1030,7 @@ export const LeapNode = memo(({ id, data, selected }: NodeProps) => {
           // Larger hit area + larger visible pin when in a draft, Tinkercad-style — optimized for user-friendly targeting
           const isDraftRelevant =
             isDraftSourcePin || isDraftTarget || isDraftActive || isPendingSourcePin;
-          const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
-          const basePinSize = isTouchDevice ? 14 : (isDraftRelevant ? 14 : (isConnected ? 6 : 4));
+          const basePinSize = isTouchDevice ? 14 : (isDraftRelevant ? 14 : (isConnected ? 10 : 8));
           const pinSize = isDraftRelevant ? (isTouchDevice ? 24 : 16) : basePinSize;
           const halfSize = pinSize / 2;
           const handleStyle: React.CSSProperties = {
@@ -985,6 +1045,12 @@ export const LeapNode = memo(({ id, data, selected }: NodeProps) => {
             touchAction: 'none',
             transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
           };
+
+          // Transparent hit target, clamped by the nearest neighbour so neighbouring
+          // pins never fight over the same cursor position.
+          const hitBox = pinHitBoxes.get(pin.name);
+          const hitWidth = Math.max(hitBox?.w ?? pinSize, pinSize);
+          const hitHeight = Math.max(hitBox?.h ?? pinSize, pinSize);
 
           return (
             <React.Fragment key={`${pin.name}-${idx}`}>
@@ -1023,6 +1089,8 @@ export const LeapNode = memo(({ id, data, selected }: NodeProps) => {
               {/* Visible interactive pin dot */}
               <div
                 className="leap-pin-dot react-flow__handle nodrag"
+                data-node-id={id}
+                data-pin-name={pin.name}
                 style={{
                   ...handleStyle,
                   position: 'absolute',
@@ -1033,7 +1101,7 @@ export const LeapNode = memo(({ id, data, selected }: NodeProps) => {
                   boxShadow: pinGlow,
                   cursor: wireDraft ? 'crosshair' : 'pointer',
                   // Enlarge on hover for easier target acquisition (Tinkercad-style)
-                  transform: isDraftTarget ? 'scale(1.4)' : 'scale(1)',
+                  transform: isDraftTarget ? 'scale(1.4)' : isHoveredPin ? 'scale(1.3)' : 'scale(1)',
                 }}
                 title={
                   isDraftTarget
@@ -1140,17 +1208,12 @@ export const LeapNode = memo(({ id, data, selected }: NodeProps) => {
                   }
                 }}
                 onMouseEnter={() => {
-                  const state = useForgeStore.getState();
-                  // Only show the red target indicator when a wire is actively being
-                  // drawn (not just armed). Avoids showing it prematurely on pending.
-                  if (state.wireDraft) {
-                    setHoveredPinName(pin.name);
-                  }
+                  // Track hover for both the red draft-target indicator (only shown while
+                  // a wire is being drawn) and the hover reveal of the enlarged hit-box.
+                  setHoveredPinName(pin.name);
                 }}
                 onMouseLeave={() => {
-                  if (hoveredPinName === pin.name) {
-                    setHoveredPinName(null);
-                  }
+                  setHoveredPinName((current) => (current === pin.name ? null : current));
                 }}
                 onContextMenu={(e) => {
                   const state = useForgeStore.getState();
@@ -1160,7 +1223,23 @@ export const LeapNode = memo(({ id, data, selected }: NodeProps) => {
                     cancelWireDraft();
                   }
                 }}
-              />
+              >
+                {/* Enlarged invisible hit target — pointer events bubble to the pin dot */}
+                <div
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute',
+                    left: '50%',
+                    top: '50%',
+                    width: `${hitWidth}px`,
+                    height: `${hitHeight}px`,
+                    transform: 'translate(-50%, -50%)',
+                    borderRadius: `${Math.min(hitWidth, hitHeight) / 2}px`,
+                    background: 'transparent',
+                    pointerEvents: 'all',
+                  }}
+                />
+              </div>
             </React.Fragment>
           );
         })}

@@ -36,6 +36,20 @@ export function transpileArduinoToJS(arduinoCode: string): string {
     /^\s*([A-Z][A-Za-z0-9_]*(?:<[^>]*>)?)\s+(\w+)\s*;/gm,
     (_m, className, varName) => `var ${varName} = new ${className}();`
   );
+  // Copy-initialization: `Adafruit_FT6206 ctp = Adafruit_FT6206();` must become
+  // `new Adafruit_FT6206()` — calling the injected ES class without `new`
+  // throws "Class constructor cannot be invoked without 'new'".
+  code = code.replace(
+    /^\s*([A-Z][A-Za-z0-9_]*)\s+(\w+)\s*=\s*(?:new\s+)?([A-Z][A-Za-z0-9_]*)\s*\(([^;]*)\)\s*;/gm,
+    (_m, _className, varName, ctorName, args) => {
+      const cleanArgs = args
+        .split(',')
+        .map((a: string) => a.trim().replace(/^&/, '').replace(/^\(.*?\)/, '').trim())
+        .filter((a: string) => a.length > 0)
+        .join(', ');
+      return `var ${varName} = new ${ctorName}(${cleanArgs});`;
+    }
+  );
 
   const TYPES = '(?:void|int|long|unsigned\\s+\\w+|uint8_t|uint16_t|uint32_t|int8_t|int16_t|int32_t|size_t|byte|char|float|double|boolean|bool|String|string)';
   code = code.replace(
@@ -44,10 +58,12 @@ export function transpileArduinoToJS(arduinoCode: string): string {
       const jsParams = params.split(',')
         .map((p: string) => p.trim().split(/\s+/).pop()?.replace(/[*&]/g, ''))
         .filter((p: string | undefined): p is string => Boolean(p) && p !== 'void').join(', ');
-      const isLifecycle = name === 'setup' || name === 'loop';
-      const prefix = isLifecycle ? 'async ' : '';
+      // All functions are async so `await` (prepended to user-function calls
+      // and inserted for delay()) is legal inside them — only marking
+      // setup/loop async produced "await inside non-async function" syntax
+      // errors for any sketch with helper functions.
       const jsName = name === 'setup' ? '__setup' : name === 'loop' ? '__loop' : name;
-      return `${prefix}function ${jsName}(${jsParams}) {`;
+      return `async function ${jsName}(${jsParams}) {`;
     }
   );
 
@@ -109,8 +125,13 @@ export function transpileArduinoToJS(arduinoCode: string): string {
   code = code.replace(/(\w+)\.(getString)\s*\(/g, 'await $1.$2(');
 
   userFunctions.forEach((funcName) => {
-    const callRegex = new RegExp(`\\b(${funcName})\\s*\\(`, 'g');
-    code = code.replace(callRegex, `await $1(`);
+    // Never prefix declarations — `function drawButton(` must not become
+    // `function await drawButton(` (invalid JS / SyntaxError).
+    const callRegex = new RegExp(`\\b(async\\s+)?(function\\s+)?(${funcName})\\s*\\(`, 'g');
+    code = code.replace(callRegex, (match, p1, p2) => {
+      if (p1 || p2) return match;
+      return `await ${match}`;
+    });
   });
   code = code.replace(/\bawait\s+await\s+/g, 'await ');
 
@@ -171,6 +192,28 @@ if (typeof DEG_TO_RAD === 'undefined') DEG_TO_RAD = Math.PI / 180;
 if (typeof RAD_TO_DEG === 'undefined') RAD_TO_DEG = 180 / Math.PI;
 if (typeof LSBFIRST === 'undefined') LSBFIRST = 0;
 if (typeof MSBFIRST === 'undefined') MSBFIRST = 1;
+if (typeof ILI9341_BLACK === 'undefined')       ILI9341_BLACK       = 0x0000;
+if (typeof ILI9341_NAVY === 'undefined')        ILI9341_NAVY        = 0x000F;
+if (typeof ILI9341_DARKGREEN === 'undefined')   ILI9341_DARKGREEN   = 0x03E0;
+if (typeof ILI9341_DARKCYAN === 'undefined')    ILI9341_DARKCYAN    = 0x03EF;
+if (typeof ILI9341_MAROON === 'undefined')      ILI9341_MAROON      = 0x7800;
+if (typeof ILI9341_PURPLE === 'undefined')      ILI9341_PURPLE      = 0x780F;
+if (typeof ILI9341_OLIVE === 'undefined')       ILI9341_OLIVE       = 0x7BE0;
+if (typeof ILI9341_LIGHTGREY === 'undefined')   ILI9341_LIGHTGREY   = 0xC618;
+if (typeof ILI9341_DARKGREY === 'undefined')    ILI9341_DARKGREY    = 0x7BEF;
+if (typeof ILI9341_BLUE === 'undefined')        ILI9341_BLUE        = 0x001F;
+if (typeof ILI9341_GREEN === 'undefined')       ILI9341_GREEN       = 0x07E0;
+if (typeof ILI9341_CYAN === 'undefined')        ILI9341_CYAN        = 0x07FF;
+if (typeof ILI9341_RED === 'undefined')         ILI9341_RED         = 0xF800;
+if (typeof ILI9341_MAGENTA === 'undefined')     ILI9341_MAGENTA     = 0xF81F;
+if (typeof ILI9341_YELLOW === 'undefined')      ILI9341_YELLOW      = 0xFFE0;
+if (typeof ILI9341_WHITE === 'undefined')       ILI9341_WHITE       = 0xFFFF;
+if (typeof ILI9341_ORANGE === 'undefined')      ILI9341_ORANGE      = 0xFD20;
+if (typeof ILI9341_GREENYELLOW === 'undefined') ILI9341_GREENYELLOW = 0xAFE5;
+if (typeof ILI9341_PINK === 'undefined')        ILI9341_PINK        = 0xFC18;
+if (typeof Adafruit_ILI9341 === 'undefined') Adafruit_ILI9341 = class { constructor() {} begin() {} setRotation() {} fillScreen() {} setTextColor() {} setTextSize() {} setCursor() {} print() {} println() {} drawPixel() {} drawLine() {} drawRect() {} fillRect() {} drawCircle() {} fillCircle() {} drawRoundRect() {} fillRoundRect() {} width() { return 240; } height() { return 320; } invertDisplay() {} };
+if (typeof TS_Point === 'undefined') TS_Point = class { constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; } };
+if (typeof Adafruit_FT6206 === 'undefined') Adafruit_FT6206 = class { constructor() {} begin() { return true; } touched() { return 0; } getPoint() { return new TS_Point(0, 0, 0); } };
 
 
 ${code}

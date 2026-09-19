@@ -57,6 +57,39 @@ export function transpileArduinoToJS(arduinoCode: string): string {
   code = code.replace(/\b(int|long|short|unsigned\s+\w+|uint8_t|uint16_t|uint32_t|byte|char|float|double)\s+(\w+)\s*\[\s*(\d+)\s*\]\s*;/g,
     (_m, _type, name, size) => `let ${name} = new Array(${size}).fill(0);`);
 
+  // ── Step 4b: Class-type globals (Adafruit_ILI9341 tft(CS, DC, RST);) ──
+  // Constructor with arguments
+  code = code.replace(
+    /^\s*([A-Z][A-Za-z0-9_]*(?:<[^>]*>)?)\s+(\w+)\s*\(([^)]*)\)\s*;/gm,
+    (_m, className, varName, args) => {
+      const cleanArgs = args
+        .split(',')
+        .map((a: string) => a.trim().replace(/^&/, '').replace(/^\(.*?\)/, '').trim())
+        .filter((a: string) => a.length > 0)
+        .join(', ');
+      return `var ${varName} = new ${className}(${cleanArgs});`;
+    }
+  );
+  // Default construction: Adafruit_FT6206 ctp;
+  code = code.replace(
+    /^\s*([A-Z][A-Za-z0-9_]*(?:<[^>]*>)?)\s+(\w+)\s*;/gm,
+    (_m, className, varName) => `var ${varName} = new ${className}();`
+  );
+  // Copy-initialization: Adafruit_FT6206 ctp = Adafruit_FT6206();
+  code = code.replace(
+    /^\s*([A-Z][A-Za-z0-9_]*)\s+(\w+)\s*=\s*(?:new\s+)?([A-Z][A-Za-z0-9_]*)\s*\(([^;]*)\)\s*;/gm,
+    (_m, _className, varName, ctorName, args) => {
+      const cleanArgs = args
+        .split(',')
+        .map((a: string) => a.trim().replace(/^&/, '').replace(/^\(.*?\)/, '').trim())
+        .filter((a: string) => a.length > 0)
+        .join(', ');
+      return `var ${varName} = new ${ctorName}(${cleanArgs});`;
+    }
+  );
+  // Any other class-typed assignment: TS_Point p = ctp.getPoint();
+  code = code.replace(/^\s*([A-Z][A-Za-z0-9_]*)\s+(\w+)\s*=/gm, 'let $2 =');
+
   // ── Step 5: String handling ─────────────────────────────────
   // Convert String("...") → "..."
   code = code.replace(/\bString\s*\(([^)]*)\)/g, 'String($1)');

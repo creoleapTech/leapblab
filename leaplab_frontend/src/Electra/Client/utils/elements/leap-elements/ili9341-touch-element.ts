@@ -53,6 +53,9 @@ export class ILI9341TouchElement extends LitElement {
   private _canvas: HTMLCanvasElement | null | undefined = undefined;
   private _ctx: CanvasCtx = null;
   private _isTouched = false;
+  /** Last reported native touch position — used to ignore duplicate/jitter moves. */
+  private _lastNativeX = -1;
+  private _lastNativeY = -1;
   private _canvasCTM: DOMMatrix | null = null;
 
   // 11-pin layout: 9 display SPI + 2 touch I2C (2.54mm pitch)
@@ -184,6 +187,8 @@ export class ILI9341TouchElement extends LitElement {
     e.preventDefault();
     e.stopPropagation();
     this._isTouched = true;
+    this._lastNativeX = -1;
+    this._lastNativeY = -1;
     this._updateCanvasCTM();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     this._handlePointerEvent(e, true);
@@ -208,6 +213,8 @@ export class ILI9341TouchElement extends LitElement {
 
   private _handlePointerEvent(e: PointerEvent, isTouched: boolean): void {
     if (!isTouched) {
+      this._lastNativeX = -1;
+      this._lastNativeY = -1;
       this.dispatchEvent(new CustomEvent('touch-change', {
         detail: { touched: false, x: 0, y: 0 },
         bubbles: true,
@@ -260,6 +267,18 @@ export class ILI9341TouchElement extends LitElement {
 
     nativeX = Math.max(0, Math.min(NATIVE_W - 1, Math.floor(nativeX)));
     nativeY = Math.max(0, Math.min(NATIVE_H - 1, Math.floor(nativeY)));
+
+    // Ignore duplicate / sub-pixel-jitter move events. Queueing them makes the
+    // simulated controller replay stale positions and the UI feel unreliable.
+    if (
+      this._lastNativeX >= 0 &&
+      Math.abs(nativeX - this._lastNativeX) < 2 &&
+      Math.abs(nativeY - this._lastNativeY) < 2
+    ) {
+      return;
+    }
+    this._lastNativeX = nativeX;
+    this._lastNativeY = nativeY;
 
     this.dispatchEvent(new CustomEvent('touch-change', {
       detail: { touched: true, x: nativeX, y: nativeY },
@@ -333,6 +352,7 @@ export class ILI9341TouchElement extends LitElement {
           @pointermove=${this._onPointerMove}
           @pointerup=${this._onPointerUp}
           @pointerleave=${this._onPointerUp}
+          @pointercancel=${this._onPointerUp}
         ></canvas>
       </div>
     `;

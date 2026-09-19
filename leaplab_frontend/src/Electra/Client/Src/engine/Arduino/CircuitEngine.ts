@@ -14,6 +14,7 @@ import { StepperEmulator as UnifiedStepperEmulator, type StepperModel } from '..
 import { SSD1306I2CSlave } from './SSD1306I2CSlave';
 import { ILI9341SPISlave } from './ILI9341SPISlave';
 import { FT6206I2CSlave } from './FT6206I2CSlave';
+import { enqueueTouchPoint } from './touchQueue';
 import { MPU6050I2CSlave } from './MPU6050I2CSlave';
 import { DS1307Emulator } from './DS1307Emulator';
 import { KeypadEmulator } from './KeypadEmulator';
@@ -3707,32 +3708,7 @@ class CircuitEngine {
     }
     const queue = this.touchQueues.get(nodeId)!;
 
-    // Linearly interpolate points between the last queued point and the new point
-    // to fill in coordinates when dragging the mouse/finger quickly.
-    if (touched && queue.length > 0) {
-      const lastPt = queue[queue.length - 1];
-      if (lastPt.touched) {
-        const dx = x - lastPt.x;
-        const dy = y - lastPt.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-
-        // Interpolate every 4 pixels (since drawing diameter is ~6px) to keep dragging smooth and responsive
-        if (dist > 5) {
-          const steps = Math.floor(dist / 4);
-          for (let s = 1; s < steps; s++) {
-            const ix = Math.round(lastPt.x + (dx * s) / steps);
-            const iy = Math.round(lastPt.y + (dy * s) / steps);
-            if (queue.length < 200) {
-              queue.push({ touched: true, x: ix, y: iy });
-            }
-          }
-        }
-      }
-    }
-
-    if (queue.length < 200) { // Keep queue size bounded
-      queue.push({ touched, x, y });
-    }
+    enqueueTouchPoint(queue, touched, x, y);
   }
 
   public registerDisplayElement(nodeId: string, el: any) {

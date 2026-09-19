@@ -39,6 +39,46 @@ interface ForgeCanvasProps {
   canRedo?: boolean;
 }
 
+// ── Magnetic pin snapping ─────────────────────────────────────────────
+// The pin dots render at only a few screen pixels (especially on dense pin
+// headers like the ESP32-C3), so requiring an exact hit makes wiring painful.
+// These radii let the canvas grab/snap the nearest pin in *screen* space,
+// independent of component scale and canvas zoom.
+const PIN_START_RADIUS = 20; // press within this radius of a pin to start a wire
+const PIN_SNAP_RADIUS = 34;  // release within this radius to connect to that pin
+
+interface NearestPin {
+  nodeId: string;
+  pinName: string;
+  el: HTMLElement;
+  dist: number;
+}
+
+function findNearestPin(clientX: number, clientY: number, maxRadius: number): NearestPin | null {
+  const dots = document.querySelectorAll<HTMLElement>(
+    '.forge-canvas-container .leap-pin-dot[data-pin-name]'
+  );
+  let best: NearestPin | null = null;
+  let bestDist = maxRadius;
+  for (let i = 0; i < dots.length; i++) {
+    const el = dots[i];
+    const rect = el.getBoundingClientRect();
+    const dist = Math.hypot(clientX - (rect.left + rect.width / 2), clientY - (rect.top + rect.height / 2));
+    if (dist <= bestDist) {
+      bestDist = dist;
+      best = { nodeId: el.dataset.nodeId || '', pinName: el.dataset.pinName || '', el, dist };
+    }
+  }
+  return best;
+}
+
+/** Elements that must keep their native click behaviour (no pin hijacking). */
+function isInteractiveUiTarget(target: HTMLElement | null): boolean {
+  return !!target?.closest(
+    'button, input, textarea, select, .react-flow__panel, .glass-minimap, .canvas-action-panel'
+  );
+}
+
 const ForgeCanvasInner: React.FC<ForgeCanvasProps> = ({
   onToggleSimulation,
   isCompiling,
@@ -367,6 +407,126 @@ const ForgeCanvasInner: React.FC<ForgeCanvasProps> = ({
     };
   }, [wireDraft, pendingSource, cancelWireDraft, setPendingSource]);
 
+  // ── Magnetic pin snapping (capture phase) ──
+  // Runs before React Flow / node handlers so that pressing near a pin starts a
+  // wire (instead of dragging the component) and releasing near a pin connects
+  // it — even when the cursor is several pixels away from the tiny pin dot.
+  useEffect(() => {
+    const pinSourcePosition = (el: HTMLElement) => {
+      const rect = el.getBoundingClientRect();
+      const vp = getViewport();
+      const canvasContainer = document.querySelector('.forge-canvas-container');
+      const canvasRect = canvasContainer ? canvasContainer.getBoundingClientRect() : { left: 0, top: 0 };
+      return {
+        x: (rect.left + rect.width / 2 - canvasRect.left - vp.x) / vp.zoom,
+        y: (rect.top + rect.height / 2 - canvasRect.top - vp.y) / vp.zoom,
+      };
+    };
+
+    /** Returns true when the press was consumed by pin snapping. */
+    const tryStartFromNearestPin = (clientX: number, clientY: number) => {
+      const state = useForgeStore.getState();
+      if (state.wireDraft || state.pendingSource) return false;
+      const nearest = findNearestPin(clientX, clientY, PIN_START_RADIUS);
+      if (!nearest) return false;
+      state.setPendingSource({
+        nodeId: nearest.nodeId,
+        pinName: nearest.pinName,
+        sourcePosition: pinSourcePosition(nearest.el),
+      });
+      return true;
+    };
+
+    /** Returns true when the release was consumed by pin snapping. */
+    const tryFinishAtNearestPin = (clientX: number, clientY: number) => {
+      const state = useForgeStore.getState();
+      if (!state.wireDraft && !state.pendingSource) return false;
+      const nearest = findNearestPin(clientX, clientY, PIN_SNAP_RADIUS);
+      if (!nearest) return false;
+
+      if (state.wireDraft) {
+        if (state.wireDraft.source === nearest.nodeId && state.wireDraft.sourceHandle === nearest.pinName) {
+          state.cancelWireDraft();
+        } else {
+          state.completeWireDraft(nearest.nodeId, nearest.pinName);
+        }
+        return true;
+      }
+
+      const pending = state.pendingSource;
+      if (!pending) return false;
+      state.startWireDraft(pending.nodeId, pending.pinName, pending.sourcePosition);
+      if (pending.nodeId !== nearest.nodeId || pending.pinName !== nearest.pinName) {
+        state.completeWireDraft(nearest.nodeId, nearest.pinName);
+      }
+      return true;
+    };
+
+    /** Returns the event target element when it is a valid canvas surface for snapping. */
+    const eventSurface = (target: EventTarget | null): HTMLElement | null => {
+      const el = target as HTMLElement | null;
+      if (!el || !el.closest('.forge-canvas-container')) return null;
+      if (el.closest('.react-flow__edge')) return null;
+      // Pin dots (and their enlarged transparent hit-boxes) are prime snap
+      // targets: resolve them by *distance* through findNearestPin so that
+      // densely packed pins can never steal each other's press.
+      if (el.closest('.leap-pin-dot')) return el;
+      if (el.closest('.react-flow__handle')) return null;
+      if (isInteractiveUiTarget(el)) return null;
+      return el;
+    };
+
+    const onMouseDownCapture = (e: MouseEvent) => {
+      if (e.button !== 0 || !eventSurface(e.target)) return;
+      if (tryStartFromNearestPin(e.clientX, e.clientY)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    const onMouseUpCapture = (e: MouseEvent) => {
+      if (e.button !== 0 || !eventSurface(e.target)) return;
+      if (tryFinishAtNearestPin(e.clientX, e.clientY)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    const onTouchStartCapture = (e: TouchEvent) => {
+      if (e.touches.length !== 1 || !eventSurface(e.target)) return;
+      if (tryStartFromNearestPin(e.touches[0].clientX, e.touches[0].clientY)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    const onTouchEndCapture = (e: TouchEvent) => {
+      // Touch pointerup is implicitly captured by the element under the finger
+      // at touchstart (and fires before touchend), so pin-on-pin taps are
+      // already resolved by the pin's own pointer handlers — don't double-handle.
+      const el = e.target as HTMLElement | null;
+      if (el?.closest?.('.leap-pin-dot')) return;
+      if (!eventSurface(e.target)) return;
+      const touch = e.changedTouches[0];
+      if (!touch) return;
+      if (tryFinishAtNearestPin(touch.clientX, touch.clientY)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    document.addEventListener('mousedown', onMouseDownCapture, true);
+    document.addEventListener('mouseup', onMouseUpCapture, true);
+    document.addEventListener('touchstart', onTouchStartCapture, { capture: true, passive: false });
+    document.addEventListener('touchend', onTouchEndCapture, { capture: true, passive: false });
+    return () => {
+      document.removeEventListener('mousedown', onMouseDownCapture, true);
+      document.removeEventListener('mouseup', onMouseUpCapture, true);
+      document.removeEventListener('touchstart', onTouchStartCapture, { capture: true } as EventListenerOptions);
+      document.removeEventListener('touchend', onTouchEndCapture, { capture: true } as EventListenerOptions);
+    };
+  }, [getViewport]);
+
   // ── Track mouse for draft wire end ──
   // Throttled with requestAnimationFrame so we only commit a state update once
   // per frame (~60Hz max). We push the latest cursor position to the
@@ -419,6 +579,22 @@ const ForgeCanvasInner: React.FC<ForgeCanvasProps> = ({
         x: (pos.x - bounds.left - vp.x) / vp.zoom,
         y: (pos.y - bounds.top - vp.y) / vp.zoom,
       });
+
+      // Magnetic target feedback: highlight the nearest pin within the snap
+      // radius so the user sees where the wire will land before releasing.
+      const store = useForgeStore.getState();
+      if (store.wireDraft) {
+        const nearest = findNearestPin(pos.x, pos.y, PIN_SNAP_RADIUS);
+        const isSource =
+          !!nearest &&
+          store.wireDraft.source === nearest.nodeId &&
+          store.wireDraft.sourceHandle === nearest.pinName;
+        store.setDraftTargetPin(
+          nearest && !isSource ? { nodeId: nearest.nodeId, pinName: nearest.pinName } : null
+        );
+      } else {
+        store.setDraftTargetPin(null);
+      }
     });
   }, [getViewport, startWireDraft]);
 
@@ -626,6 +802,7 @@ const ForgeCanvasInner: React.FC<ForgeCanvasProps> = ({
       onMouseMove={onContainerMouseMove}
       onPointerMove={onContainerMouseMove}
       onDoubleClick={onContainerDoubleClick}
+      onMouseLeave={() => useForgeStore.getState().setDraftTargetPin(null)}
     >
       <ReactFlow
         nodes={nodes}

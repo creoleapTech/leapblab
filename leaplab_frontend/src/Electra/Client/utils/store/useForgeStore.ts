@@ -104,6 +104,13 @@ export interface ForgeState {
    */
   pendingSource: { nodeId: string; pinName: string; sourcePosition?: { x: number; y: number } } | null;
   setPendingSource: (source: { nodeId: string; pinName: string; sourcePosition?: { x: number; y: number } } | null) => void;
+  /**
+   * Nearest pin under the cursor while a wire is being drawn — the magnetic snap
+   * target that will be connected if the user releases the mouse now. Drives the
+   * red target highlight independently of the (tiny) pin dot hover area.
+   */
+  draftTargetPin: { nodeId: string; pinName: string } | null;
+  setDraftTargetPin: (target: { nodeId: string; pinName: string } | null) => void;
   startWireDraft: (
     source: string,
     sourceHandle: string,
@@ -206,6 +213,7 @@ export const useForgeStore = create<ForgeState>((set, get) => ({
   viewport: { x: 0, y: 0, zoom: 1 },
   wireDraft: null,
   pendingSource: null,
+  draftTargetPin: null,
   isDraggingWaypoint: false,
 
   setUiTheme: (theme) => set({ uiTheme: theme }),
@@ -222,6 +230,13 @@ export const useForgeStore = create<ForgeState>((set, get) => ({
     set({ pendingSource: source });
   },
 
+  setDraftTargetPin: (target) => set((state) => {
+    const current = state.draftTargetPin;
+    if (current === target) return state;
+    if (current && target && current.nodeId === target.nodeId && current.pinName === target.pinName) return state;
+    return { draftTargetPin: target };
+  }),
+
   startWireDraft: (source, sourceHandle, sourcePosition) => {
     console.log(
       `[FORGE STORE] Wire draft started: ${source}:${sourceHandle}` +
@@ -232,6 +247,7 @@ export const useForgeStore = create<ForgeState>((set, get) => ({
     set({
       // Clear any pending source — the draft is now active and supersedes it.
       pendingSource: null,
+      draftTargetPin: null,
       wireDraft: {
         source,
         sourceHandle,
@@ -260,12 +276,12 @@ export const useForgeStore = create<ForgeState>((set, get) => ({
       data: { color: '#22c55e', waypoints },
     };
     console.log(`[FORGE STORE] Wire draft completed: ${source}:${sourceHandle} → ${target}:${targetHandle}`);
-    return { edges: [...state.edges, edge as any], wireDraft: null, pendingSource: null };
+    return { edges: [...state.edges, edge as any], wireDraft: null, pendingSource: null, draftTargetPin: null };
   }),
 
   cancelWireDraft: () => {
     console.log('[FORGE STORE] Wire draft cancelled');
-    set({ wireDraft: null, pendingSource: null });
+    set({ wireDraft: null, pendingSource: null, draftTargetPin: null });
   },
 
   setProjectPath: (path) => {
